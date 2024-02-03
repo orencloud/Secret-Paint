@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (0, 9, 8, 0),
+    "version": (0, 9, 8, 3),
     "blender": (4, 0, 2),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -30,58 +30,58 @@ bl_info = {
 }
 
 import bpy
-import random   
-from bpy.types import Menu     
+import random
+from bpy.types import Menu
 
-from mathutils import Vector    
-from bpy.props import FloatVectorProperty       
+from mathutils import Vector
+from bpy.props import FloatVectorProperty
 
-from bpy.utils import resource_path   
-from pathlib import Path  
-import os        
+from bpy.utils import resource_path
+from pathlib import Path
+import os
 
-import addon_utils  
+import addon_utils
 
-from collections import  defaultdict 
+from collections import  defaultdict
 
-import math 
-
-
+import math
 
 
-from mathutils import Matrix   
+
+
+from mathutils import Matrix
 
 
 from bpy.types import Header, Panel, Menu, UIList
 from bpy_extras import (asset_utils,)
 
-import bpy, os  
+import bpy, os
 
 
-import bpy_extras  
+import bpy_extras
 import mathutils
 
-import datetime  
+import datetime
 import time
 
 
-from bpy_extras import view3d_utils  
+from bpy_extras import view3d_utils
 from bpy.types import Operator
 
 
 
-import bpy.types  
+import bpy.types
 from bpy.props import StringProperty
 
-import subprocess   
-import threading 
+import subprocess
+import threading
 
 import ctypes
 import platform
-import shutil  
+import shutil
 
 
-import bmesh  
+import bmesh
 
 from . import addon_updater_ops
 
@@ -644,7 +644,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 9 
+    current_node_version = 10 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -5537,18 +5537,19 @@ def export_to_asset_library_function(self,context,event):
 
 
     
-    new_collection=[]
+    
+    
+    asset_name = bpy.context.preferences.addons[__name__].preferences.biomeAssetName  
+    if not asset_name and activeobj: asset_name = activeobj.name
+    new_collection = bpy.data.collections.new(asset_name)
+    bpy.context.scene.collection.children.link(new_collection)
+
     newobjs_toDelete=[]
     if biome_detected and all_parent_surfaces == all_meshes and len(all_meshes)==1\
     or all_sel_are_hair:
 
 
 
-        
-        asset_name = bpy.context.preferences.addons[__name__].preferences.biomeAssetName    
-        if not asset_name and activeobj: asset_name=activeobj.name
-        new_collection = bpy.data.collections.new(asset_name)
-        bpy.context.scene.collection.children.link(new_collection)
 
 
         
@@ -5706,6 +5707,7 @@ def export_to_asset_library_function(self,context,event):
     
     
     
+    pass #print"SSSSSSSSSSSSSSSSSSSS",new_collection)
     for obj in objselection:
         
         if obj.name not in new_collection.all_objects: new_collection.objects.link(obj)
@@ -8102,8 +8104,6 @@ class curveseparate(bpy.types.Operator):
 
 
 
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -8144,23 +8144,10 @@ class secret_menu(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
 
-
-        
         mainrow = layout.row()
         col = mainrow.column()
         
         addon_updater_ops.update_settings_ui(self, context)
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-
 
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxAdvancedModifier")
