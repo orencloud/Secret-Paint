@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (0, 9, 8, 3),
+    "version": (0, 9, 8, 4),
     "blender": (4, 0, 2),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
