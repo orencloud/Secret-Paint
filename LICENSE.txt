@@ -1,0 +1,14 @@
+The Addon "Secret Paint" is packaged under the Royalty Free license, this license applies to any .blend file included, such as:
+
+- Secret Paint.blend
+- Biomes.blend
+
+You can't share, resell, distribute, repackage or sublicense any of these files individually or as part of a larger package.
+You are allowed to use the "Secret Paint" Addon in any number of personal or commercial projects, modify it to suit your needs, and include it in derivative works, as long as you comply with the terms of this Royalty Free license. No attribution is required, although appreciated.
+
+"Secret Paint" also supports external content packs. Said content packs are available for purchase separately from the "Secret Paint" Addon and they will have their own separate license terms.
+
+Other files (.py files) are under GNU/GPU MIT license:
+https://www.gnu.org/licenses/gpl-3.0.en.html
+
+You are granted permission to use, modify, and distribute these .py files, as long as you include the copyright notice and permission notice. The files are provided "as is" without warranty, and the author is not liable for any claims or damages arising from their use.
