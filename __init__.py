@@ -1513,6 +1513,7 @@ def biomegroupreorder_f(context,**kwargs):
     if "move_to_extreme" in kwargs:move_to_extreme = kwargs.get("move_to_extreme")
     else:move_to_extreme = False
 
+    secretpaint_update_modifier_f(context)
 
     
     if move_to_extreme:
@@ -1601,6 +1602,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
     object_biome: bpy.props.StringProperty()
     
     def invoke(self, context, event):
+        secretpaint_update_modifier_f(context)
 
         buttonbiome = int(self.object_biome)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -7335,8 +7337,6 @@ class curveseparate(bpy.types.Operator):
     def execute(self, context):
         curveseparate_function(context)
         return {'FINISHED'}
-
-
 
 
 
