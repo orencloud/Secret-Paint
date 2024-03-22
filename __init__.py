@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 0, 1),
+    "version": (1, 1, 0),
     "blender": (4, 0, 2),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -647,7 +647,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 11 
+    current_node_version = 12 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -675,8 +675,15 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
             if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None     or Forced_Update or bpy.data.node_groups["Secret Paint"].library     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
         elif bpy.app.version_string < "4.0.0":
             if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None     or Forced_Update or bpy.data.node_groups["Secret Paint"].library     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                  carry_through=True
-    except: carry_through=True
-    
+    except:
+        pass #print"--------- UPDATE")
+        carry_through=True
+
+    try: 
+        if bpy.app.version_string >= "4.0.0" and bpy.data.node_groups.get("Secret Paint") != None and bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value >= 12 and bpy.data.node_groups["Secret Paint"].interface.items_tree[7].default_value: carry_through=False  
+        elif bpy.app.version_string < "4.0.0" and bpy.data.node_groups.get("Secret Paint") != None and bpy.data.node_groups["Secret Paint"].outputs[1].default_value >= 12 and bpy.data.node_groups["Secret Paint"].inputs[5].default_value: carry_through=False  
+    except: pass #print"---------FAILED UPDATE 2")
+
     if carry_through:
         for node_tree in bpy.data.node_groups:
             if not node_tree.library and node_tree.name.startswith("Secret Paint"):
@@ -828,6 +835,8 @@ def apply_paint(self,context, **kwargs):
     else:objselection = bpy.context.selected_objects
     if activeobj not in objselection: objselection.append(activeobj) 
 
+    if "applyIDs" in kwargs:applyIDs = kwargs.get("applyIDs")
+    else:applyIDs = False
 
     
     if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
@@ -896,7 +905,6 @@ def apply_paint(self,context, **kwargs):
     bpy.ops.object.mode_set(mode="OBJECT")
 
     
-
     for obj in all_selected_hair:
 
         
@@ -928,102 +936,150 @@ def apply_paint(self,context, **kwargs):
         
         
         
-        if obj.modifiers[0]["Input_69"] == True:  
-            node_to_use=[]
+
+
+        
+        
+        node_to_use=[]
+        if applyIDs or obj.modifiers[0]["Input_69"] == False:
+            if "Secret Paint Apply IDs" in bpy.data.node_groups: node_to_use = bpy.data.node_groups.get("Secret Paint Apply IDs")
+            else:
+                node_to_use = bpy.data.node_groups.new(type='GeometryNodeTree', name='Secret Paint Apply IDs')
+                input = node_to_use.nodes.new('NodeGroupInput')
+                if bpy.app.version_string >= "4.0.0": node_to_use.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+                elif bpy.app.version_string < "4.0.0": node_to_use.outputs.new(type='NodeSocketGeometry', name='GEO')
+                output = node_to_use.nodes.new('NodeGroupOutput')
+                if bpy.app.version_string >= "4.0.0": node_to_use.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+                elif bpy.app.version_string < "4.0.0": node_to_use.inputs.new(type='NodeSocketGeometry', name='GEO')
+
+                GeometryNodeSetID = node_to_use.nodes.new('GeometryNodeSetID')
+                
+                GeometryNodeSetID2 = node_to_use.nodes.new('GeometryNodeSetID')
+                
+                ID = node_to_use.nodes.new('GeometryNodeInputID')
+                
+                MATH = node_to_use.nodes.new('ShaderNodeMath')
+                MATH.operation = 'COMPARE'
+                MATH.inputs[1].default_value = MATH.inputs[2].default_value = 0
+                
+
+                node_to_use.links.new(input.outputs[0], GeometryNodeSetID.inputs[0])
+                node_to_use.links.new(ID.outputs[0], MATH.inputs[0])
+                node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID.inputs[1])
+                node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID2.inputs[1])
+                node_to_use.links.new(GeometryNodeSetID.outputs[0], GeometryNodeSetID2.inputs[0])
+                node_to_use.links.new(GeometryNodeSetID2.outputs[0], output.inputs[0])
+
+        elif applyIDs == False:
             for node in bpy.data.node_groups:
                 if node.name.startswith("Secret Generator"):
                     node_to_use = node
                     break
-            modifier = obj.modifiers.new(name="GeometryNodes", type='NODES')
-            modifier.node_group =  bpy.data.node_groups.get(node_to_use.name)  
-            modifier["Input_2"] = obj.parent  
-            modifier["Input_15"] = obj.modifiers[0]["Input_68"]*(obj.modifiers[0]["Input_100"]**2) 
-            modifier["Input_14"] = obj.modifiers[0]["Input_83"] 
-            modifier["Input_16"] = obj.modifiers[0]["Input_80"] 
-            modifier["Input_19"] = obj.modifiers[0]["Input_79"] 
-            modifier["Input_30"] = obj.modifiers[0]["Input_78"] 
-            modifier["Input_33"] = obj.modifiers[0]["Input_70"]*obj.modifiers[0]["Input_100"] 
-            modifier["Input_31"] = obj.modifiers[0]["Input_72"] 
-            modifier["Input_32"] = obj.modifiers[0]["Input_82"] 
-            modifier["Input_34"] = obj.modifiers[0]["Input_71"] 
-            modifier["Input_39"] = obj.modifiers[0]["Input_89"] 
-            modifier["Input_40"] = obj.modifiers[0]["Input_16"] 
-            modifier["Input_41"] = obj.modifiers[0]["Input_86"] 
-            modifier["Input_42"] = obj.modifiers[0]["Input_91"] 
-            modifier["Input_43"] = obj.modifiers[0]["Input_92"] 
-            modifier["Input_44"] = obj.modifiers[0]["Input_95"] 
-            modifier["Input_45"] = obj.modifiers[0]["Input_85"] 
-            if obj.modifiers[0]["Input_83_attribute_name"] and obj.modifiers[0]["Input_83_use_attribute"]:
-                modifier["Input_14_attribute_name"] = obj.modifiers[0]["Input_83_attribute_name"] 
-                modifier["Input_14_use_attribute"] = 1 
-            obj.modifiers[0]["Input_69"] = False 
 
+        modifier = obj.modifiers.new(name="GeometryNodes", type='NODES')
+        modifier.node_group =  bpy.data.node_groups.get(node_to_use.name)  
+        modifier["Input_2"] = obj.parent  
+        modifier["Input_15"] = obj.modifiers[0]["Input_68"]*(obj.modifiers[0]["Input_100"]**2) 
+        modifier["Input_14"] = obj.modifiers[0]["Input_83"] 
+        modifier["Input_16"] = obj.modifiers[0]["Input_80"] 
+        modifier["Input_19"] = obj.modifiers[0]["Input_79"] 
+        modifier["Input_30"] = obj.modifiers[0]["Input_78"] 
+        modifier["Input_33"] = obj.modifiers[0]["Input_70"]*obj.modifiers[0]["Input_100"] 
+        modifier["Input_31"] = obj.modifiers[0]["Input_72"] 
+        modifier["Input_32"] = obj.modifiers[0]["Input_82"] 
+        modifier["Input_34"] = obj.modifiers[0]["Input_71"] 
+        modifier["Input_39"] = obj.modifiers[0]["Input_89"] 
+        modifier["Input_40"] = obj.modifiers[0]["Input_16"] 
+        modifier["Input_41"] = obj.modifiers[0]["Input_86"] 
+        modifier["Input_42"] = obj.modifiers[0]["Input_91"] 
+        modifier["Input_43"] = obj.modifiers[0]["Input_92"] 
+        modifier["Input_44"] = obj.modifiers[0]["Input_95"] 
+        modifier["Input_45"] = obj.modifiers[0]["Input_85"] 
+        if obj.modifiers[0]["Input_83_attribute_name"] and obj.modifiers[0]["Input_83_use_attribute"]:
+            modifier["Input_14_attribute_name"] = obj.modifiers[0]["Input_83_attribute_name"] 
+            modifier["Input_14_use_attribute"] = 1 
+        obj.modifiers[0]["Input_69"] = False 
+
+        
+        if bpy.app.version_string >= "4.0.0":
+            obj.modifiers.move(len(obj.modifiers) - 1, 0)
+        elif bpy.app.version_string < "4.0.0":
             
-            if bpy.app.version_string >= "4.0.0":
-                obj.modifiers.move(len(obj.modifiers) - 1, 0)
-            elif bpy.app.version_string < "4.0.0":
+            
+            bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
+
+
+        
+
+        
+        successfully_applied_so_reimport_materials = False
+        mats_before = [mat_slot.material for mat_slot in obj.material_slots if mat_slot.material] 
+        if obj.data.users >=2: 
+            same_data=[xx for xx in bpy.data.objects if xx.data==obj.data and xx!=obj]
+            obj.data = obj.data.copy()
+            try:
+                if bpy.app.version_string >= "4.0.0":
+                    with context.temp_override(**context.copy()): bpy.ops.object.modifier_apply(modifier=modifier.name)
+                    successfully_applied_so_reimport_materials = True
+                elif bpy.app.version_string < "4.0.0":
+                    bpy.ops.object.modifier_apply({'object': obj}, modifier=modifier.name)
+                    successfully_applied_so_reimport_materials = True
+            except:
                 
                 
-                bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
-
-
+                
+                
+                obj.modifiers.remove(modifier) 
+                
+                obj.location = obj.location
+                
+            for ojj in same_data: ojj.data=obj.data
+        else:
             
+            try:
+                if bpy.app.version_string >= "4.0.0":
+                    with context.temp_override(**context.copy()): bpy.ops.object.modifier_apply(modifier=modifier.name)
+                    successfully_applied_so_reimport_materials = True
+                elif bpy.app.version_string < "4.0.0":
+                    bpy.ops.object.modifier_apply({'object': obj}, modifier=modifier.name)
+                    successfully_applied_so_reimport_materials = True
+            except:
+                
+                
+                
+                
+                obj.modifiers.remove(modifier) 
+                
+                obj.location=obj.location 
+                
 
-            
-            mats_before = [mat_slot.material for mat_slot in obj.material_slots if mat_slot.material] 
-            if obj.data.users >=2: 
-                same_data=[xx for xx in bpy.data.objects if xx.data==obj.data and xx!=obj]
-                obj.data = obj.data.copy()
-                try:
-                    if bpy.app.version_string >= "4.0.0":
-                        with context.temp_override(**context.copy()): bpy.ops.object.modifier_apply(modifier=modifier.name)
-                    elif bpy.app.version_string < "4.0.0": bpy.ops.object.modifier_apply({'object': obj}, modifier=modifier.name)
-                except:
-                    if obj.modifiers[1]["Input_83_attribute_name"] and obj.modifiers[1]["Input_83_use_attribute"]: self.report({'WARNING'}, "No hair to convert, remove the vertex weight paint or don't leave it empty")
-                    else: self.report({'WARNING'}, "No hair to convert, increase the procedural density first")
+        
+        if successfully_applied_so_reimport_materials:
+            for mat in mats_before:
+                if mat.name not in obj.data.materials: obj.data.materials.append(mat)
+
+
+
+
+        
+        if obj.parent and obj.parent.modifiers:  
+            for mod in obj.parent.modifiers: 
+                if mod.type=="ARMATURE":
+                    bpy.context.view_layer.objects.active = obj
+                    current_mode = bpy.context.object.mode
+                    if current_mode!= "SCULPT_CURVES": bpy.ops.object.mode_set(mode="SCULPT_CURVES")
+                    bpy.ops.curves.snap_curves_to_surface(attach_mode='DEFORM')
                     
-                    obj.modifiers.remove(modifier) 
-                    obj.modifiers[0]["Input_69"] = True  
-                    obj.location = obj.location
-                    return {"CANCELLED"}
-                for ojj in same_data: ojj.data=obj.data
-            else:
-                
-                try:
-                    if bpy.app.version_string >= "4.0.0":
-                        with context.temp_override(**context.copy()): bpy.ops.object.modifier_apply(modifier=modifier.name)
-                    elif bpy.app.version_string < "4.0.0": bpy.ops.object.modifier_apply({'object': obj}, modifier=modifier.name)
-                except:
-                    if obj.modifiers[1]["Input_83_attribute_name"] and obj.modifiers[1]["Input_83_use_attribute"]: self.report({'WARNING'}, "No hair to convert, remove the vertex weight paint or don't leave it empty")
-                    else: self.report({'WARNING'}, "No hair to convert, increase the procedural density first")
                     
-                    obj.modifiers.remove(modifier) 
-                    obj.modifiers[0]["Input_69"] = True  
-                    obj.location=obj.location 
-                    return {"CANCELLED"}
-            for mat in mats_before:  
-                obj.data.materials.append(mat)
+                    
+                    bpy.ops.object.mode_set(mode=current_mode)
 
 
+        
+
+        
 
 
-            
-            if obj.parent and obj.parent.modifiers:  
-                for mod in obj.parent.modifiers: 
-                    if mod.type=="ARMATURE":
-                        bpy.context.view_layer.objects.active = obj
-                        current_mode = bpy.context.object.mode
-                        if current_mode!= "SCULPT_CURVES": bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-                        bpy.ops.curves.snap_curves_to_surface(attach_mode='DEFORM')
-                        
-                        
-                        
-                        bpy.ops.object.mode_set(mode=current_mode)
-
-
-            self.report({'INFO'}, "Procedural Distribution converted into Manual Paint")  
-
-            if N_Of_Selected==1 or saveMode=="SCULPT_CURVES": context3sculptbrush(context)
         
 
         
@@ -1594,7 +1650,7 @@ class biomegroupreorder2(bpy.types.Operator):
         biomegroupreorder_f(context, direction= +1, activeobj = buttonobj, objselection=objselection, move_to_extreme=move_to_extreme)
         return{'FINISHED'}
 class ToggleVisibilityOperatorRender(bpy.types.Operator):
-    """Turn off Paint System. Alt+Click to 'Solo' a paint system"""
+    """Turn off Paint System. Alt+Click to 'Solo' a paint system, like a photoshop layer"""
     bl_idname = "secret.toggle_visibilityrender"
     bl_label = "Toggle Visibility"
     bl_options = {'REGISTER', 'UNDO'}
@@ -1713,7 +1769,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
 
         return {'FINISHED'}
 class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
-    """Turn off Paint System for the entire biome"""
+    """Turn off The entire biome. Alt+Click to 'Solo' a Biome and mute the other ones"""
     bl_idname = "secret.toggle_visibilityrender_biome"
     bl_label = "Toggle Visibility"
     bl_options = {'REGISTER', 'UNDO'}
@@ -2063,32 +2119,49 @@ def context3sculptbrush(context,**kwargs):
 
 
         
-        if bpy.context.object.modifiers[0]: brush_density.curves_sculpt_settings.minimum_distance = 0.5/((bpy.context.object.modifiers[0]["Input_68"]**0.5) *bpy.context.object.modifiers[0]["Input_100"])  
+        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance = 0.5/((bpy.context.object.modifiers[0]["Input_68"]**0.5) *bpy.context.object.modifiers[0]["Input_100"])  
         else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
         brush_density.curves_sculpt_settings.density_mode = 'AUTO'
         brush_density.strength = 1
         brush_density.falloff_shape = 'SPHERE'
         brush_density.curve_preset = 'SMOOTHER'
         brush_density.curves_sculpt_settings.density_add_attempts = 200
-        brush_density.curves_sculpt_settings.interpolate_length = False
-        brush_density.curves_sculpt_settings.curve_length = 0.3
-        brush_density.curves_sculpt_settings.interpolate_shape = False
-        brush_density.curves_sculpt_settings.interpolate_point_count = False
-        brush_density.curves_sculpt_settings.points_per_curve = 2
+        if bpy.app.version_string >= "4.2.0":
+            brush_density.curves_sculpt_settings.use_length_interpolate = False
+            brush_density.curves_sculpt_settings.curve_length = 0.5
+            brush_density.curves_sculpt_settings.use_shape_interpolate = False
+            brush_density.curves_sculpt_settings.use_point_count_interpolate = False
+            brush_density.curves_sculpt_settings.points_per_curve = 2
+        elif bpy.app.version_string < "4.2.0":
+            brush_density.curves_sculpt_settings.interpolate_length = False
+            brush_density.curves_sculpt_settings.curve_length = 0.3
+            brush_density.curves_sculpt_settings.interpolate_shape = False
+            brush_density.curves_sculpt_settings.interpolate_point_count = False
+            brush_density.curves_sculpt_settings.points_per_curve = 2
 
         
         brush_grow.strength = 0.05
-        brush_grow.curves_sculpt_settings.scale_uniform = True
+        if bpy.app.version_string >= "4.2.0":
+            brush_grow.curves_sculpt_settings.use_uniform_scale = True
+        elif bpy.app.version_string < "4.2.0":
+            brush_grow.curves_sculpt_settings.scale_uniform = True
 
         
         brush_add.curves_sculpt_settings.add_amount = 2
         brush_add.falloff_shape = 'SPHERE'
         brush_add.use_frontface = True
-        brush_add.curves_sculpt_settings.interpolate_length = False
-        brush_add.curves_sculpt_settings.interpolate_shape = False
-        brush_add.curves_sculpt_settings.interpolate_point_count = False
-        brush_add.curves_sculpt_settings.curve_length = 0.3
-        brush_add.curves_sculpt_settings.points_per_curve = 2
+        if bpy.app.version_string >= "4.2.0":
+            brush_add.curves_sculpt_settings.use_length_interpolate = False
+            brush_add.curves_sculpt_settings.use_shape_interpolate = False
+            brush_add.curves_sculpt_settings.use_point_count_interpolate = False
+            brush_add.curves_sculpt_settings.curve_length = 0.3
+            brush_add.curves_sculpt_settings.points_per_curve = 2
+        elif bpy.app.version_string < "4.2.0":
+            brush_add.curves_sculpt_settings.interpolate_length = False
+            brush_add.curves_sculpt_settings.interpolate_shape = False
+            brush_add.curves_sculpt_settings.interpolate_point_count = False
+            brush_add.curves_sculpt_settings.curve_length = 0.3
+            brush_add.curves_sculpt_settings.points_per_curve = 2
 
         
         brush_delete.falloff_shape = 'PROJECTED'
@@ -3634,7 +3707,10 @@ def secretpaint_function(self,*args,**kwargs):
             bpy.context.view_layer.objects.active = found_to_paint[0]
             if paint_type=="EDIT": curve_draw_tool(context)
             elif paint_type=="WEIGHT_PAINT": vertexgrouppaint_function(self, context, NoMasksDetected=True)
-            elif paint_type=="SCULPT_CURVES": context3sculptbrush(context)
+            elif paint_type=="SCULPT_CURVES":
+                
+                apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True )
+
 
         
         elif not found_to_paint and hoverobj and hoverobj.type=="MESH" and hoverobj!=activeobj.parent and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
@@ -3731,7 +3807,9 @@ def secretpaint_function(self,*args,**kwargs):
                 for modif in hoverobj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                         if modif["Input_69"] == True and modif["Input_83_use_attribute"] == 1: vertexgrouppaint_function(self, context, NoMasksDetected=True)
-                        elif modif["Input_69"] == False: context3sculptbrush(context)
+                        elif modif["Input_69"] == False:
+                            
+                            apply_paint(self, context, activeobj=hoverobj, objselection=[hoverobj], applyIDs=True)
                         else: self.report({'WARNING'}, "Try again while hovering with the mouse on a hair system")
                     else: self.report({'WARNING'}, "Try again while hovering with the mouse on a hair system")
             else: self.report({'WARNING'}, "Try again while hovering with the mouse on a hair system")
@@ -3751,7 +3829,7 @@ def secretpaint_function(self,*args,**kwargs):
             
             elif activeobj.modifiers[0]["Input_69"] == False:
                 
-                context3sculptbrush(context)
+                apply_paint(self, context, activeobj=activeobj, objselection=[activeobj], applyIDs=True)
 
             
             
@@ -7337,84 +7415,6 @@ class curveseparate(bpy.types.Operator):
     def execute(self, context):
         curveseparate_function(context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
