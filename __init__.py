@@ -20,8 +20,8 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 1, 0),
-    "blender": (4, 0, 2),
+    "version": (1, 1, 2),
+    "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
     "warning": "",
@@ -83,7 +83,29 @@ import shutil
 
 import bmesh
 
-from . import addon_updater_ops
+
+addon_is_an_extension = True
+addon_path=[]
+for mod in addon_utils.modules():
+    if mod.bl_info.get("name") == "Secret Paint":
+        addon_path = os.path.dirname(mod.__file__)
+        if "extensions" not in addon_path:
+            from . import addon_updater_ops
+            addon_is_an_extension = False
+        break
+
+
+blender_version = bpy.app.version_string
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -179,16 +201,17 @@ class orencurvepanel(bpy.types.Panel):
             
             
 
-            row = layout.row(align=True)
+
+            row = layout.row(align=True) 
+
+
             row.scale_x = 0.7  
-
-
-            biomegroupreorder = row.operator("secret.biomegroupreorder", text="", icon='TRIA_UP')
+            biomegroupreorder = row.operator("secret.biomegroupreorder", text="", icon='TRIA_UP')   
             biomegroupreorder.object_name = sibling.name
             biomegroupreorder2 = row.operator("secret.biomegroupreorder2", text="", icon='TRIA_DOWN')
             biomegroupreorder2.object_name = sibling.name
-            row.scale_x = 0.98  
 
+            row.scale_x = 0.98  
             
             
             
@@ -301,41 +324,42 @@ class orencurvepanel(bpy.types.Panel):
             
             
         
-        def list_biomes(bgroup,hair_in_bgroup):
+        def list_biomes(bgroup,hair_in_bgroup,row):
             
             
             
 
-            row = layout.row(align=True)
-            row.scale_y = 1.4  
+            
+            
+            row.scale_y = 1.6  
             row.scale_x = 0.99  
 
 
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
 
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            select_button = row.operator("secret.select_biome", text="BIOME " + str(bgroup))
+            select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup) if hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == "" or hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == str(bgroup) else hair_in_bgroup[0][0].modifiers[0]["Socket_8"])
             select_button.object_biome = str(bgroup)
             
 
@@ -481,13 +505,25 @@ class orencurvepanel(bpy.types.Panel):
             
             
             
-            all_bgroups=[]
+
+            all_bgroups=[]   
             for hayr in hair[:]:
                 if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
             all_bgroups.sort()
-            for Bgroup in all_bgroups:
-                hair_in_bgroup = [hayr for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == Bgroup]
-                list_biomes(Bgroup, hair_in_bgroup) 
+            for Bgroup in all_bgroups:     
+                hair_in_bgroup = [hayr for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == Bgroup]  
+
+                if blender_version < "4.1.0":   
+                    list_biomes(Bgroup, hair_in_bgroup,row = layout.row(align=True)) 
+                    for hayr in hair_in_bgroup: list_hair(hayr[0],Bgroup)  
+                elif blender_version >= "4.1.0":
+                    header, panel = layout.panel(str(Bgroup), default_closed=False)
+                    
+                    list_biomes(Bgroup, hair_in_bgroup,header) 
+                    if panel:
+                        for hayr in hair_in_bgroup: list_hair(hayr[0],Bgroup)  
+
+
 
                 
                 
@@ -496,9 +532,29 @@ class orencurvepanel(bpy.types.Panel):
                 
                 
                 
+                
 
-                for hayr in hair_in_bgroup: list_hair(hayr[0],Bgroup)  
-                row = layout.row()
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+
+
+
                 row = layout.row()
                 row = layout.row()
                 row = layout.row()
@@ -647,7 +703,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 12 
+    current_node_version = 14 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -694,9 +750,15 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                 if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
 
         
-        USER = Path(resource_path('USER'))
-        src = USER / "scripts/addons" / "Secret Paint"
-        file_path = src / "Secret Paint.blend"       
+        
+        
+        
+        
+        
+        
+        
+        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
+        elif blender_version >= "4.1.0": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Secret Paint"
         try: bpy.ops.wm.append( 
@@ -1335,37 +1397,24 @@ class biome_delete(bpy.types.Operator):
         return {'FINISHED'}
 
 class SelectBiomeOperator(bpy.types.Operator):
-    """Shift+Click: extend selection, Alt+Click: duplicate a backup system"""
+    """Shift+Click: extend selection, Alt+Click: duplicate a backup system, Ctrl+Click: rename biome"""
     
     bl_idname = "secret.select_biome"
-    bl_label = "Select Object"
+    bl_label = ""
     bl_options = {'REGISTER', 'UNDO'}
-    object_biome: StringProperty()  
+    object_biome: bpy.props.StringProperty(name= "Custom Biome Name", default="")  
+
+    def execute(self, context):  
+        for ob in self.hair_in_bgroup:
+            ob.modifiers[0]["Socket_8"] = self.object_biome
+        return {'FINISHED'}
+
     def invoke(self, context, event):
-        if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
 
         obj = context.object
         if obj:
-            hair=[]
-            parent = obj.parent
-            if obj.type=="CURVES" and parent:   
-                for hai in parent.children: 
-                    if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
-                        for modifier in hai.modifiers:
-                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"): 
-                                hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-            
-            elif obj.type=="MESH" or obj.type=="EMPTY":
-                for hayr in bpy.context.scene.objects:
-                
-                    if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
-                        for modifier in hayr.modifiers: 
-                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj: 
-                                hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-
-            all_bgroups=[]
+            hair = find_all_listed_paintsystems(context)
+            all_bgroups=[]   
             for hayr in hair[:]:
                 if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
             hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
@@ -1411,6 +1460,7 @@ class SelectBiomeOperator(bpy.types.Operator):
             
 
             if event.alt:  
+                if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 new_bgroup_number = 1
                 while new_bgroup_number in all_bgroups: new_bgroup_number +=1
 
@@ -1442,6 +1492,7 @@ class SelectBiomeOperator(bpy.types.Operator):
             
 
             elif event.shift:
+                if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 yet_to_be_selected = []
                 for ob in hair_in_bgroup:
                     if not ob.select_get(): yet_to_be_selected.append(ob)
@@ -1459,21 +1510,15 @@ class SelectBiomeOperator(bpy.types.Operator):
 
 
 
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
+            elif event.ctrl:    
+                self.biom_temp_numb = int(self.object_biome)     
+                self.hair_in_bgroup = hair_in_bgroup
+                return context.window_manager.invoke_props_dialog(self)
 
 
 
             else:
+                if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
                 for ob in hair_in_bgroup:
                     if ob.name in bpy.context.view_layer.objects:
@@ -1521,8 +1566,11 @@ def find_all_listed_paintsystems(context,**kwargs):
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
     if "objselection" in kwargs:objselection = kwargs.get("objselection")
-    else:objselection = bpy.context.selected_objects
-    if activeobj not in objselection: objselection.append(activeobj)
+    
+    else:objselection = bpy.context.scene.objects
+    try:
+        if activeobj not in objselection: objselection.append(activeobj)
+    except:pass  
 
     listed_hair=[]
     parent = activeobj.parent
@@ -1572,8 +1620,8 @@ def biomegroupreorder_f(context,**kwargs):
     secretpaint_update_modifier_f(context)
 
     
+    hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
     if move_to_extreme:
-        hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
         all_biome_numbers = []
         for hayr in hair[:]:
             if hayr[0].modifiers[0]["Socket_0"] not in all_biome_numbers: all_biome_numbers.append(hayr[0].modifiers[0]["Socket_0"])
@@ -1583,8 +1631,8 @@ def biomegroupreorder_f(context,**kwargs):
 
 
 
-    hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
-    hair_in_destination_biome = []
+    
+    
     they_are_all_hidden = True
     for hayr in hair[:]:
         if hayr[0].modifiers[0]["Socket_0"] == destination_biome and hayr[0].modifiers[0]["Socket_2"] == False: they_are_all_hidden = False
@@ -1607,9 +1655,11 @@ def biomegroupreorder_f(context,**kwargs):
                     modif["Socket_6"] = False
                     
                     obj.location=obj.location
+                    if hair_in_destination_biome: modif["Socket_8"] = hair_in_destination_biome[0].modifiers[0]["Socket_8"]   
+
 
     
-    hair = find_all_listed_paintsystems(context,activeobj=activeobj,objselection=objselection)
+    
     biome_remove_gaps(context, hair)
 
 
@@ -6043,8 +6093,9 @@ def export_to_asset_library_function(self,context,event):
     move_objects_script_content = f'''
 import bpy
 import os
-from bpy.utils import resource_path   
+
 from pathlib import Path  
+import addon_utils
 
 
 
@@ -6092,9 +6143,15 @@ for node_tree in bpy.data.node_groups:
         node_tree.name = "Secret Generator_OLD"  
         if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
 
-USER = Path(resource_path('USER'))
-src = USER / "scripts/addons" / "Secret Paint"
-file_path = src / "Secret Paint.blend"      
+
+
+
+for mod in addon_utils.modules():
+    if mod.bl_info.get("name") == "Secret Paint":
+        if bpy.app.version_string >= "4.0.0": node_tree_version = "\Secret Paint.blend"
+        elif bpy.app.version_string < "4.0.0": node_tree_version = "\Secret Paint 4.0 and older.blend"
+        file_path = os.path.dirname(mod.__file__) + node_tree_version
+        break  
 inner_path = "NodeTree"
 object_name = "Secret Paint"
 try: bpy.ops.wm.append( 
@@ -6955,9 +7012,15 @@ def shared_material_f(context):
         
         activeobj = bpy.context.active_object  
         objselection = bpy.context.selected_objects  
-        USER = Path(resource_path('USER'))
-        src = USER / "scripts/addons" / "Secret Paint"
-        file_path = src / "Secret Paint.blend"
+        
+        
+        
+        
+        
+        
+        
+        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
+        elif blender_version >= "4.1.0": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Shared"
         bpy.ops.wm.append(
@@ -8104,6 +8167,947 @@ class curveseparate(bpy.types.Operator):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -8146,8 +9150,14 @@ class secret_menu(bpy.types.AddonPreferences):
 
         mainrow = layout.row()
         col = mainrow.column()
+
+
         
-        addon_updater_ops.update_settings_ui(self, context)
+        
+        
+        
+        if addon_is_an_extension == False: addon_updater_ops.update_settings_ui(self, context)
+        
 
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxAdvancedModifier")
@@ -8325,7 +9335,11 @@ classes = [
 
 def register():
 
-    addon_updater_ops.register(bl_info)
+    
+    
+    
+    
+    if not addon_is_an_extension: addon_updater_ops.register(bl_info)
     
     
 
@@ -8483,7 +9497,11 @@ def register():
 def unregister():
 
     
-    addon_updater_ops.unregister()
+    
+    
+    
+    if not addon_is_an_extension: addon_updater_ops.unregister()
+    
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
