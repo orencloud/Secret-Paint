@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 1, 2),
+    "version": (1, 1, 4),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -359,7 +359,8 @@ class orencurvepanel(bpy.types.Panel):
             
             
 
-            select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup) if hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == "" or hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == str(bgroup) else hair_in_bgroup[0][0].modifiers[0]["Socket_8"])
+            try: select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup) if hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == "" or hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == str(bgroup) else hair_in_bgroup[0][0].modifiers[0]["Socket_8"])
+            except: select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup))
             select_button.object_biome = str(bgroup)
             
 
@@ -643,7 +644,9 @@ class open_folder(bpy.types.Operator):
             return {'FINISHED'}
         biome_name = bpy.context.preferences.addons[__name__].preferences.biomename  
         path = bpy.context.preferences.addons[__name__].preferences.biome_library + os.path.dirname(biome_name)      
-        os.startfile(path)
+        pass #print"111111111111111", path)
+        try: os.startfile(path)
+        except:self.report({'ERROR'}, "The folder doesn't exist. It will be created automatically once you export your Biome. You can also specify a pre-existing folder")
         return {'FINISHED'}
 
 
@@ -2783,6 +2786,7 @@ def secretpaint_function(self,*args,**kwargs):
     if "auto_Mask_Optimization" in kwargs: auto_Mask_Optimization = kwargs.get("auto_Mask_Optimization")
     else:auto_Mask_Optimization=True
 
+    if activeobj == None: return {'FINISHED'}
 
     
     activeobj_BoundingBox_State = activeobj.display_type
@@ -7001,7 +7005,7 @@ def checkboxImportWithoutPainting_f(self, context):
     row.operator("secret.paint_from_library", icon='BRUSH_DATA', text="Paint")
     row.prop(bpy.context.preferences.addons[__name__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__name__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
     
-def shared_material_f(context):
+def shared_material_f(self,context):
 
 
     common_name = "Shared "+ str(context.scene.mypropertieslist.shared_material_index)
@@ -7103,7 +7107,11 @@ def shared_material_f(context):
 
     
     Remove_Enabled = False
-    for nod in bpy.context.active_object.active_material.node_tree.nodes:
+    try: nodeys = bpy.context.active_object.active_material.node_tree.nodes
+    except:
+        self.report({'ERROR'}, "Select an object with at least one Material")
+        return {'FINISHED'}
+    for nod in nodeys:
         if nod.type=="GROUP" and nod.node_tree and nod.node_tree == bpy.data.node_groups.get(common_name): Remove_Enabled = True
 
     
@@ -7254,7 +7262,7 @@ class shared_material(bpy.types.Operator):
     bl_label = "Toggle Shared Material"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        shared_material_f(context)
+        shared_material_f(self,context)
         return {'FINISHED'}
 class circular_array(bpy.types.Operator):
     """Quick Shortcut to create a circular array with the selected object"""
@@ -7478,14 +7486,6 @@ class curveseparate(bpy.types.Operator):
     def execute(self, context):
         curveseparate_function(context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
 
 
 
