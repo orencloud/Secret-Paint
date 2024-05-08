@@ -359,6 +359,7 @@ class orencurvepanel(bpy.types.Panel):
             
             
 
+            
             try: select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup) if hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == "" or hair_in_bgroup[0][0].modifiers[0]["Socket_8"] == str(bgroup) else hair_in_bgroup[0][0].modifiers[0]["Socket_8"])
             except: select_button = row.operator("secret.select_biome", text= "BIOME " + str(bgroup))
             select_button.object_biome = str(bgroup)
@@ -1516,6 +1517,7 @@ class SelectBiomeOperator(bpy.types.Operator):
             elif event.ctrl:    
                 self.biom_temp_numb = int(self.object_biome)     
                 self.hair_in_bgroup = hair_in_bgroup
+                secretpaint_update_modifier_f(context,Forced_Update=True)
                 return context.window_manager.invoke_props_dialog(self)
 
 
@@ -7486,8 +7488,6 @@ class curveseparate(bpy.types.Operator):
     def execute(self, context):
         curveseparate_function(context)
         return {'FINISHED'}
-
-
 
 
 
