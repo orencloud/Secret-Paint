@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 1, 5),
+    "version": (1, 2, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -83,19 +83,34 @@ import shutil
 
 import bmesh
 
+blender_version = bpy.app.version_string
 
-addon_is_an_extension = True
+
+
+
+
+
+
+
+
+
+
+auto_updater_status = True
 addon_path=[]
 for mod in addon_utils.modules():
     if mod.bl_info.get("name") == "Secret Paint":
         addon_path = os.path.dirname(mod.__file__)
-        if "extensions" not in addon_path:
-            from . import addon_updater_ops
-            addon_is_an_extension = False
+        if "extensions" in addon_path:
+            auto_updater_status = False
         break
 
+if blender_version >= "4.2.0":
+    if bpy.app.online_access == False: auto_updater_status = False
 
-blender_version = bpy.app.version_string
+if auto_updater_status == True: from . import addon_updater_ops
+
+
+
 
 
 
@@ -707,7 +722,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 14 
+    current_node_version = 15 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -762,7 +777,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
         
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-        elif blender_version >= "4.1.0": file_path= addon_path + "\Secret Paint.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
+        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Secret Paint"
         try: bpy.ops.wm.append( 
@@ -5218,268 +5234,388 @@ class orencurveselectobj(bpy.types.Operator):
 
 
 
+
+
+
+
+
+def convert_and_join_f(self,context):
+    activeobj = bpy.context.active_object
+    if activeobj.type == "MESH": objtype = "MESH"
+    if activeobj.type == "CURVE": objtype = "BEZ"
+    if activeobj.type == "CURVES": objtype = "HAI"
+    activeobjDATANAME = activeobj.data.name
+
+    bpy.ops.object.select_grouped(extend=True, type='CHILDREN_RECURSIVE')  
+    bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False})
+    bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+
+    activeobjlocation = tuple(bpy.context.active_object.location)
+    objselection = bpy.context.selected_objects  
+
+    
+
+    
+
+    
+    linked_detected_will_cause_dupli_everything = False
+    all_curves=[]
+    for obj in objselection:
+        if obj.type in ["CURVES", "CURVE"]:
+            all_curves.append(obj)   
+            if obj.modifiers:
+                for modif in obj.modifiers:
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
+                        obj.modifiers[0]["Input_50"] = True  
+                        obj.location = obj.location 
+        
+        
+        
+        
+        
+        
+    bpy.ops.object.duplicates_make_real()
+
+    
+    for ob in all_curves:
+        bpy.data.objects.remove(ob, do_unlink=True)
+    newobjselection = bpy.context.selected_objects
+
+    
+    for ob in newobjselection:
+        if ob.type == "EMPTY":
+            newobjselection.remove(ob)
+            bpy.data.objects.remove(ob, do_unlink=True)
+
+
+
+
+    
+    for ob in newobjselection:
+        bpy.context.view_layer.objects.active = ob  
+        if ob.data.library: linked_detected_will_cause_dupli_everything = True
+
+    
+    bpy.ops.object.make_single_user(object=True, obdata=True)   
+    bpy.ops.object.convert(target='MESH')
+
+    
+    if linked_detected_will_cause_dupli_everything:
+        for ob in newobjselection:
+            newobjselection.remove(ob)
+            bpy.data.objects.remove(ob, do_unlink=True)
+        newobjselection = bpy.context.selected_objects 
+
+
+
+
+    
+    center_found = False
+    for ob in newobjselection:
+        if tuple(ob.location) == activeobjlocation:
+            bpy.context.view_layer.objects.active = ob
+            center_found = True
+            break
+
+    bpy.ops.object.join()
+    if not center_found:     
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+        bpy.ops.object.align_tools(subject='1', active_too=True, advanced=True, loc_z=True, ref1='0', ref2='0', self_or_active='0')
+
+    
+    reupdating_existing_mesh=False
+    ob_to_update=[]
+    data_to_update = []
+    for ob in bpy.data.objects:
+        if ob.type=="MESH" and ob.data.name == activeobjDATANAME +"ASSEMBLY-"+objtype:        
+            ob_to_update.append(ob)
+            data_to_update = ob.data
+            reupdating_existing_mesh=True
+    if data_to_update:
+        data_to_update.name = "OLDTODELETE"
+        bpy.context.view_layer.objects.active.data.name = activeobjDATANAME +"ASSEMBLY-"+objtype
+        for ob in ob_to_update: ob.data = bpy.context.view_layer.objects.active.data 
+
+
+
+    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+
+
+    
+    if reupdating_existing_mesh:
+        bpy.data.objects.remove(bpy.context.view_layer.objects.active, do_unlink=True)
+        self.report({'INFO'}, "Reupdated Existing Assemblies")  
+    else:
+        bpy.context.view_layer.objects.active.name = bpy.context.view_layer.objects.active.data.name = activeobjDATANAME +"ASSEMBLY-"+objtype
+        self.report({'INFO'}, "Created new Assembly")  
+        bpy.ops.transform.translate('INVOKE_DEFAULT', use_proportional_edit=False)
+
+
+
+    return {'FINISHED'}
+class convert_and_join(bpy.types.Operator):
+    """convert_and_join"""
+    bl_idname = "secret.convert_and_join"
+    bl_label = "convert_and_join curves into mesh"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        convert_and_join_f(self,context)
+        return {'FINISHED'}
+
+
+
+
+def realize_instances_f(self,context):
+    bpy.ops.object.mode_set(mode="OBJECT")
+    activeobj = bpy.context.active_object
+    activeobj.select_set(True)
+    objselection = bpy.context.selected_objects  
+
+    
+    
+    
+    
+    
+    
+    surface_to_parent_to = activeobj.parent
+
+    all_brush_coll_instans = []  
+    for obj in objselection:
+        if obj.type == "CURVES" and obj.modifiers:
+            for modif in obj.modifiers:  
+                if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
+
+                    if obj.modifiers[0]["Input_2"] and obj.modifiers[0]["Input_2"].instance_collection and obj.modifiers[0]["Input_2"] not in all_brush_coll_instans: all_brush_coll_instans.append(obj.modifiers[0]["Input_2"])
+
+                    if obj.modifiers[0]["Input_9"]:
+                        for obij in obj.modifiers[0]["Input_9"].all_objects:
+                            if obij.instance_collection and obij not in all_brush_coll_instans: all_brush_coll_instans.append(obij)  
+
+                    
+                    
+
+    all_data = []
+    if all_brush_coll_instans:
+        for instance in all_brush_coll_instans:
+            
+            for x in instance.instance_collection.all_objects:
+                if x.data not in all_data: all_data.append(x.data)
+
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    all_previous_objects = set(bpy.context.scene.objects)
+    bpy.ops.object.duplicates_make_real()
+    for ob in objselection:
+        if ob.type == "EMPTY" and not ob.instance_collection:
+            bpy.data.objects.remove(ob, do_unlink=True)  
+        
+        elif ob.type == "CURVES" and ob.modifiers or ob.type == "CURVE" and ob.modifiers:
+            for modif in ob.modifiers:  
+                if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
+                    if ob.type == "CURVES": ob.modifiers[0]["Input_99"] = True  
+                    if ob.type == "CURVE":
+                        ob.modifiers[0].show_viewport = False
+                        ob.modifiers[0].show_render = False
+                    ob.location = ob.location  
+
+    new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    objs_to_delete_afterwards = []
+    for ob in new_obs:
+        if ob.type == "EMPTY":
+            for instance in all_brush_coll_instans:
+                if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  
+                    ob.instance_type = 'COLLECTION'
+                    ob.instance_collection = instance.instance_collection  
+            if not ob.instance_collection: objs_to_delete_afterwards.append(ob)  
+        elif ob.type != "EMPTY" and ob.data and ob.data in all_data and ob not in objs_to_delete_afterwards:
+            objs_to_delete_afterwards.append(ob)
+        if activeobj.type == "CURVE":
+            if ob != new_obs[0]: ob.parent = new_obs[0]
+            ob.matrix_parent_inverse = new_obs[0].matrix_world.inverted()  
+        else:
+            
+            ob.parent = surface_to_parent_to  
+            ob.matrix_parent_inverse = surface_to_parent_to.matrix_world.inverted()  
+
+    
+    
+
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    all_empties_coordinates = []
+    for ob in new_obs:
+        if ob.type == "EMPTY" and str(ob.location) not in all_empties_coordinates:
+            
+            all_empties_coordinates.append(str(ob.location))
+        elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
+            
+            objs_to_delete_afterwards.append(ob)
+
+    
+    
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+    
+    for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+
+    return {'FINISHED'}
 class realize_instances(bpy.types.Operator):
-    """Make instances real, mute Paint System"""
+    """Make instances real, mute Paint System. Shift + Click: convert to mesh"""
     bl_idname = "secret.realize_instances"
     bl_label = "Realize Instances"
     bl_options = {'REGISTER', 'UNDO'}
 
-    def execute(self, context):
-        bpy.ops.object.mode_set(mode="OBJECT")
-        activeobj = bpy.context.active_object
-        activeobj.select_set(True)
-        objselection=bpy.context.selected_objects        
-
-        
-        
-        
-        
-        
-        
-        surface_to_parent_to = activeobj.parent
-
-        all_brush_coll_instans=[] 
-        for obj in objselection:
-            if obj.type == "CURVES" and obj.modifiers:
-                for modif in obj.modifiers:  
-                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-
-                        if obj.modifiers[0]["Input_2"] and obj.modifiers[0]["Input_2"].instance_collection and obj.modifiers[0]["Input_2"] not in all_brush_coll_instans: all_brush_coll_instans.append(obj.modifiers[0]["Input_2"])
-
-                        if obj.modifiers[0]["Input_9"]:
-                            for obij in obj.modifiers[0]["Input_9"].all_objects:
-                                if obij.instance_collection and obij not in all_brush_coll_instans: all_brush_coll_instans.append(obij) 
-
-                        
-                        
-
-        all_data=[]
-        if all_brush_coll_instans:
-            for instance in all_brush_coll_instans:
-                
-                for x in instance.instance_collection.all_objects:
-                    if x.data not in all_data: all_data.append(x.data)
-
-        
-
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-
-
-
-
-        all_previous_objects = set(bpy.context.scene.objects)
-        bpy.ops.object.duplicates_make_real()
-        for ob in objselection:
-            if ob.type=="EMPTY" and not ob.instance_collection: bpy.data.objects.remove(ob, do_unlink=True) 
-            
-            elif ob.type == "CURVES" and ob.modifiers or ob.type == "CURVE" and ob.modifiers:
-                for modif in ob.modifiers:  
-                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                        if ob.type == "CURVES": ob.modifiers[0]["Input_99"] = True 
-                        if ob.type == "CURVE":
-                            ob.modifiers[0].show_viewport=False
-                            ob.modifiers[0].show_render=False
-                        ob.location=ob.location 
-
-        new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
-
-
-        
-        
-        
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-
-        
-        
-        
-
-        
-        
-
-
-        
-        
-        
-        
-        
-        
-        
-
-        
-        
-        objs_to_delete_afterwards=[]
-        for ob in new_obs:
-            if ob.type == "EMPTY":
-                for instance in all_brush_coll_instans:
-                    if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  
-                        ob.instance_type = 'COLLECTION'
-                        ob.instance_collection = instance.instance_collection  
-                if not ob.instance_collection: objs_to_delete_afterwards.append(ob) 
-            elif ob.type != "EMPTY" and ob.data and ob.data in all_data and ob not in objs_to_delete_afterwards: objs_to_delete_afterwards.append(ob)
-            if activeobj.type == "CURVE":
-                if ob != new_obs[0]: ob.parent = new_obs[0]
-                ob.matrix_parent_inverse = new_obs[0].matrix_world.inverted()  
-            else:
-                
-                ob.parent = surface_to_parent_to 
-                ob.matrix_parent_inverse = surface_to_parent_to.matrix_world.inverted()  
-
-
-        
-        
-
-            
-            
-
-            
-            
-            
-            
-            
-            
-            
-            
-
-
-        
-        all_empties_coordinates=[]
-        for ob in new_obs:
-            if ob.type == "EMPTY" and str(ob.location) not in all_empties_coordinates:
-                
-                all_empties_coordinates.append(str(ob.location))
-            elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
-                
-                objs_to_delete_afterwards.append(ob)
-
-        
-        
-
-        
-        
-
-        
-        
-        
-        
-        
-
-
-
-        
-        
-        
-
-        
-        for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
-
-        
-        
-        
-        
-        
-
-        
-        
-        
-        
-        
-        
-
-
-
-
-
-
-
-
-
-
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-
-        
-        
-        
-        
-        
-
-        
-        
-            
-            
-            
-            
-            
-        
-
-        
-
-        
-
+    
+    def invoke(self, context, event):
+        if event.shift: convert_and_join_f(self,context)
+        else: realize_instances_f(self,context)
 
         return {'FINISHED'}
+
+
 def orengrouprecentercollectionobj_function(context,**kwargs): 
 
     if "objselection" in kwargs:objselection = kwargs.get("objselection")
@@ -6153,10 +6289,10 @@ for node_tree in bpy.data.node_groups:
 
 
 for mod in addon_utils.modules():
-    if mod.bl_info.get("name") == "Secret Paint":
-        if bpy.app.version_string >= "4.0.0": node_tree_version = "\Secret Paint.blend"
-        elif bpy.app.version_string < "4.0.0": node_tree_version = "\Secret Paint 4.0 and older.blend"
-        file_path = os.path.dirname(mod.__file__) + node_tree_version
+    if mod.bl_info.get("name") == "Secret Paint":        
+        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
+        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
         break  
 inner_path = "NodeTree"
 object_name = "Secret Paint"
@@ -7026,7 +7162,8 @@ def shared_material_f(self,context):
         
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-        elif blender_version >= "4.1.0": file_path= addon_path + "\Secret Paint.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
+        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Shared"
         bpy.ops.wm.append(
@@ -8985,129 +9122,6 @@ class curveseparate(bpy.types.Operator):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -9156,8 +9170,9 @@ class secret_menu(bpy.types.AddonPreferences):
         
         
         
-        if addon_is_an_extension == False: addon_updater_ops.update_settings_ui(self, context)
         
+        if auto_updater_status == True: addon_updater_ops.update_settings_ui(self, context)
+
 
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxAdvancedModifier")
@@ -9339,8 +9354,9 @@ def register():
     
     
     
-    if not addon_is_an_extension: addon_updater_ops.register(bl_info)
     
+    if auto_updater_status: addon_updater_ops.register(bl_info)
+
     
 
     for cls in classes:
@@ -9495,28 +9511,20 @@ def register():
 
 
 def unregister():
-
     
-    
-    
-    
-    if not addon_is_an_extension: addon_updater_ops.unregister()
-    
+    if auto_updater_status: addon_updater_ops.unregister()
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-    
-
 
     del bpy.types.Scene.mypropertieslist
 
-
     bpy.types.FILEBROWSER_HT_header.remove(checkboxImportWithoutPainting_f)
-
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
+
 
 if __name__ == "__main__":
     register()
