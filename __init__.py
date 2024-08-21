@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -605,8 +605,9 @@ class subpanelutils(bpy.types.Panel):
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
         row = layout.row()
-        layout.prop(bpy.context.preferences.addons[__name__].preferences, "checkboxHideImported", toggle = False, expand=False)  
-        layout.prop(bpy.context.preferences.addons[__name__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxFasterViewportMask", toggle = False, expand=False)
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
         
         
         
@@ -625,20 +626,20 @@ class subpanelutils(bpy.types.Panel):
         row = layout.row()
 
         
-        row.prop(bpy.context.preferences.addons[__name__].preferences, "biomeAssetName")   
+        row.prop(bpy.context.preferences.addons[__package__].preferences, "biomeAssetName")   
         row = layout.row()
-        row.prop(bpy.context.preferences.addons[__name__].preferences, "biome_library")   
+        row.prop(bpy.context.preferences.addons[__package__].preferences, "biome_library")   
         row = layout.row()
-        row.prop(bpy.context.preferences.addons[__name__].preferences, "biomename")   
+        row.prop(bpy.context.preferences.addons[__package__].preferences, "biomename")   
         row = layout.row()
-        row.prop(bpy.context.preferences.addons[__name__].preferences, "biomenamecategory")  
+        row.prop(bpy.context.preferences.addons[__package__].preferences, "biomenamecategory")  
         row = layout.row()
-        biome_name = bpy.context.preferences.addons[__name__].preferences.biomename 
+        biome_name = bpy.context.preferences.addons[__package__].preferences.biomename 
         if not biome_name.endswith(".blend"): biome_name = biome_name + ".blend"  
         blend_file_name= os.path.basename(biome_name)  
         
         
-        file_path = bpy.context.preferences.addons[__name__].preferences.biome_library + "/"+ biome_name    
+        file_path = bpy.context.preferences.addons[__package__].preferences.biome_library + "/"+ biome_name    
         blend_found=False
         if os.path.exists(file_path):
             blend_found = True
@@ -655,11 +656,11 @@ class open_folder(bpy.types.Operator):
     bl_label = "Open Destination Folder"
     
     def execute(self, context):
-        if bpy.context.preferences.addons[__name__].preferences.biome_library == "(No Library Found, create one first)":
+        if bpy.context.preferences.addons[__package__].preferences.biome_library == "(No Library Found, create one first)":
             self.report({'ERROR'}, "No Library Found, create one first")
             return {'FINISHED'}
-        biome_name = bpy.context.preferences.addons[__name__].preferences.biomename  
-        path = bpy.context.preferences.addons[__name__].preferences.biome_library + os.path.dirname(biome_name)      
+        biome_name = bpy.context.preferences.addons[__package__].preferences.biomename  
+        path = bpy.context.preferences.addons[__package__].preferences.biome_library + os.path.dirname(biome_name)      
         pass #print"111111111111111", path)
         try: os.startfile(path)
         except:self.report({'ERROR'}, "The folder doesn't exist. It will be created automatically once you export your Biome. You can also specify a pre-existing folder")
@@ -722,7 +723,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 15 
+    current_node_version = 16 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -860,9 +861,10 @@ def toggleAdvancedModifier():
                 or input.name=="Material Original /Custom"\
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
+                or input.name=="Faster Viewport Mask"\
                 or input.name=="TURN OFF SYSTEM":
-                    if bpy.context.preferences.addons[__name__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-                    elif not bpy.context.preferences.addons[__name__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
+                    if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
+                    elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
 
             elif bpy.app.version_string < "4.0.0":
                 if input.name=="Scale"\
@@ -888,9 +890,10 @@ def toggleAdvancedModifier():
                 or input.name=="Material Original /Custom"\
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
+                or input.name=="Faster Viewport Mask"\
                 or input.name=="TURN OFF SYSTEM":
-                    if bpy.context.preferences.addons[__name__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-                    elif not bpy.context.preferences.addons[__name__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
+                    if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
+                    elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
     
 class secretpaint_update_modifier(bpy.types.Operator):
     """reimport the node group, update selected objects"""
@@ -2720,7 +2723,7 @@ def secretpaint_create_curve(self,context,**kwargs):
     
 
 
-
+    
     hairCurves = bpy.data.objects.new("Secret Paint", bpy.data.hair_curves.new("Secret Paint"))
     if targetCollection.name =="Scene Collection": bpy.context.scene.collection.objects.link(hairCurves) 
     else: bpy.data.collections[targetCollection.name].objects.link(hairCurves) 
@@ -2762,10 +2765,12 @@ def secretpaint_create_curve(self,context,**kwargs):
                 for key, value in mod.items():
                     mod_copy[key] = value
             except: pass
+    hairCurves.modifiers[0]["Input_99"] = True    
     hairCurves.modifiers[0]["Input_71"] = float(random.choice(range(0, 10)))  
     hairCurves.modifiers[0]["Input_73"] = targetOBJsurface 
     hairCurves.modifiers[0]["Input_100"] = abs(max(targetOBJsurface.scale))    
-    hairCurves.modifiers[0]["Input_99"] = False    
+    
+    if bpy.context.preferences.addons[__package__].preferences.checkboxFasterViewportMask: hairCurves.modifiers[0]["Socket_10"] = True
     if targetOBJsurface.modifiers:   
         for mod in targetOBJsurface.modifiers:
             if mod.type in ["ARMATURE","CAST","CURVE","DISPLACE","HOOK","LAPLACIANDEFORM","LATTICE","MESH_DEFORM","SHRINKWRAP","SIMPLE_DEFORM","SMOOTH","CORRECTIVE_SMOOTH","LAPLACIANSMOOTH","SURFACE_DEFORM","WARP","WAVE",]:
@@ -2780,8 +2785,6 @@ def secretpaint_create_curve(self,context,**kwargs):
         
         if smallest_obj.dimensions[0]/smallest_obj.scale[0] > smallest_obj.dimensions[1]/smallest_obj.scale[1]: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[1]/smallest_obj.scale[1]) **2) 
         else: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) 
-
-
 
 
     return hairCurves
@@ -2938,6 +2941,9 @@ def secretpaint_function(self,*args,**kwargs):
         context3sculptbrush(context)
 
         
+        hairCurves.modifiers[0]["Input_99"] = False
+
+        
         pass #print"scatter sel obj on active surface")
 
 
@@ -3049,6 +3055,10 @@ def secretpaint_function(self,*args,**kwargs):
         for x in objselection: x.select_set(False)
         bpy.context.view_layer.objects.active = hairCurves
         context3sculptbrush(context, activeobj=hairCurves)
+
+        
+        hairCurves.modifiers[0]["Input_99"] = False
+
         pass #print"scatter sel collection on active surface")
 
 
@@ -3120,6 +3130,10 @@ def secretpaint_function(self,*args,**kwargs):
         for x in objselection: x.select_set(False)
         bpy.context.view_layer.objects.active = hairCurves
         context3sculptbrush(context, activeobj=hairCurves)
+
+        
+        hairCurves.modifiers[0]["Input_99"] = False
+
         pass #print"scatter selected coll with active hair settings on same surface")
 
 
@@ -3242,6 +3256,7 @@ def secretpaint_function(self,*args,**kwargs):
                     
                     
 
+                    
                     if hairCurves.modifiers[0]["Input_98"] \
                     or hairCurves.modifiers[0]["Input_97"]\
                     or allTerrainArea      /       (1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5)   * (hairCurves.modifiers[0]["Input_100"]**2)))       /2            > 10000 and hairCurves.modifiers[0]["Input_69"]:  
@@ -3250,7 +3265,6 @@ def secretpaint_function(self,*args,**kwargs):
                         hairCurves.modifiers[0]["Input_98"] = False  
                         hairCurves.modifiers[0]["Input_97"] = None
                     
-
                     if bpy.app.version_string >= "4.0.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value  
                     elif bpy.app.version_string < "4.0.0":
                         try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value  
@@ -3311,6 +3325,10 @@ def secretpaint_function(self,*args,**kwargs):
 
         for x in objselection: bpy.data.objects[x.name].select_set(False)
         if N_Of_Selected >= 2 and hairCurves.modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])
+
+        
+        for ojgb in newlycreated_hair:
+            ojgb.modifiers[0]["Input_99"] = False
 
         pass #print"many HAIR on MANY MESHES")
 
@@ -3455,6 +3473,7 @@ def secretpaint_function(self,*args,**kwargs):
                 hairCurves.modifiers[0]["Input_98"] = False  
                 hairCurves.modifiers[0]["Input_97"] = None
 
+
         
         if len([slot.material for slot in activeobj.material_slots if slot.material != None]) == 0:
             for i, mat_slot in enumerate(all_found_parents_without_activeobj[0].material_slots):
@@ -3488,6 +3507,11 @@ def secretpaint_function(self,*args,**kwargs):
         elif bpy.app.version_string < "4.0.0":
             try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value 
             except:pass
+
+        
+        for ojgb in newlycreated_hair:
+            ojgb.modifiers[0]["Input_99"] = False
+
         pass #print"MANY HAIR on single MESH or HAIR")
 
 
@@ -3593,6 +3617,7 @@ def secretpaint_function(self,*args,**kwargs):
         
         
         
+        
 
         if bpy.app.version_string >= "4.0.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value  
         elif bpy.app.version_string < "4.0.0":
@@ -3610,6 +3635,10 @@ def secretpaint_function(self,*args,**kwargs):
         bpy.context.view_layer.objects.active = hairCurves
         if not activeobj.modifiers[0]["Input_69"]: context3sculptbrush(context, activeobj=hairCurves) 
         
+
+        
+        hairCurves.modifiers[0]["Input_99"] = False
+
         pass #print"scatter selected obj with active hair settings on same surface")
 
 
@@ -5929,7 +5958,7 @@ def export_to_asset_library_function(self,context,event):
     
     
 
-    if bpy.context.preferences.addons[__name__].preferences.biome_library == "(No Library Found, create one first)":
+    if bpy.context.preferences.addons[__package__].preferences.biome_library == "(No Library Found, create one first)":
         self.report({'ERROR'}, "No Library Found, create one first")
         return{'FINISHED'}
 
@@ -5969,7 +5998,7 @@ def export_to_asset_library_function(self,context,event):
     
     
     
-    asset_name = bpy.context.preferences.addons[__name__].preferences.biomeAssetName  
+    asset_name = bpy.context.preferences.addons[__package__].preferences.biomeAssetName  
     if not asset_name and activeobj: asset_name = activeobj.name
     new_collection = bpy.data.collections.new(asset_name)
     bpy.context.scene.collection.children.link(new_collection)
@@ -6165,9 +6194,9 @@ def export_to_asset_library_function(self,context,event):
 
 
     
-    target_catalog = bpy.context.preferences.addons[__name__].preferences.biomenamecategory 
+    target_catalog = bpy.context.preferences.addons[__package__].preferences.biomenamecategory 
     if target_catalog:
-        folder = bpy.context.preferences.addons[__name__].preferences.biome_library + "/blender_assets.cats.txt"   
+        folder = bpy.context.preferences.addons[__package__].preferences.biome_library + "/blender_assets.cats.txt"   
         with open(folder, 'a+') as f:
             f.seek(0) 
             existingID=False
@@ -6203,8 +6232,8 @@ def export_to_asset_library_function(self,context,event):
 
 
     
-    biome_name = bpy.context.preferences.addons[__name__].preferences.biomename 
-    path= bpy.context.preferences.addons[__name__].preferences.biome_library + os.path.dirname(biome_name) 
+    biome_name = bpy.context.preferences.addons[__package__].preferences.biomename 
+    path= bpy.context.preferences.addons[__package__].preferences.biome_library + os.path.dirname(biome_name) 
     if not os.path.exists(path): os.makedirs(path) 
 
     
@@ -6678,7 +6707,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
     
     if justImport == False:
-        if bpy.context.preferences.addons[__name__].preferences.checkboxHideImported: 
+        if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported: 
             all_collections = []
             for top_level_collection in bpy.context.scene.collection.children:
                 add_collections_to_list(top_level_collection, all_collections)
@@ -7141,7 +7170,7 @@ def checkboxImportWithoutPainting_f(self, context):
     
     
     row.operator("secret.paint_from_library", icon='BRUSH_DATA', text="Paint")
-    row.prop(bpy.context.preferences.addons[__name__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__name__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
+    row.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
     
 def shared_material_f(self,context):
 
@@ -9093,35 +9122,6 @@ class curveseparate(bpy.types.Operator):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -9140,8 +9140,9 @@ addon_keymaps = []
 
 import rna_keymap_ui
 class secret_menu(bpy.types.AddonPreferences):
-    bl_idname = __name__
+    bl_idname = __package__
     
+
 
     auto_check_update : bpy.props.BoolProperty(name="Auto-check for Update", description="If enabled, auto-check for updates using an interval", default=True)
     updater_interval_months : bpy.props.IntProperty(name='Months', description="Number of months between checking for updates", default=0, min=0)
@@ -9153,7 +9154,8 @@ class secret_menu(bpy.types.AddonPreferences):
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
-    checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f) 
+    checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f)
+    checkboxFasterViewportMask: bpy.props.BoolProperty(name="Faster Viewport Mask", description="Useful for Huge terrains: Newly created systems will have faster viewport performance when dragging the mask in the viewport at the expense of stable IDs (the plants randomly change rotation and scale when moving the mask around in the viewport. IDs are still stable at render time) Manual checkbox can be found in the modifier of each indivual system", default=False, update=secretpaint_update_modifier_f)  
     all_libraries = [(lib.path,lib.name,"") for lib in bpy.context.preferences.filepaths.asset_libraries]
 
     if len(all_libraries) == 0: all_libraries = [("(No Library Found, create one first)","(No Library Found, create one first)","")]
@@ -9174,8 +9176,9 @@ class secret_menu(bpy.types.AddonPreferences):
         if auto_updater_status == True: addon_updater_ops.update_settings_ui(self, context)
 
 
-        layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxAdvancedModifier")
+        layout.prop(self, "checkboxFasterViewportMask")
+        layout.prop(self, "checkboxHideImported")
 
         row = layout.row()
         row = layout.row()
