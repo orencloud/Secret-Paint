@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -606,7 +606,7 @@ class subpanelutils(bpy.types.Panel):
         row.operator("secret.straight_array", icon="CURVE_PATH")
         row = layout.row()
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
-        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxFasterViewportMask", toggle = False, expand=False)
+        
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
         
         
@@ -779,7 +779,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Secret Paint"
         try: bpy.ops.wm.append( 
@@ -2202,13 +2203,13 @@ def context3sculptbrush(context,**kwargs):
         brush_density.curves_sculpt_settings.density_add_attempts = 200
         if bpy.app.version_string >= "4.2.0":
             brush_density.curves_sculpt_settings.use_length_interpolate = False
-            brush_density.curves_sculpt_settings.curve_length = 0.5
+            brush_density.curves_sculpt_settings.curve_length = 0.32  
             brush_density.curves_sculpt_settings.use_shape_interpolate = False
             brush_density.curves_sculpt_settings.use_point_count_interpolate = False
             brush_density.curves_sculpt_settings.points_per_curve = 2
         elif bpy.app.version_string < "4.2.0":
             brush_density.curves_sculpt_settings.interpolate_length = False
-            brush_density.curves_sculpt_settings.curve_length = 0.3
+            brush_density.curves_sculpt_settings.curve_length = 0.32  
             brush_density.curves_sculpt_settings.interpolate_shape = False
             brush_density.curves_sculpt_settings.interpolate_point_count = False
             brush_density.curves_sculpt_settings.points_per_curve = 2
@@ -2228,13 +2229,13 @@ def context3sculptbrush(context,**kwargs):
             brush_add.curves_sculpt_settings.use_length_interpolate = False
             brush_add.curves_sculpt_settings.use_shape_interpolate = False
             brush_add.curves_sculpt_settings.use_point_count_interpolate = False
-            brush_add.curves_sculpt_settings.curve_length = 0.3
+            brush_add.curves_sculpt_settings.curve_length = 0.32  
             brush_add.curves_sculpt_settings.points_per_curve = 2
         elif bpy.app.version_string < "4.2.0":
             brush_add.curves_sculpt_settings.interpolate_length = False
             brush_add.curves_sculpt_settings.interpolate_shape = False
             brush_add.curves_sculpt_settings.interpolate_point_count = False
-            brush_add.curves_sculpt_settings.curve_length = 0.3
+            brush_add.curves_sculpt_settings.curve_length = 0.32  
             brush_add.curves_sculpt_settings.points_per_curve = 2
 
         
@@ -2770,7 +2771,7 @@ def secretpaint_create_curve(self,context,**kwargs):
     hairCurves.modifiers[0]["Input_73"] = targetOBJsurface 
     hairCurves.modifiers[0]["Input_100"] = abs(max(targetOBJsurface.scale))    
     
-    if bpy.context.preferences.addons[__package__].preferences.checkboxFasterViewportMask: hairCurves.modifiers[0]["Socket_10"] = True
+    
     if targetOBJsurface.modifiers:   
         for mod in targetOBJsurface.modifiers:
             if mod.type in ["ARMATURE","CAST","CURVE","DISPLACE","HOOK","LAPLACIANDEFORM","LATTICE","MESH_DEFORM","SHRINKWRAP","SIMPLE_DEFORM","SMOOTH","CORRECTIVE_SMOOTH","LAPLACIANSMOOTH","SURFACE_DEFORM","WARP","WAVE",]:
@@ -6321,7 +6322,8 @@ for mod in addon_utils.modules():
     if mod.bl_info.get("name") == "Secret Paint":        
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         break  
 inner_path = "NodeTree"
 object_name = "Secret Paint"
@@ -7192,7 +7194,8 @@ def shared_material_f(self,context):
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version >= "4.2.0": file_path= addon_path + "\Secret Paint.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Shared"
         bpy.ops.wm.append(
@@ -9119,9 +9122,6 @@ class curveseparate(bpy.types.Operator):
 
 
 
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -9155,7 +9155,7 @@ class secret_menu(bpy.types.AddonPreferences):
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
     checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f)
-    checkboxFasterViewportMask: bpy.props.BoolProperty(name="Faster Viewport Mask", description="Useful for Huge terrains: Newly created systems will have faster viewport performance when dragging the mask in the viewport at the expense of stable IDs (the plants randomly change rotation and scale when moving the mask around in the viewport. IDs are still stable at render time) Manual checkbox can be found in the modifier of each indivual system", default=False, update=secretpaint_update_modifier_f)  
+    
     all_libraries = [(lib.path,lib.name,"") for lib in bpy.context.preferences.filepaths.asset_libraries]
 
     if len(all_libraries) == 0: all_libraries = [("(No Library Found, create one first)","(No Library Found, create one first)","")]
@@ -9177,7 +9177,7 @@ class secret_menu(bpy.types.AddonPreferences):
 
 
         layout.prop(self, "checkboxAdvancedModifier")
-        layout.prop(self, "checkboxFasterViewportMask")
+        
         layout.prop(self, "checkboxHideImported")
 
         row = layout.row()
