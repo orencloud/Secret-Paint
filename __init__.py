@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 3, 1),
+    "version": (1, 4, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -185,18 +185,15 @@ class orencurvepanel(bpy.types.Panel):
         row.operator("secret.paint", icon= 'BRUSH_DATA', text= "Paint") 
         
         row = layout.row()
-        row = layout.row()
+        
         row = layout.row()
         row.scale_y = 1.7  
         row.operator("secret.paintbrushswitch", icon= 'BRUSHES_ALL', text= "Switch") 
-        row.operator("secret.realize_instances", icon="LIBRARY_DATA_OVERRIDE_NONEDITABLE")
+        row.operator("secret.assembly", icon="MOD_EXPLODE", text= "Assembly")
         
         row = layout.row()
         row.operator("secret.fixdyntopo", icon="GROUP_UVS")
-        row.operator("secret.group", icon= 'COLLECTION_NEW', text= "Group")
-        row.operator("secret.instancecollfromactiveobj", icon="OUTLINER_OB_GROUP_INSTANCE", text= "Instance")
-        
-        row.operator("secret.grouprecentercollectionobj", icon="ORIENTATION_CURSOR", text= "")
+        row.operator("secret.realize_instances", icon="LIBRARY_DATA_OVERRIDE_NONEDITABLE")
         row = layout.row()
         
         
@@ -596,14 +593,20 @@ class subpanelutils(bpy.types.Panel):
         
         row = layout.row()
         
+        row.operator("secret.group", icon= 'COLLECTION_NEW')
+        row.operator("secret.instancecollfromactiveobj", icon="OUTLINER_OB_GROUP_INSTANCE", text= "Instance")
+        
+        row.operator("secret.grouprecentercollectionobj", icon="ORIENTATION_CURSOR", text= "")
+        row = layout.row()
         row.scale_y = 1.3  
         row.operator("secret.shared_material", icon= 'MATERIAL')
         row.scale_x = 0.3  
         row.prop(context.scene.mypropertieslist, "shared_material_index", expand=True, text="")
         row = layout.row()
-        row = layout.row()
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
+        row = layout.row()
+        row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
         row = layout.row()
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
         
@@ -710,6 +713,7 @@ def reupdate_hair_material(context,**kwargs):
 
     return {'FINISHED'}
 def contextorencurveappend(context,**kwargs):  
+    pass #print"AAAAAAAAAAAAAAAAAAAAAAAA ----- contextorencurveappend")
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
@@ -721,6 +725,7 @@ def contextorencurveappend(context,**kwargs):
     modifier.node_group = bpy.data.node_groups.get("Secret Paint")
     return {"FINISHED"}
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
+    pass #print"AAAAAAAAAAAAAAAAAAAAAAAA ----- contextorencurveappend")
 
 
     current_node_version = 16 
@@ -779,7 +784,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
         elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Secret Paint"
@@ -897,9 +902,9 @@ def toggleAdvancedModifier():
                     elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
     
 class secretpaint_update_modifier(bpy.types.Operator):
-    """reimport the node group, update selected objects"""
+    """Reimport the Secret Paint node tree: Useful when opening older blend files. Blender developers often change how the Geometry Node tree calculates attributes. So when opening an old scene with a new blender version, reimport the latest Node Tree which will account for those changes"""
     bl_idname = "secret.secretpaint_update_modifier"
-    bl_label = "update node group"
+    bl_label = "Reimport Node Tree"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2785,7 +2790,9 @@ def secretpaint_create_curve(self,context,**kwargs):
         
         
         if smallest_obj.dimensions[0]/smallest_obj.scale[0] > smallest_obj.dimensions[1]/smallest_obj.scale[1]: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[1]/smallest_obj.scale[1]) **2) 
-        else: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) 
+        else:
+            if smallest_obj.dimensions[0] == (0,0,0) and smallest_obj.scale[0] > (0,0,0): hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) 
+            else: hairCurves.modifiers[0]["Input_68"] = 5
 
 
     return hairCurves
@@ -4156,8 +4163,8 @@ def secretpaint_function(self,*args,**kwargs):
             if material_slot.material and material_slot.material.name not in hairCurves.data.materials:
                 hairCurves.data.materials.append(material_slot.material)
         
-        if activeobj.type!="MESH": density_large = 1.0 
-        else: hairCurves.modifiers[0]["Input_68"] = (1 / ( max(activeobj.dimensions)  **2)  )   *2
+        if activeobj.type in ["MESH","CURVE"] and activeobj.dimensions > (0,0,0): hairCurves.modifiers[0]["Input_68"] = (1 / ( max(activeobj.dimensions)  **2)  )   *2
+        else:density_large = 1.0  
 
         dont_set_drawing_tool = False
         if circulararray or straightarray:  
@@ -4730,7 +4737,7 @@ def context283482(context,**kwargs):
 class orengroup(bpy.types.Operator):
     """Group selected objects in a subcollection of the active collection. Name it as the active object. Shortcut also works in the Outliner"""
     bl_idname = "secret.group"
-    bl_label = "Group"
+    bl_label = "Collection"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         context283482(context)
@@ -5374,10 +5381,10 @@ def convert_and_join_f(self,context):
     
     if reupdating_existing_mesh:
         bpy.data.objects.remove(bpy.context.view_layer.objects.active, do_unlink=True)
-        self.report({'INFO'}, "Reupdated Existing Assemblies")  
+        self.report({'INFO'}, "Updated Existing Mesh Assembly")  
     else:
         bpy.context.view_layer.objects.active.name = bpy.context.view_layer.objects.active.data.name = activeobjDATANAME +"ASSEMBLY-"+objtype
-        self.report({'INFO'}, "Created new Assembly")  
+        self.report({'INFO'}, "Created a new Mesh Assembly")  
         bpy.ops.transform.translate('INVOKE_DEFAULT', use_proportional_edit=False)
 
 
@@ -5396,7 +5403,7 @@ class convert_and_join(bpy.types.Operator):
 
 
 def realize_instances_f(self,context):
-    bpy.ops.object.mode_set(mode="OBJECT")
+    
     activeobj = bpy.context.active_object
     activeobj.select_set(True)
     objselection = bpy.context.selected_objects  
@@ -5410,19 +5417,67 @@ def realize_instances_f(self,context):
     surface_to_parent_to = activeobj.parent
 
     all_brush_coll_instans = []  
+    all_assemblies_modifiers = []  
+    realized_partial_hair = False
     for obj in objselection:
         if obj.type == "CURVES" and obj.modifiers:
+
+            
+            if bpy.context.object.mode != "OBJECT":
+                realized_partial_hair =True
+
+                apply_paint(self, context)
+
+                Coll_of_Active = []
+                original_collection = bpy.context.view_layer.active_layer_collection  
+                ucol = obj.users_collection
+                for i in ucol:
+                    layer_collection = bpy.context.view_layer.layer_collection  
+                    Coll_of_Active = recurLayerCollection(layer_collection, i.name)
+                    bpy.context.view_layer.active_layer_collection = Coll_of_Active
+                newobj = obj.copy()
+                bpy.context.view_layer.active_layer_collection = original_collection
+                newobj.data = obj.data.copy()
+                bpy.context.collection.objects.link(newobj)
+                
+                
+
+                newobj.select_set(False)
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.curves.select_linked()
+                bpy.ops.curves.delete()
+
+
+                obj.select_set(False)
+                newobj.select_set(True)
+                bpy.context.view_layer.objects.active = newobj
+                bpy.ops.object.mode_set(mode="EDIT")
+                bpy.ops.curves.select_linked()
+                bpy.ops.curves.select_all(action='INVERT')
+                bpy.ops.curves.delete()
+                bpy.ops.object.mode_set(mode="OBJECT")
+                activeobj = newobj
+                objselection = [activeobj]
+
             for modif in obj.modifiers:  
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
 
-                    if obj.modifiers[0]["Input_2"] and obj.modifiers[0]["Input_2"].instance_collection and obj.modifiers[0]["Input_2"] not in all_brush_coll_instans: all_brush_coll_instans.append(obj.modifiers[0]["Input_2"])
+                    if modif["Input_2"] and modif["Input_2"] not in all_brush_coll_instans:
+                        if modif["Input_2"].instance_collection: all_brush_coll_instans.append(modif["Input_2"])
 
-                    if obj.modifiers[0]["Input_9"]:
-                        for obij in obj.modifiers[0]["Input_9"].all_objects:
+                        
+                        elif modif["Input_2"].modifiers and modif["Input_2"].modifiers[0].type == "NODES" and modif["Input_2"].modifiers[0].node_group and "ASSEMBLY" in modif["Input_2"].modifiers[0].node_group.name and modif["Input_2"].modifiers[0].show_viewport == True:
+                            if modif["Input_2"].modifiers[0] not in all_assemblies_modifiers: all_assemblies_modifiers.append(modif["Input_2"].modifiers[0])
+                            modif["Input_2"].modifiers[0].show_viewport = False
+
+                    if modif["Input_9"]:
+                        for obij in modif["Input_9"].all_objects:
                             if obij.instance_collection and obij not in all_brush_coll_instans: all_brush_coll_instans.append(obij)  
 
-                    
-                    
+                            
+                            elif obij.modifiers and obij.modifiers[0].type=="NODES" and obij.modifiers[0].node_group and "ASSEMBLY" in obij.modifiers[0].node_group.name and obij.modifiers[0].show_viewport == True:
+                                if obij.modifiers[0] not in all_assemblies_modifiers: all_assemblies_modifiers.append(obij.modifiers[0])
+                                obij.modifiers[0].show_viewport = False
 
     all_data = []
     if all_brush_coll_instans:
@@ -5433,89 +5488,43 @@ def realize_instances_f(self,context):
 
     
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
 
     all_previous_objects = set(bpy.context.scene.objects)
     bpy.ops.object.duplicates_make_real()
+    objs_to_delete_afterwards = []
     for ob in objselection:
         if ob.type == "EMPTY" and not ob.instance_collection:
             bpy.data.objects.remove(ob, do_unlink=True)  
         
         elif ob.type == "CURVES" and ob.modifiers or ob.type == "CURVE" and ob.modifiers:
             for modif in ob.modifiers:  
-                if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                    if ob.type == "CURVES": ob.modifiers[0]["Input_99"] = True  
+                if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
+                    if ob.type == "CURVES" and ob not in objs_to_delete_afterwards: objs_to_delete_afterwards.append(ob)   
                     if ob.type == "CURVE":
                         ob.modifiers[0].show_viewport = False
                         ob.modifiers[0].show_render = False
                     ob.location = ob.location  
 
+    
+    for modif in all_assemblies_modifiers: modif.show_viewport = True
+
     new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 
     
-    
-    
-
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-    objs_to_delete_afterwards = []
     for ob in new_obs:
+
+        
+        if ob.modifiers and ob.modifiers[0].type == "NODES" and ob.modifiers[0].node_group and "ASSEMBLY" in ob.modifiers[0].node_group.name and ob.modifiers[0].show_viewport == False:
+            ob.modifiers[0].show_viewport = True 
+            
+
+
+
         if ob.type == "EMPTY":
             for instance in all_brush_coll_instans:
                 if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  
@@ -5527,25 +5536,13 @@ def realize_instances_f(self,context):
         if activeobj.type == "CURVE":
             if ob != new_obs[0]: ob.parent = new_obs[0]
             ob.matrix_parent_inverse = new_obs[0].matrix_world.inverted()  
-        else:
-            
+        elif activeobj.type == "CURVES":
             ob.parent = surface_to_parent_to  
             ob.matrix_parent_inverse = surface_to_parent_to.matrix_world.inverted()  
+        else:
+            ob.parent = surface_to_parent_to  
 
-    
-    
 
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
 
     
     all_empties_coordinates = []
@@ -5557,92 +5554,22 @@ def realize_instances_f(self,context):
             
             objs_to_delete_afterwards.append(ob)
 
-    
-    
 
-    
-    
-
-    
-    
-    
-    
-    
-
-    
-    
-    
 
     
     for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
 
-    
-    
-    
-    
-    
 
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
-
-    
-
-    
 
     return {'FINISHED'}
 class realize_instances(bpy.types.Operator):
-    """Make instances real, mute Paint System. Shift + Click: convert to mesh"""
+    """Make instances real, mute Paint System. If executed from Edit mode or Hair Sculpt mode, it will only realize the selected hair strands. So you can choose which instance will be converted to an object and keep the rest as a Paint System"""
     bl_idname = "secret.realize_instances"
     bl_label = "Realize Instances"
     bl_options = {'REGISTER', 'UNDO'}
 
-    
-    def invoke(self, context, event):
-        if event.shift: convert_and_join_f(self,context)
-        else: realize_instances_f(self,context)
-
+    def execute(self, context):
+        realize_instances_f(self,context)
         return {'FINISHED'}
 
 
@@ -6322,7 +6249,7 @@ for mod in addon_utils.modules():
     if mod.bl_info.get("name") == "Secret Paint":        
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
         elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         break  
 inner_path = "NodeTree"
@@ -7194,7 +7121,7 @@ def shared_material_f(self,context):
         
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
         elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Shared"
@@ -7660,55 +7587,278 @@ class curveseparate(bpy.types.Operator):
 
 
 
+def get_all_children(parent,all_children,context):
+    for children in parent.children:
+        if children.name in bpy.context.view_layer.objects: all_children.append(children)  
+        get_all_children(children,all_children,context)
+    return all_children
+
+def get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context):
+    for obj in all_assemblies_and_their_parent:
+        if obj[1] == activeobj:
+            if obj[0] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[0])
+            get_all_DownwardsDependencies(obj[0], final_assemblies_to_process, all_assemblies_and_their_parent, context)
+    return final_assemblies_to_process
+def get_all_UpwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context):
+    for obj in all_assemblies_and_their_parent:
+        if obj[0] == activeobj:
+            if obj[1] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[1])
+            pass #printf"{obj[0].name} is the activeobj,{obj[1].name} is it's parent that's being appended to FINAL and reprocessed, here's final list so far {[x.name for x in final_assemblies_to_process]}")
+            get_all_UpwardsDependencies(obj[1], final_assemblies_to_process, all_assemblies_and_their_parent, context)
+    return final_assemblies_to_process
+
+def assembly_1(self,context,**kwargs):
+
+    original_activeobj = activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
+    if activeobj == None: activeobj = bpy.context.active_object
+    
+    
+    
+    
+    if activeobj == None:
+        self.report({'ERROR'}, "Select the Parent Object. Its children will be automatically included in the Assembly")
+        return{'FINISHED'}
+
+    for ob in bpy.context.selected_objects:
+        if not ob.parent or ob.parent and ob.parent not in bpy.context.selected_objects: activeobj = original_activeobj = ob
+
+    
+    all_objs_used_as_parents = []
+    all_assemblies_and_their_parent = []
+    for obj in bpy.data.objects:
+        if obj.type == "MESH" and obj.modifiers:
+            for modif in obj.modifiers:
+                if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
+                    if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
+                    elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                    for input in node_group_inputs_temp:
+                        if input.socket_type == "NodeSocketObject" and input.name == "Parent":
+                            all_assemblies_and_their_parent.append((obj,modif[input.identifier]))
+                            if modif[input.identifier] not in all_objs_used_as_parents: all_objs_used_as_parents.append(modif[input.identifier])
+
+
+    
+    final_assemblies_to_process =[]
+    get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context)
+    get_all_UpwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context)
+
+
+    
+    if activeobj in final_assemblies_to_process:
+        final_assemblies_to_process.remove(activeobj)
+        final_assemblies_to_process.append(activeobj)
+    else: final_assemblies_to_process.append(activeobj) 
+
+
+    
+    main_loops=0
+    pass #printfinal_assemblies_to_process)
+    for obj in final_assemblies_to_process:
+        there_are_assemblies_to_update, processing_original_activeobj = assembly_2(self, context, activeobj=obj, original_activeobj=original_activeobj)  
+        main_loops+=1
+
+    if processing_original_activeobj and there_are_assemblies_to_update==False:
+        if len(bpy.context.selected_objects) >= 2: self.report({'INFO'}, "Created a New Assembly.  You only need to select the Parent Object. Its children will be automatically included in the Assembly")
+        else: self.report({'INFO'}, "Created a New Assembly")
+        bpy.ops.transform.translate('INVOKE_DEFAULT', use_proportional_edit=False)
+    elif main_loops >=3:
+        self.report({'INFO'}, "Updated Interdependent Assemblies")
+        for ob in final_assemblies_to_process: ob.select_set(True)
+    else:
+        self.report({'INFO'}, "Updated Existing Assembly")
+        for ob in final_assemblies_to_process: ob.select_set(True)
+
+    return{'FINISHED'}
+def assembly_2(self,context,**kwargs):
+
+    original_activeobj = kwargs.get("original_activeobj") if "original_activeobj" in kwargs else bpy.context.active_object
+    activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
+    if activeobj == None: activeobj = bpy.context.active_object
+    processing_original_activeobj = True if activeobj == original_activeobj else False
+
+
+    there_are_assemblies_to_update = False
+    all_children=[]
+
+    
+    if activeobj.type == "MESH" and activeobj.modifiers and not activeobj.children and processing_original_activeobj:
+        for modif in activeobj.modifiers:
+            if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
+                if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
+                elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                for input in node_group_inputs_temp:
+                    if input.socket_type == "NodeSocketObject" and input.name == "Parent":
+                        activeobj = modif[input.identifier]
+                        break
+
+
+    
+    node_group = bpy.data.node_groups[activeobj.name + "ASSEMBLY"] if activeobj.name + "ASSEMBLY" in bpy.data.node_groups else None
+    all_modif_to_update =[]
+    for obj in bpy.data.objects:
+        if obj.type == "MESH" and obj.modifiers:
+            for modif in obj.modifiers:
+                if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
+                    if modif.node_group == node_group and modif not in all_modif_to_update:
+                        all_modif_to_update.append(modif)
+                        there_are_assemblies_to_update = True
+                    if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
+                    elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                    for input in node_group_inputs_temp:
+                        if input.socket_type == "NodeSocketObject" and input.name == "Parent" and modif[input.identifier] == activeobj and modif not in all_modif_to_update:
+                            all_modif_to_update.append(modif)
+                            there_are_assemblies_to_update = True
+                            break 
+
+
+
+    
+    if there_are_assemblies_to_update or processing_original_activeobj:
+
+
+        
+        
+        if node_group: bpy.data.node_groups.remove(node_group) 
+        node_group = bpy.data.node_groups.new("GeometryNodeGroup", 'GeometryNodeTree')
+        node_group.name = activeobj.name + "ASSEMBLY"
+        for modif in all_modif_to_update: modif.node_group = node_group 
 
 
 
 
 
+        
+        if processing_original_activeobj and there_are_assemblies_to_update==False:
+
+            
+            Coll_of_Active = []
+            original_collection = bpy.context.view_layer.active_layer_collection  
+            for i in activeobj.users_collection:
+                Coll_of_Active = recurLayerCollection(bpy.context.view_layer.layer_collection, i.name)
+                bpy.context.view_layer.active_layer_collection = Coll_of_Active
+
+            
+            mesh = bpy.data.meshes.new("Secret Assembly")  
+            obj = bpy.data.objects.new(activeobj.name + "ASSEMBLY", mesh)  
+            obj.location = activeobj.matrix_world.to_translation()
+            bpy.context.collection.objects.link(obj)  
+            for x in bpy.context.selected_objects: x.select_set(False)
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            modifier = obj.modifiers.new(name="Secret Assembly", type='NODES')  
+            modifier.node_group = node_group  
+            
+
+            
+            bpy.context.view_layer.active_layer_collection = original_collection
+
+        
+        input = node_group.nodes.new('NodeGroupInput')
+        input.location = (-500,0)
+        node_group.interface.clear()
+        if bpy.app.version_string >= "4.0.0":
+            node_group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+            node_group.interface.new_socket(name='Parent', in_out='INPUT', socket_type='NodeSocketObject')
+        elif bpy.app.version_string < "4.0.0":
+            node_group.outputs.new(type='NodeSocketGeometry', name='Geometry')
+            node_group.outputs.new(type='NodeSocketObject', name='Parent')
+        output = node_group.nodes.new('NodeGroupOutput')
+        output.location = (+1100,0)
+        if bpy.app.version_string >= "4.0.0": node_group.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+        elif bpy.app.version_string < "4.0.0": node_group.inputs.new(type='NodeSocketGeometry', name='GEO')
+        JoinGeometry = node_group.nodes.new('GeometryNodeJoinGeometry')
+        JoinGeometry.location = (+800,0)
+        node_group.links.new(JoinGeometry.outputs[0], output.inputs[0])
 
 
 
 
+        
+        get_all_children(activeobj,all_children,context)
+
+
+        parent_info_node = node_group.nodes.new(type='GeometryNodeObjectInfo')
+        parent_info_node.location = (-300,0)
+        parent_info_node.inputs[0].default_value = activeobj 
+        parent_info_node.inputs[1].default_value = True
+        CombineTransform = node_group.nodes.new('FunctionNodeCombineTransform')
+        CombineTransform.location = (-100,0)
+        SetInstanceTransform = node_group.nodes.new('GeometryNodeSetInstanceTransform')
+        SetInstanceTransform.location = (+400,0)
+        node_group.links.new(CombineTransform.outputs[0], SetInstanceTransform.inputs[2])
+        node_group.links.new(parent_info_node.outputs[4], SetInstanceTransform.inputs[0])
+        node_group.links.new(parent_info_node.outputs[2], CombineTransform.inputs[1])
+        node_group.links.new(parent_info_node.outputs[3], CombineTransform.inputs[2])
+        node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
+        node_group.links.new(input.outputs[1], parent_info_node.inputs[0])
+
+
+        childloop = 1
+        for children in all_children:
+
+            if bpy.app.version_string >= "4.0.0": node_group.interface.new_socket(name='Child', in_out='INPUT', socket_type='NodeSocketObject')
+            elif bpy.app.version_string < "4.0.0": node_group.outputs.new(type='NodeSocketObject', name='Object')
+
+            children_info_node = node_group.nodes.new(type='GeometryNodeObjectInfo')
+            children_info_node.location = (-300, -300 *childloop)
+            children_info_node.inputs[0].default_value = children
+            children_info_node.inputs[1].default_value = True
+            CombineTransform = node_group.nodes.new('FunctionNodeCombineTransform')
+            CombineTransform.location = (+200, -300 *childloop)
+            SetInstanceTransform = node_group.nodes.new('GeometryNodeSetInstanceTransform')
+            SetInstanceTransform.location = (+400, -300 *childloop)
+
+
+            VectorMath1 = node_group.nodes.new('ShaderNodeVectorMath')
+            VectorMath1.operation = 'SUBTRACT'
+            VectorMath1.location = (-100, -300 *childloop)
+            
+            
+            
+
+            node_group.links.new(input.outputs[childloop+1], children_info_node.inputs[0])
+            node_group.links.new(children_info_node.outputs[1], VectorMath1.inputs[0])
+            node_group.links.new(VectorMath1.outputs[0], CombineTransform.inputs[0])
+            node_group.links.new(children_info_node.outputs[2], CombineTransform.inputs[1])  
+            
+            
+            node_group.links.new(children_info_node.outputs[3], CombineTransform.inputs[2])
+            node_group.links.new(children_info_node.outputs[4], SetInstanceTransform.inputs[0])
+            node_group.links.new(CombineTransform.outputs[0], SetInstanceTransform.inputs[2])
+            node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
+            node_group.links.new(parent_info_node.outputs[1], VectorMath1.inputs[1])
+
+            childloop += 1
 
 
 
 
+        
+        if bpy.app.version_string >= "4.0.0": node_group_inputs = node_group.interface.items_tree
+        elif bpy.app.version_string < "4.0.0": node_group_inputs = node_group.inputs
+        for obj in bpy.data.objects:
+            if obj.type == "MESH" and obj.modifiers:
+                for modif in obj.modifiers:
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group == node_group:
+                        loop = 0
+                        for input in node_group_inputs:
+                            if loop <= 2: modif[input.identifier] = activeobj
+                            elif loop >= 3: modif[input.identifier] = all_children[loop - 3]
+                            loop += 1
 
 
+    return there_are_assemblies_to_update, processing_original_activeobj
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+class assembly(bpy.types.Operator):
+    """Group the Active Object and its children into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again"""
+    bl_idname = "secret.assembly"
+    bl_label = "Secret Assembly_f"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def invoke(self, context, event):
+        if event.alt: convert_and_join_f(self,context)
+        else: assembly_1(self,context)
+        return {'FINISHED'}
 
 
 
@@ -9342,6 +9492,7 @@ classes = [
     switchtoweightzero,
     curveseparate,
     biome_delete,
+    assembly,
 
 
     ]
@@ -9455,6 +9606,12 @@ def register():
 
 
 
+
+    km = kc.get("Object Mode")
+    if not km:
+        km = kc.new("Object Mode")
+    kmi = km.keymap_items.new("secret.assembly", "D", "PRESS", ctrl=True)
+    addon_keymaps.append((km, kmi))
 
     km = kc.get("Object Mode")
     if not km:
