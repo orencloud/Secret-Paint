@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 0),
+    "version": (1, 4, 1),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -7599,28 +7599,38 @@ def get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_as
             if obj[0] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[0])
             get_all_DownwardsDependencies(obj[0], final_assemblies_to_process, all_assemblies_and_their_parent, context)
     return final_assemblies_to_process
-def get_all_UpwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context):
-    for obj in all_assemblies_and_their_parent:
-        if obj[0] == activeobj:
-            if obj[1] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[1])
-            pass #printf"{obj[0].name} is the activeobj,{obj[1].name} is it's parent that's being appended to FINAL and reprocessed, here's final list so far {[x.name for x in final_assemblies_to_process]}")
-            get_all_UpwardsDependencies(obj[1], final_assemblies_to_process, all_assemblies_and_their_parent, context)
-    return final_assemblies_to_process
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def get_first_parent_Upwards(activeobj, context):
+    parent_of_current_object = activeobj.modifiers[0]["Socket_1"] if activeobj.modifiers and activeobj.modifiers[0].name.startswith("Secret Assembly") and activeobj.modifiers[0].type=="NODES" and activeobj.modifiers[0].node_group and "ASSEMBLY" in activeobj.modifiers[0].node_group.name else None
+    if parent_of_current_object != None: return get_first_parent_Upwards(parent_of_current_object, context)
+    else: return activeobj
+
 
 def assembly_1(self,context,**kwargs):
 
     original_activeobj = activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
-    
-    
-    
-    
     if activeobj == None:
         self.report({'ERROR'}, "Select the Parent Object. Its children will be automatically included in the Assembly")
         return{'FINISHED'}
 
+    
     for ob in bpy.context.selected_objects:
         if not ob.parent or ob.parent and ob.parent not in bpy.context.selected_objects: activeobj = original_activeobj = ob
+
 
     
     all_objs_used_as_parents = []
@@ -7629,8 +7639,7 @@ def assembly_1(self,context,**kwargs):
         if obj.type == "MESH" and obj.modifiers:
             for modif in obj.modifiers:
                 if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
-                    if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
-                    elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                    node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
                     for input in node_group_inputs_temp:
                         if input.socket_type == "NodeSocketObject" and input.name == "Parent":
                             all_assemblies_and_their_parent.append((obj,modif[input.identifier]))
@@ -7639,8 +7648,21 @@ def assembly_1(self,context,**kwargs):
 
     
     final_assemblies_to_process =[]
-    get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context)
-    get_all_UpwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context)
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+
+    
+    first_parent = get_first_parent_Upwards(activeobj, context)
+    final_assemblies_to_process.append(first_parent)
+    get_all_DownwardsDependencies(first_parent, final_assemblies_to_process, all_assemblies_and_their_parent, context)
 
 
     
@@ -7679,17 +7701,27 @@ def assembly_2(self,context,**kwargs):
 
     there_are_assemblies_to_update = False
     all_children=[]
+    all_materials_of_parent_and_children=[]
+
+
 
     
     if activeobj.type == "MESH" and activeobj.modifiers and not activeobj.children and processing_original_activeobj:
         for modif in activeobj.modifiers:
             if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
-                if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
-                elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
                 for input in node_group_inputs_temp:
                     if input.socket_type == "NodeSocketObject" and input.name == "Parent":
                         activeobj = modif[input.identifier]
                         break
+
+
+    pass #print"BEING PROCESSED--------", activeobj)
+
+
+    
+    for material_slot in activeobj.material_slots:
+        if material_slot.material and material_slot.material not in all_materials_of_parent_and_children: all_materials_of_parent_and_children.append(material_slot.material)
 
 
     
@@ -7699,11 +7731,10 @@ def assembly_2(self,context,**kwargs):
         if obj.type == "MESH" and obj.modifiers:
             for modif in obj.modifiers:
                 if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
-                    if modif.node_group == node_group and modif not in all_modif_to_update:
-                        all_modif_to_update.append(modif)
-                        there_are_assemblies_to_update = True
-                    if bpy.app.version_string >= "4.0.0": node_group_inputs_temp = modif.node_group.interface.items_tree
-                    elif bpy.app.version_string < "4.0.0": node_group_inputs_temp = modif.node_group.inputs
+                    
+                    
+                    
+                    node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
                     for input in node_group_inputs_temp:
                         if input.socket_type == "NodeSocketObject" and input.name == "Parent" and modif[input.identifier] == activeobj and modif not in all_modif_to_update:
                             all_modif_to_update.append(modif)
@@ -7718,12 +7749,9 @@ def assembly_2(self,context,**kwargs):
 
         
         
-        if node_group: bpy.data.node_groups.remove(node_group) 
         node_group = bpy.data.node_groups.new("GeometryNodeGroup", 'GeometryNodeTree')
         node_group.name = activeobj.name + "ASSEMBLY"
         for modif in all_modif_to_update: modif.node_group = node_group 
-
-
 
 
 
@@ -7796,6 +7824,10 @@ def assembly_2(self,context,**kwargs):
         childloop = 1
         for children in all_children:
 
+            
+            for material_slot in children.material_slots:
+                if material_slot.material and material_slot.material not in all_materials_of_parent_and_children: all_materials_of_parent_and_children.append(material_slot.material)
+
             if bpy.app.version_string >= "4.0.0": node_group.interface.new_socket(name='Child', in_out='INPUT', socket_type='NodeSocketObject')
             elif bpy.app.version_string < "4.0.0": node_group.outputs.new(type='NodeSocketObject', name='Object')
 
@@ -7834,12 +7866,15 @@ def assembly_2(self,context,**kwargs):
 
 
         
-        if bpy.app.version_string >= "4.0.0": node_group_inputs = node_group.interface.items_tree
-        elif bpy.app.version_string < "4.0.0": node_group_inputs = node_group.inputs
+        node_group_inputs = node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else node_group.inputs
         for obj in bpy.data.objects:
             if obj.type == "MESH" and obj.modifiers:
                 for modif in obj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group == node_group:
+                        
+                        obj.data.materials.clear() 
+                        for mat in all_materials_of_parent_and_children:
+                            if mat.name not in obj.data.materials: obj.data.materials.append(mat)
                         loop = 0
                         for input in node_group_inputs:
                             if loop <= 2: modif[input.identifier] = activeobj
@@ -7859,41 +7894,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
