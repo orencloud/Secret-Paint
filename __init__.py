@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 1),
+    "version": (1, 4, 2),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -6246,7 +6246,7 @@ for node_tree in bpy.data.node_groups:
 
 
 for mod in addon_utils.modules():
-    if mod.bl_info.get("name") == "Secret Paint":        
+    if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  
         if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
         elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
         elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
@@ -6737,7 +6737,8 @@ def paint_from_library_function(self, context, event, **kwargs):
             elif bpy.app.version_string < "4.0.0": import_setting = bpy.context.space_data.params.import_type
 
             try: 
-                if import_setting == 'LINK' or bl_info["name"] != "orencloud private" and justImport:  
+                
+                if import_setting == 'LINK':  
                     bpy.ops.wm.link(filepath=os.path.join(asset_filepath, asset_type, asset_name),
                                     directory=os.path.join(asset_filepath, asset_type), filename=asset_name,
                                     instance_collections=False, active_collection=True,do_reuse_local_id=False)
@@ -6842,14 +6843,15 @@ def paint_from_library_function(self, context, event, **kwargs):
                 
                 
 
-                if bl_info["name"] == "orencloud private":
+                
+                if bl_info and bl_info["name"] == "orencloud private":
                     found_flag = False
-                    if ob.modifiers:  
+                    if ob.modifiers:
                         for modif in ob.modifiers:
                             if modif.type in ["MESH_DEFORM","SURFACE_DEFORM"]: 
                                 found_flag = True
                                 break
-                    if found_flag:continue
+                    if found_flag:continue  
 
                 ob.make_local() 
                 if ob.type in ["CURVES", "CURVE","LIGHT"]: ob.data.make_local()  
@@ -7706,7 +7708,14 @@ def assembly_2(self,context,**kwargs):
 
 
     
-    if activeobj.type == "MESH" and activeobj.modifiers and not activeobj.children and processing_original_activeobj:
+    activeobj_referenced_by_constraint = False
+    for ob in bpy.data.objects:
+        if ob.constraints and not activeobj_referenced_by_constraint:
+            for con in ob.constraints:
+                if hasattr(con, 'target') and con.target == activeobj:
+                    activeobj_referenced_by_constraint = True
+                    break
+    if activeobj.type == "MESH" and activeobj.modifiers and not activeobj.children and processing_original_activeobj and not activeobj_referenced_by_constraint:
         for modif in activeobj.modifiers:
             if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
                 node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
@@ -7716,7 +7725,6 @@ def assembly_2(self,context,**kwargs):
                         break
 
 
-    pass #print"BEING PROCESSED--------", activeobj)
 
 
     
@@ -7725,7 +7733,6 @@ def assembly_2(self,context,**kwargs):
 
 
     
-    node_group = bpy.data.node_groups[activeobj.name + "ASSEMBLY"] if activeobj.name + "ASSEMBLY" in bpy.data.node_groups else None
     all_modif_to_update =[]
     for obj in bpy.data.objects:
         if obj.type == "MESH" and obj.modifiers:
@@ -7748,7 +7755,8 @@ def assembly_2(self,context,**kwargs):
 
 
         
-        
+        node_group = bpy.data.node_groups[activeobj.name + "ASSEMBLY"] if activeobj.name + "ASSEMBLY" in bpy.data.node_groups else None
+        if node_group and node_group.users==0: bpy.data.node_groups.remove(node_group) 
         node_group = bpy.data.node_groups.new("GeometryNodeGroup", 'GeometryNodeTree')
         node_group.name = activeobj.name + "ASSEMBLY"
         for modif in all_modif_to_update: modif.node_group = node_group 
@@ -7802,9 +7810,6 @@ def assembly_2(self,context,**kwargs):
 
 
         
-        get_all_children(activeobj,all_children,context)
-
-
         parent_info_node = node_group.nodes.new(type='GeometryNodeObjectInfo')
         parent_info_node.location = (-300,0)
         parent_info_node.inputs[0].default_value = activeobj 
@@ -7820,6 +7825,15 @@ def assembly_2(self,context,**kwargs):
         node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
         node_group.links.new(input.outputs[1], parent_info_node.inputs[0])
 
+
+        get_all_children(activeobj,all_children,context)
+
+        
+        for ob in bpy.data.objects:
+            if ob.constraints: 
+                for con in ob.constraints:
+                    if hasattr(con, 'target') and con.target == activeobj and ob not in all_children \
+                    or hasattr(con, 'target') and con.target in all_children and ob not in all_children: all_children.append(ob)
 
         childloop = 1
         for children in all_children:
@@ -7885,7 +7899,7 @@ def assembly_2(self,context,**kwargs):
     return there_are_assemblies_to_update, processing_original_activeobj
 
 class assembly(bpy.types.Operator):
-    """Group the Active Object and its children into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again"""
+    """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally"""
     bl_idname = "secret.assembly"
     bl_label = "Secret Assembly_f"
     bl_options = {'REGISTER', 'UNDO'}
@@ -7894,20 +7908,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
