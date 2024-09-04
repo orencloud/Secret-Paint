@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 3),
+    "version": (1, 4, 4),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -765,7 +765,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
     if carry_through:
         for node_tree in bpy.data.node_groups:
-            if not node_tree.library and node_tree.name.startswith("Secret Paint"):
+            
+            if not node_tree.library and node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
                 node_tree.name = "Secret Paint_OLD"  
                 if node_tree not in nodes_to_switch: nodes_to_switch.append(node_tree)
             if not node_tree.library and node_tree.name.startswith("Secret Generator"):
@@ -798,10 +799,12 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
             if not node_tree.library and node_tree.name == "Secret Paint": orenpaintNode = node_tree
 
         
-        for obj in bpy.data.objects:  
+        for obj in bpy.data.objects:
             if obj.type in ["CURVES","CURVE"] and obj.modifiers and not obj.library:  
                 for modif in obj.modifiers:
-                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")): modif.node_group = orenpaintNode  
+                    
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode  
+                    
 
 
         
@@ -4160,7 +4163,6 @@ def secretpaint_function(self,*args,**kwargs):
         for x in bpy.context.selected_objects: x.select_set(False)   
         bpy.context.view_layer.objects.active = hairCurves
         hairCurves.select_set(True)
-
         contextorencurveappend(context)  
 
         
@@ -7915,8 +7917,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
 
 
 
