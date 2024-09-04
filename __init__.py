@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 2),
+    "version": (1, 4, 3),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -188,12 +188,12 @@ class orencurvepanel(bpy.types.Panel):
         
         row = layout.row()
         row.scale_y = 1.7  
-        row.operator("secret.paintbrushswitch", icon= 'BRUSHES_ALL', text= "Switch") 
         row.operator("secret.assembly", icon="MOD_EXPLODE", text= "Assembly")
+        row.operator("secret.realize_instances", icon="LIBRARY_DATA_OVERRIDE_NONEDITABLE", text="Realize")
         
         row = layout.row()
+        row.operator("secret.paintbrushswitch", icon= 'BRUSHES_ALL', text= "Switch") 
         row.operator("secret.fixdyntopo", icon="GROUP_UVS")
-        row.operator("secret.realize_instances", icon="LIBRARY_DATA_OVERRIDE_NONEDITABLE")
         row = layout.row()
         
         
@@ -713,7 +713,6 @@ def reupdate_hair_material(context,**kwargs):
 
     return {'FINISHED'}
 def contextorencurveappend(context,**kwargs):  
-    pass #print"AAAAAAAAAAAAAAAAAAAAAAAA ----- contextorencurveappend")
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
@@ -725,10 +724,9 @@ def contextorencurveappend(context,**kwargs):
     modifier.node_group = bpy.data.node_groups.get("Secret Paint")
     return {"FINISHED"}
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
-    pass #print"AAAAAAAAAAAAAAAAAAAAAAAA ----- contextorencurveappend")
 
 
-    current_node_version = 16 
+    current_node_version = 17 
 
     activeobj = bpy.context.active_object  
     objselection = bpy.context.selected_objects  
@@ -838,6 +836,13 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 def toggleAdvancedModifier():    
     if bpy.data.node_groups.get("Secret Paint"):
 
+        
+        
+        
+        
+        
+        
+        
         if bpy.app.version_string >= "4.0.0": x = bpy.data.node_groups["Secret Paint"].interface.items_tree
         elif bpy.app.version_string < "4.0.0": x= bpy.data.node_groups["Secret Paint"].inputs
 
@@ -855,11 +860,11 @@ def toggleAdvancedModifier():
                 or input.name=="UV for Texture" \
                 or input.name=="Scale of Surface" \
                 or input.socket_type == "NodeSocketString" and input.default_value == "LOCATION"\
+                or input.name=="Move origin"\
                 or input.socket_type == "NodeSocketString" and input.default_value == "Wind"\
                 or input.name=="Strenght"\
                 or input.name=="Wind Scale"\
                 or input.name=="Speed"\
-                or input.name=="Move origin"\
                 or input.name=="Viewport Density"\
                 or input.name=="Proxy Convex Hull"\
                 or input.name=="Proxy Bounding Box"\
@@ -884,11 +889,11 @@ def toggleAdvancedModifier():
                 or input.name=="UV for Texture" \
                 or input.name=="Scale of Surface" \
                 or input.type == "STRING" and input.default_value == "LOCATION"\
+                or input.name=="Move origin"\
                 or input.type == "STRING" and input.default_value == "Wind"\
                 or input.name=="Strenght"\
                 or input.name=="Wind Scale"\
                 or input.name=="Speed"\
-                or input.name=="Move origin"\
                 or input.name=="Viewport Density"\
                 or input.name=="Proxy Convex Hull"\
                 or input.name=="Proxy Bounding Box"\
@@ -5444,7 +5449,8 @@ def realize_instances_f(self,context):
 
                 newobj.select_set(False)
                 bpy.ops.object.mode_set(mode="EDIT")
-                bpy.ops.curves.select_linked()
+                try: bpy.ops.curves.select_linked()
+                except:pass
                 bpy.ops.curves.delete()
 
 
@@ -5452,7 +5458,8 @@ def realize_instances_f(self,context):
                 newobj.select_set(True)
                 bpy.context.view_layer.objects.active = newobj
                 bpy.ops.object.mode_set(mode="EDIT")
-                bpy.ops.curves.select_linked()
+                try:bpy.ops.curves.select_linked()
+                except:pass
                 bpy.ops.curves.select_all(action='INVERT')
                 bpy.ops.curves.delete()
                 bpy.ops.object.mode_set(mode="OBJECT")
@@ -7908,13 +7915,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
 
 
 
