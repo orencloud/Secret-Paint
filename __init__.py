@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 4),
+    "version": (1, 4, 5),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2791,16 +2791,38 @@ def secretpaint_create_curve(self,context,**kwargs):
                 hairCurves.modifiers[0]["Input_63"] = True 
                 targetOBJsurface.add_rest_position_attribute = True
     
-    smallest_obj = brushOBJ[0]
+    smallest_obj = brushOBJ[0]   
+    pass #print"OOOOOOOOOOO")
     for obje in brushOBJ:
-        if smallest_obj.type == "MESH" and obje.dimensions < smallest_obj.dimensions: smallest_obj = obje
-    if smallest_obj.type == "MESH":
-        
-        
+        if obje.type == "MESH":
+
+            
+            thisobj_is_an_assembly = False
+            if obje.modifiers:
+                for modif in obje.modifiers:
+                    if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
+                        node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
+                        for input in node_group_inputs_temp:
+                            if input.socket_type == "NodeSocketObject" and input.name == "Parent":
+                                if modif[input.identifier] and modif[input.identifier].type=="MESH":
+                                    if max(smallest_obj.dimensions)==0\
+                                    or max(modif[input.identifier].dimensions)>0 and modif[input.identifier].dimensions < smallest_obj.dimensions:
+                                        smallest_obj = modif[input.identifier]
+                                        thisobj_is_an_assembly = True
+                                        break
+
+            if not thisobj_is_an_assembly:
+                if max(smallest_obj.dimensions)==0\
+                or smallest_obj.type == "MESH" and max(obje.dimensions) > 0 and obje.dimensions < smallest_obj.dimensions: smallest_obj = obje
+
+    if max(smallest_obj.dimensions)>0:  
         if smallest_obj.dimensions[0]/smallest_obj.scale[0] > smallest_obj.dimensions[1]/smallest_obj.scale[1]: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[1]/smallest_obj.scale[1]) **2) 
-        else:
-            if smallest_obj.dimensions[0] == (0,0,0) and smallest_obj.scale[0] > (0,0,0): hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) 
-            else: hairCurves.modifiers[0]["Input_68"] = 5
+        else: hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) 
+        
+        
+        
+
+
 
 
     return hairCurves
@@ -4169,9 +4191,20 @@ def secretpaint_function(self,*args,**kwargs):
         for material_slot in activeobj.material_slots:
             if material_slot.material and material_slot.material.name not in hairCurves.data.materials:
                 hairCurves.data.materials.append(material_slot.material)
+
         
-        if activeobj.type in ["MESH","CURVE"] and activeobj.dimensions > (0,0,0): hairCurves.modifiers[0]["Input_68"] = (1 / ( max(activeobj.dimensions)  **2)  )   *2
-        else:density_large = 1.0  
+        
+        
+        obj_for_dimensions = activeobj
+        if activeobj.type=="MESH" and activeobj.modifiers:  
+            for modif in activeobj.modifiers:
+                if modif.type == 'NODES' and modif.name == "Secret Assembly" and modif.node_group and "ASSEMBLY" in modif.node_group.name:
+                    node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
+                    for input in node_group_inputs_temp:
+                        if input.socket_type == "NodeSocketObject" and input.name == "Parent":
+                            if modif[input.identifier] and modif[input.identifier].type == "MESH": obj_for_dimensions = modif[input.identifier]
+        if max(obj_for_dimensions.dimensions)>0: hairCurves.modifiers[0]["Input_68"] = (1 / ( max(obj_for_dimensions.dimensions)  **2)  )   *2    
+
 
         dont_set_drawing_tool = False
         if circulararray or straightarray:  
@@ -4181,9 +4214,9 @@ def secretpaint_function(self,*args,**kwargs):
 
         curve_draw_tool(context, dont_set_drawing_tool=dont_set_drawing_tool)
         hairCurves.modifiers[0]["Input_2"] = activeobj
+        hairCurves.location= bpy.context.scene.cursor.location
         pass #print"DRAW CURVE, OBJ MODE, 1 or 2")
 
-        hairCurves.location= bpy.context.scene.cursor.location
     
 
 
@@ -7813,7 +7846,7 @@ def assembly_2(self,context,**kwargs):
         elif bpy.app.version_string < "4.0.0": node_group.inputs.new(type='NodeSocketGeometry', name='GEO')
         JoinGeometry = node_group.nodes.new('GeometryNodeJoinGeometry')
         JoinGeometry.location = (+800,0)
-        node_group.links.new(JoinGeometry.outputs[0], output.inputs[0])
+        
 
 
 
@@ -7904,6 +7937,7 @@ def assembly_2(self,context,**kwargs):
                             elif loop >= 3: modif[input.identifier] = all_children[loop - 3]
                             loop += 1
 
+        node_group.links.new(JoinGeometry.outputs[0], output.inputs[0])  
 
     return there_are_assemblies_to_update, processing_original_activeobj
 
@@ -7917,40 +7951,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
