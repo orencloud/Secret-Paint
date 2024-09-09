@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 6),
+    "version": (1, 4, 7),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -157,6 +157,48 @@ if auto_updater_status == True: from . import addon_updater_ops
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class orencurvepanel(bpy.types.Panel):
+    bl_label = "Secret Paint"
     bl_idname = "OREN_PT_OrencurvePanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -7943,6 +7985,7 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
+
 
 
 
