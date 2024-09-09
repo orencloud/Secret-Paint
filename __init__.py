@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 5),
+    "version": (1, 4, 6),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -29,59 +29,59 @@ bl_info = {
     "category": "Paint",
 }
 
-import bpy
-import random
-from bpy.types import Menu
 
-from mathutils import Vector
-from bpy.props import FloatVectorProperty
+import random   
 
-from bpy.utils import resource_path
-from pathlib import Path
-import os
 
-import addon_utils
-
-from collections import  defaultdict
-
-import math
+from mathutils import Vector    
 
 
 
-
-from mathutils import Matrix
-
-
-from bpy.types import Header, Panel, Menu, UIList
-from bpy_extras import (asset_utils,)
-
-import bpy, os
+from pathlib import Path  
 
 
-import bpy_extras
+import addon_utils  
+
+
+
+import math 
+
+
+
+
+
+
+
+
+
+
+import bpy, os  
+
+
+
 import mathutils
 
-import datetime
-import time
-
-
-from bpy_extras import view3d_utils
-from bpy.types import Operator
 
 
 
-import bpy.types
+
+
+
+
+
+
+import bpy.types  
 from bpy.props import StringProperty
 
-import subprocess
-import threading
-
-import ctypes
-import platform
-import shutil
+import subprocess   
 
 
-import bmesh
+
+
+
+
+
+import bmesh  
 
 blender_version = bpy.app.version_string
 
@@ -95,18 +95,17 @@ blender_version = bpy.app.version_string
 
 
 
-auto_updater_status = True
 addon_path=[]
 for mod in addon_utils.modules():
     if mod.bl_info.get("name") == "Secret Paint":
         addon_path = os.path.dirname(mod.__file__)
-        if "extensions" in addon_path:
-            auto_updater_status = False
+        
+        
         break
 
-if blender_version >= "4.2.0":
-    if bpy.app.online_access == False: auto_updater_status = False
 
+auto_updater_status = True
+if blender_version >= "4.2.0" and bpy.app.online_access == False: auto_updater_status = False
 if auto_updater_status == True: from . import addon_updater_ops
 
 
@@ -158,17 +157,6 @@ if auto_updater_status == True: from . import addon_updater_ops
 
 
 
-
-
-
-
-
-
-
-
-
-class orencurvepanel(bpy.types.Panel):
-    bl_label = "Secret Paint"
     bl_idname = "OREN_PT_OrencurvePanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -2792,7 +2780,6 @@ def secretpaint_create_curve(self,context,**kwargs):
                 targetOBJsurface.add_rest_position_attribute = True
     
     smallest_obj = brushOBJ[0]   
-    pass #print"OOOOOOOOOOO")
     for obje in brushOBJ:
         if obje.type == "MESH":
 
@@ -4253,7 +4240,7 @@ def secretpaint_function(self,*args,**kwargs):
 
 
 
-    secretpaint_cleanup_empty_systems(self, context)
+    
 
     
 class orenscatter(bpy.types.Operator):
@@ -6886,14 +6873,14 @@ def paint_from_library_function(self, context, event, **kwargs):
                 
 
                 
-                if bl_info and bl_info["name"] == "orencloud private":
-                    found_flag = False
-                    if ob.modifiers:
-                        for modif in ob.modifiers:
-                            if modif.type in ["MESH_DEFORM","SURFACE_DEFORM"]: 
-                                found_flag = True
-                                break
-                    if found_flag:continue  
+                
+                
+                
+                
+                
+                
+                
+                
 
                 ob.make_local() 
                 if ob.type in ["CURVES", "CURVE","LIGHT"]: ob.data.make_local()  
@@ -7633,7 +7620,7 @@ class curveseparate(bpy.types.Operator):
 
 def get_all_children(parent,all_children,context):
     for children in parent.children:
-        if children.name in bpy.context.view_layer.objects: all_children.append(children)  
+        if children.visible_get(): all_children.append(children)  
         get_all_children(children,all_children,context)
     return all_children
 
@@ -7666,14 +7653,19 @@ def get_first_parent_Upwards(activeobj, context):
 def assembly_1(self,context,**kwargs):
 
     original_activeobj = activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
-    if activeobj == None: activeobj = bpy.context.active_object
+    
+    if activeobj == None and bpy.context.selected_objects: activeobj = original_activeobj= bpy.context.selected_objects[0]  
     if activeobj == None:
         self.report({'ERROR'}, "Select the Parent Object. Its children will be automatically included in the Assembly")
         return{'FINISHED'}
 
     
+    parent_with_most_children = bpy.context.selected_objects[0]
     for ob in bpy.context.selected_objects:
-        if not ob.parent or ob.parent and ob.parent not in bpy.context.selected_objects: activeobj = original_activeobj = ob
+        if not ob.parent and len(ob.children) > len(parent_with_most_children.children) \
+        or ob.parent and ob.parent not in bpy.context.selected_objects and len(ob.children) > len(parent_with_most_children.children):
+            parent_with_most_children = ob
+    activeobj = original_activeobj = parent_with_most_children
 
 
     
@@ -7718,7 +7710,7 @@ def assembly_1(self,context,**kwargs):
 
     
     main_loops=0
-    pass #printfinal_assemblies_to_process)
+    
     for obj in final_assemblies_to_process:
         there_are_assemblies_to_update, processing_original_activeobj = assembly_2(self, context, activeobj=obj, original_activeobj=original_activeobj)  
         main_loops+=1
@@ -7942,7 +7934,7 @@ def assembly_2(self,context,**kwargs):
     return there_are_assemblies_to_update, processing_original_activeobj
 
 class assembly(bpy.types.Operator):
-    """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally"""
+    """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally. This works with everything, even complex rigs"""
     bl_idname = "secret.assembly"
     bl_label = "Secret Assembly_f"
     bl_options = {'REGISTER', 'UNDO'}
@@ -7951,6 +7943,13 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
+
+
+
+
+
+
+
 
 
 
