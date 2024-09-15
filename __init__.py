@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 4, 7),
+    "version": (1, 5, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -30,24 +30,21 @@ bl_info = {
 }
 
 
-import random   
+import random
 
 
-from mathutils import Vector    
-
-
-
-from pathlib import Path  
-
-
-import addon_utils  
+from mathutils import Vector
 
 
 
-import math 
+from pathlib import Path
+
+
+import addon_utils
 
 
 
+import math
 
 
 
@@ -55,7 +52,10 @@ import math
 
 
 
-import bpy, os  
+
+
+
+import bpy, os
 
 
 
@@ -70,10 +70,10 @@ import mathutils
 
 
 
-import bpy.types  
+import bpy.types
 from bpy.props import StringProperty
 
-import subprocess   
+import subprocess
 
 
 
@@ -81,7 +81,7 @@ import subprocess
 
 
 
-import bmesh  
+import bmesh
 
 blender_version = bpy.app.version_string
 
@@ -92,22 +92,21 @@ blender_version = bpy.app.version_string
 
 
 
-
-
-
-addon_path=[]
+both_addon_and_extensions_are_installed = False
+addon_is_an_extension=False
+addon_path=None
 for mod in addon_utils.modules():
-    if mod.bl_info.get("name") == "Secret Paint":
+    if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":
+        if addon_path != None: both_addon_and_extensions_are_installed = True
         addon_path = os.path.dirname(mod.__file__)
+        if hasattr(mod, '__file_manifest__'): addon_is_an_extension=True
+
         
-        
-        break
 
 
 auto_updater_status = True
-if blender_version >= "4.2.0" and bpy.app.online_access == False: auto_updater_status = False
+if blender_version >= "4.2.0" and bpy.app.online_access == False or addon_is_an_extension or both_addon_and_extensions_are_installed: auto_updater_status = False
 if auto_updater_status == True: from . import addon_updater_ops
-
 
 
 
@@ -638,9 +637,12 @@ class subpanelutils(bpy.types.Panel):
         row = layout.row()
         row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
         row = layout.row()
+        row = layout.row()
+        row = layout.row()
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
         
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "trigger_viewport_mask", expand=False)
         
         
         
@@ -906,6 +908,7 @@ def toggleAdvancedModifier():
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
                 or input.name=="Faster Viewport Mask"\
+                or input.name=="Distribution Seed"\
                 or input.name=="TURN OFF SYSTEM":
                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
                     elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
@@ -935,6 +938,7 @@ def toggleAdvancedModifier():
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
                 or input.name=="Faster Viewport Mask"\
+                or input.name=="Distribution Seed"\
                 or input.name=="TURN OFF SYSTEM":
                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
                     elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
@@ -1305,9 +1309,22 @@ class toggle_procedural(bpy.types.Operator):
         for obj in objselection:
             if obj.type == "CURVES" and obj.modifiers:
                 for modif in obj.modifiers:  
-                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                        obj.modifiers[0]["Input_69"] = not checkbox_state
-                        obj.location = obj.location
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
+
+                        
+                        if obj.type == "CURVES" and obj.modifiers[0]["Input_69"] == False:
+                            allTerrainArea = sum(face.area for face in obj.parent.data.polygons)  
+                            pass #print"Number of instances ---------",(allTerrainArea/   (   (1/   ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"]))   )   **2)))
+                            
+                            
+                            if (allTerrainArea/   (   (1/   ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"]))   )   **2))   > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask:
+                                obj.modifiers[0]["Input_98"] = False  
+                                obj.modifiers[0]["Input_97"] = None
+                                secretpaint_viewport_mask_function(self, context, objselection=[obj], activeobj=obj)
+
+                        obj.modifiers[0]["Input_69"] = not checkbox_state  
+                        obj.location = obj.location 
+
         
         
         
@@ -2237,7 +2254,7 @@ def context3sculptbrush(context,**kwargs):
 
 
         
-        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance = 0.5/((bpy.context.object.modifiers[0]["Input_68"]**0.5) *bpy.context.object.modifiers[0]["Input_100"])  
+        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*2     
         else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
         brush_density.curves_sculpt_settings.density_mode = 'AUTO'
         brush_density.strength = 1
@@ -2258,7 +2275,7 @@ def context3sculptbrush(context,**kwargs):
             brush_density.curves_sculpt_settings.points_per_curve = 2
 
         
-        brush_grow.strength = 0.05
+        brush_grow.strength = 0.1
         if bpy.app.version_string >= "4.2.0":
             brush_grow.curves_sculpt_settings.use_uniform_scale = True
         elif bpy.app.version_string < "4.2.0":
@@ -3326,7 +3343,7 @@ def secretpaint_function(self,*args,**kwargs):
                     
                     if hairCurves.modifiers[0]["Input_98"] \
                     or hairCurves.modifiers[0]["Input_97"]\
-                    or allTerrainArea      /       (1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5)   * (hairCurves.modifiers[0]["Input_100"]**2)))       /2            > 10000 and hairCurves.modifiers[0]["Input_69"]:  
+                    or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))            > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:  
                         if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
                         
                         hairCurves.modifiers[0]["Input_98"] = False  
@@ -3535,7 +3552,7 @@ def secretpaint_function(self,*args,**kwargs):
 
             if hairCurves.modifiers[0]["Input_98"] \
             or hairCurves.modifiers[0]["Input_97"] \
-            or allTerrainArea /         (1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5)   * (hairCurves.modifiers[0]["Input_100"]**2)))       /2          > 10000 and hairCurves.modifiers[0]["Input_69"]:      
+            or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))     > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:      
                 if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
                 hairCurves.modifiers[0]["Input_98"] = False  
                 hairCurves.modifiers[0]["Input_97"] = None
@@ -6019,7 +6036,9 @@ def export_to_asset_library_function(self,context,event):
         
         
         
-        xsize =  1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * largest.modifiers[0]["Input_100"])
+
+        xsize =  1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * (largest.modifiers[0]["Input_100"]** 0.5))     
+        
         number_instaces_to_show = 12
         radius = (number_instaces_to_show * (xsize * xsize)) ** 0.5   
 
@@ -6794,7 +6813,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                 asset_type = asset_fullpath.parent.name  
 
 
-            all_previous_objects = set(bpy.context.scene.objects)
+            all_previous_objects = set(bpy.data.objects)  
             all_previous_objectData = set(bpy.data.meshes) 
             
             all_previous_collections=[]
@@ -6874,7 +6893,10 @@ def paint_from_library_function(self, context, event, **kwargs):
 
 
             
-            for top_level_collection in bpy.context.scene.collection.children[:]:  
+
+
+            
+            for top_level_collection in bpy.context.scene.collection.children[:]:
                 
                 
                 
@@ -6887,19 +6909,19 @@ def paint_from_library_function(self, context, event, **kwargs):
             
 
 
-            new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
+            new_obs = list(set(bpy.data.objects) - all_previous_objects)  
             if not new_obs: return{'FINISHED'} 
 
 
             
-            all_collections=[]
-            for top_level_collection in bpy.context.scene.collection.children:
-                add_collections_to_list(top_level_collection,all_collections)
-            all_with_new_collections = all_collections
-            for coll in all_with_new_collections:#bpy.data.collections: 
-                if coll not in all_previous_collections:
-                    coll.asset_mark()
-                    coll.asset_generate_preview()
+            
+            
+            
+            
+            
+            
+            
+            
 
 
             
@@ -6927,10 +6949,15 @@ def paint_from_library_function(self, context, event, **kwargs):
                 ob.make_local() 
                 if ob.type in ["CURVES", "CURVE","LIGHT"]: ob.data.make_local()  
                 for mat_slot in ob.material_slots:
-                    mat = mat_slot.material
-                    mat_slot.link = 'OBJECT'
-                    mat_slot.material = mat 
-                    if mat not in all_materials and mat!=None: all_materials.append(mat)
+                    if mat_slot.material:
+                        mat = mat_slot.material
+                        mat_slot.link = 'OBJECT'
+                        if mat.library: mat.make_local()
+                        try:mat_slot.material = mat  
+                        except:
+                            pass #print"objjjjj",ob.name, "matslot-------", mat_slot,) 
+                            pass
+                        if mat not in all_materials and mat!=None: all_materials.append(mat)
             for matery in all_materials: matery.make_local()   
 
 
@@ -7004,6 +7031,14 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
             
+            
+            
+            
+            
+
+
+            
+            
             obs_without_parent_for_recenter_coll_origin =[]
             center = sum((obj.location for obj in new_obs), mathutils.Vector()) / len(new_obs) 
             for obj in new_obs:
@@ -7017,7 +7052,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
 
             
-            orengrouprecentercollectionobj_function(context, objselection=obs_without_parent_for_recenter_coll_origin)       
+            
             
             
 
@@ -9281,39 +9316,6 @@ class assembly(bpy.types.Operator):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -9333,7 +9335,7 @@ addon_keymaps = []
 import rna_keymap_ui
 class secret_menu(bpy.types.AddonPreferences):
     bl_idname = __package__
-    
+
 
 
     auto_check_update : bpy.props.BoolProperty(name="Auto-check for Update", description="If enabled, auto-check for updates using an interval", default=True)
@@ -9347,7 +9349,8 @@ class secret_menu(bpy.types.AddonPreferences):
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
     checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f)
-    
+    trigger_viewport_mask: bpy.props.IntProperty(name="Trigger Viewport Mask", description="Automatically create the Viewport Mask whenever turning on the procedural distribution would create more than the specified number of instances. Useful to avoid slowing down the interface when working on huge terrains", default=15000)
+
     all_libraries = [(lib.path,lib.name,"") for lib in bpy.context.preferences.filepaths.asset_libraries]
 
     if len(all_libraries) == 0: all_libraries = [("(No Library Found, create one first)","(No Library Found, create one first)","")]
@@ -9360,17 +9363,15 @@ class secret_menu(bpy.types.AddonPreferences):
         col = mainrow.column()
 
 
-        
-        
-        
-        
-        
+
+
+
         if auto_updater_status == True: addon_updater_ops.update_settings_ui(self, context)
 
 
         layout.prop(self, "checkboxAdvancedModifier")
-        
         layout.prop(self, "checkboxHideImported")
+        layout.prop(self, "trigger_viewport_mask")
 
         row = layout.row()
         row = layout.row()
@@ -9713,7 +9714,6 @@ def register():
 
 
 def unregister():
-    
     if auto_updater_status: addon_updater_ops.unregister()
 
     for cls in reversed(classes):
