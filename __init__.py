@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 0),
+    "version": (1, 5, 1),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -319,8 +319,7 @@ class orencurvepanel(bpy.types.Panel):
             if sibling.modifiers[0]["Input_98"]: row.alert = True
             else: row.alert = False
             
-            
-            mask_button = row.operator("secret.secretpaint_viewport_mask", text="", icon='MOD_MASK')
+            mask_button = row.operator("secret.secretpaint_viewport_mask", text="", icon='CLIPUV_HLT' if row.alert else "CLIPUV_DEHLT")
             mask_button.object_name = sibling.name
 
             
@@ -430,6 +429,7 @@ class orencurvepanel(bpy.types.Panel):
             
             
 
+
             
             
             
@@ -437,32 +437,27 @@ class orencurvepanel(bpy.types.Panel):
             vertex_button = row.operator("secret.vertexgrouppaint_biome", text="", icon='GROUP_VERTEX')
             vertex_button.object_biome = str(bgroup)
 
-            
-            
-            
 
-            if hair_in_bgroup[0][0].modifiers[0]["Socket_2"]:
-                active=True
-                row.alert = True
-            else:
-                active=False
-                row.alert = False
-            hide_buttonre = row.operator("secret.toggle_visibilityrender_biome", text="", icon='RESTRICT_RENDER_ON' if active else 'RESTRICT_RENDER_OFF')
+
             
+            row.alert = True if hair_in_bgroup[0][0].modifiers[0]["Socket_2"] else False  
+            hide_buttonre = row.operator("secret.toggle_visibilityrender_biome", text="", icon='RESTRICT_RENDER_ON' if row.alert else 'RESTRICT_RENDER_OFF')
             hide_buttonre.object_biome = str(bgroup)
 
-            
-            
-            row.alert = False
-            
-            bounds_button = row.operator("secret.toggle_display_bounds_biome", text="", icon='SHADING_SOLID')
-            bounds_button.object_biome = str(bgroup)
+
+
 
             
             
             
+            row.alert = False if any(listed_display_types in ("WIRE", "SOLID", "TEXTURED") for listed_display_types in [haa[0].display_type for haa in hair_in_bgroup]) else True
+            bounds_button = row.operator("secret.toggle_display_bounds_biome", text="", icon='SHADING_BBOX' if row.alert else 'SHADING_SOLID')
+            bounds_button.object_biome = str(bgroup)
+
+
             
-            mask_button = row.operator("object.secretpaint_viewport_mask_biome", text="", icon='MOD_MASK')
+            row.alert = True if False not in [haa[0].modifiers[0]["Input_98"] for haa in hair_in_bgroup] else False       
+            mask_button = row.operator("object.secretpaint_viewport_mask_biome", text="", icon='CLIPUV_HLT' if row.alert else "CLIPUV_DEHLT")
             mask_button.object_biome = str(bgroup)
 
 
@@ -2486,6 +2481,7 @@ def secretpaint_viewport_mask_function(*args,**kwargs):
                         break
                 
                 if not maskobj or force_new_maskObj:
+                    if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                     bpy.ops.mesh.primitive_cube_add(size=5, enter_editmode=False, align='WORLD',location=activeobj.location)
                     
                     
@@ -2548,7 +2544,11 @@ def secretpaint_viewport_mask_function(*args,**kwargs):
                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint":  
                     if modifier["Input_97"] and modifier["Input_97"] not in all_used_masks_in_blendfile: all_used_masks_in_blendfile.append(modifier["Input_97"])
     for mask in all_masks_in_blendfile:
-        if mask not in all_used_masks_in_blendfile: bpy.data.objects.remove(mask, do_unlink=True)
+        if mask not in all_used_masks_in_blendfile:
+            flag_make_row_object_active_after_deleting_mask = True if mask == bpy.context.active_object else False
+            bpy.data.objects.remove(mask, do_unlink=True)
+            if flag_make_row_object_active_after_deleting_mask: bpy.context.view_layer.objects.active = activeobj
+
 
 
     
