@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 1),
+    "version": (1, 5, 2),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -617,18 +617,19 @@ class subpanelutils(bpy.types.Panel):
         
         row = layout.row()
         
+        row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
+        row.operator("secret.straight_array", icon="CURVE_PATH")
+        row = layout.row()
+        row.scale_y = 1.4  
+        row.operator("secret.shared_material", icon= 'MATERIAL')
+        row.scale_x = 0.25  
+        row.prop(context.scene.mypropertieslist, "shared_material_index", expand=True, text="")
+        row = layout.row()
+        row.scale_y = 1  
         row.operator("secret.group", icon= 'COLLECTION_NEW')
         row.operator("secret.instancecollfromactiveobj", icon="OUTLINER_OB_GROUP_INSTANCE", text= "Instance")
         
         row.operator("secret.grouprecentercollectionobj", icon="ORIENTATION_CURSOR", text= "")
-        row = layout.row()
-        row.scale_y = 1.3  
-        row.operator("secret.shared_material", icon= 'MATERIAL')
-        row.scale_x = 0.3  
-        row.prop(context.scene.mypropertieslist, "shared_material_index", expand=True, text="")
-        row = layout.row()
-        row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
-        row.operator("secret.straight_array", icon="CURVE_PATH")
         row = layout.row()
         row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
         row = layout.row()
@@ -637,6 +638,7 @@ class subpanelutils(bpy.types.Panel):
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
         
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxOverrideBrushes", toggle = False, expand=False)  
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "trigger_viewport_mask", expand=False)
         
         
@@ -2248,69 +2250,75 @@ def context3sculptbrush(context,**kwargs):
             brush_comb.size = 150
 
 
-        
-        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*2     
-        else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
-        brush_density.curves_sculpt_settings.density_mode = 'AUTO'
-        brush_density.strength = 1
-        brush_density.falloff_shape = 'SPHERE'
-        brush_density.curve_preset = 'SMOOTHER'
-        brush_density.curves_sculpt_settings.density_add_attempts = 200
-        if bpy.app.version_string >= "4.2.0":
-            brush_density.curves_sculpt_settings.use_length_interpolate = False
-            brush_density.curves_sculpt_settings.curve_length = 0.32  
-            brush_density.curves_sculpt_settings.use_shape_interpolate = False
-            brush_density.curves_sculpt_settings.use_point_count_interpolate = False
-            brush_density.curves_sculpt_settings.points_per_curve = 2
-        elif bpy.app.version_string < "4.2.0":
-            brush_density.curves_sculpt_settings.interpolate_length = False
-            brush_density.curves_sculpt_settings.curve_length = 0.32  
-            brush_density.curves_sculpt_settings.interpolate_shape = False
-            brush_density.curves_sculpt_settings.interpolate_point_count = False
-            brush_density.curves_sculpt_settings.points_per_curve = 2
 
-        
-        brush_grow.strength = 0.1
-        if bpy.app.version_string >= "4.2.0":
-            brush_grow.curves_sculpt_settings.use_uniform_scale = True
-        elif bpy.app.version_string < "4.2.0":
-            brush_grow.curves_sculpt_settings.scale_uniform = True
-
-        
-        brush_add.curves_sculpt_settings.add_amount = 2
-        brush_add.falloff_shape = 'SPHERE'
-        brush_add.use_frontface = True
-        if bpy.app.version_string >= "4.2.0":
-            brush_add.curves_sculpt_settings.use_length_interpolate = False
-            brush_add.curves_sculpt_settings.use_shape_interpolate = False
-            brush_add.curves_sculpt_settings.use_point_count_interpolate = False
-            brush_add.curves_sculpt_settings.curve_length = 0.32  
-            brush_add.curves_sculpt_settings.points_per_curve = 2
-        elif bpy.app.version_string < "4.2.0":
-            brush_add.curves_sculpt_settings.interpolate_length = False
-            brush_add.curves_sculpt_settings.interpolate_shape = False
-            brush_add.curves_sculpt_settings.interpolate_point_count = False
-            brush_add.curves_sculpt_settings.curve_length = 0.32  
-            brush_add.curves_sculpt_settings.points_per_curve = 2
-
-        
-        brush_delete.falloff_shape = 'PROJECTED'
-
-        
-        brush_puff.strength = 10
-        brush_puff.falloff_shape = 'PROJECTED'
-
-        
-        brush_comb.strength = 0.1
-        brush_comb.falloff_shape = 'PROJECTED'
-
-
-
-        
-        
         
         try: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")  
         except:pass
+        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
+        else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
+        if bpy.app.version_string >= "4.2.0": brush_density.curves_sculpt_settings.points_per_curve = 2
+        elif bpy.app.version_string < "4.2.0": brush_density.curves_sculpt_settings.points_per_curve = 2
+
+        
+        if bpy.context.preferences.addons[__package__].preferences.checkboxOverrideBrushes:
+            
+            brush_density.curves_sculpt_settings.density_mode = 'AUTO'
+            brush_density.strength = 1
+            brush_density.falloff_shape = 'SPHERE'
+            brush_density.curve_preset = 'SMOOTHER'
+            brush_density.curves_sculpt_settings.density_add_attempts = 200
+            if bpy.app.version_string >= "4.2.0":
+                brush_density.curves_sculpt_settings.use_length_interpolate = False
+                brush_density.curves_sculpt_settings.curve_length = 0.32  
+                brush_density.curves_sculpt_settings.use_shape_interpolate = False
+                brush_density.curves_sculpt_settings.use_point_count_interpolate = False
+            elif bpy.app.version_string < "4.2.0":
+                brush_density.curves_sculpt_settings.interpolate_length = False
+                brush_density.curves_sculpt_settings.curve_length = 0.32  
+                brush_density.curves_sculpt_settings.interpolate_shape = False
+                brush_density.curves_sculpt_settings.interpolate_point_count = False
+
+            
+            brush_grow.strength = 0.1
+            if bpy.app.version_string >= "4.2.0":
+                brush_grow.curves_sculpt_settings.use_uniform_scale = True
+            elif bpy.app.version_string < "4.2.0":
+                brush_grow.curves_sculpt_settings.scale_uniform = True
+
+            
+            brush_add.curves_sculpt_settings.add_amount = 2
+            brush_add.falloff_shape = 'SPHERE'
+            brush_add.use_frontface = True
+            if bpy.app.version_string >= "4.2.0":
+                brush_add.curves_sculpt_settings.use_length_interpolate = False
+                brush_add.curves_sculpt_settings.use_shape_interpolate = False
+                brush_add.curves_sculpt_settings.use_point_count_interpolate = False
+                brush_add.curves_sculpt_settings.curve_length = 0.32  
+                brush_add.curves_sculpt_settings.points_per_curve = 2
+            elif bpy.app.version_string < "4.2.0":
+                brush_add.curves_sculpt_settings.interpolate_length = False
+                brush_add.curves_sculpt_settings.interpolate_shape = False
+                brush_add.curves_sculpt_settings.interpolate_point_count = False
+                brush_add.curves_sculpt_settings.curve_length = 0.32  
+                brush_add.curves_sculpt_settings.points_per_curve = 2
+
+            
+            brush_delete.falloff_shape = 'PROJECTED'
+
+            
+            brush_puff.strength = 10
+            brush_puff.falloff_shape = 'PROJECTED'
+
+            
+            brush_comb.strength = 0.1
+            brush_comb.falloff_shape = 'PROJECTED'
+
+
+            
+            
+            
+
+
 
 
 
@@ -2327,22 +2335,24 @@ def context3sculptbrush(context,**kwargs):
                 
                 
 
-                bpy.ops.wm.tool_set_by_id(override, name="builtin.draw")
+                
+                bpy.ops.wm.tool_set_by_id(name="builtin.draw")
 
-                bpy.context.scene.tool_settings.curve_paint_settings.depth_mode = 'SURFACE'
-                bpy.context.scene.tool_settings.curve_paint_settings.use_offset_absolute = True
-                bpy.context.scene.tool_settings.curve_paint_settings.use_stroke_endpoints = True
-                bpy.context.scene.tool_settings.curve_paint_settings.error_threshold = 8
-                bpy.context.scene.tool_settings.curve_paint_settings.fit_method = 'REFIT'
-                bpy.context.scene.tool_settings.curve_paint_settings.use_corners_detect = False
-                bpy.context.scene.tool_settings.curve_paint_settings.radius_taper_start = 1
-                bpy.context.scene.tool_settings.curve_paint_settings.radius_taper_end = 1
-                bpy.context.scene.tool_settings.curve_paint_settings.radius_min = 0
-                bpy.context.scene.tool_settings.curve_paint_settings.radius_max = 4
-                bpy.context.scene.tool_settings.curve_paint_settings.use_pressure_radius = False
-                bpy.context.scene.tool_settings.curve_paint_settings.surface_offset = 0.02
-                bpy.context.scene.tool_settings.curve_paint_settings.surface_plane = 'VIEW'
-                bpy.context.scene.tool_settings.curve_paint_settings.curve_type = 'BEZIER'
+                if bpy.context.preferences.addons[__package__].preferences.checkboxOverrideBrushes:
+                    bpy.context.scene.tool_settings.curve_paint_settings.depth_mode = 'SURFACE'
+                    bpy.context.scene.tool_settings.curve_paint_settings.use_offset_absolute = True
+                    bpy.context.scene.tool_settings.curve_paint_settings.use_stroke_endpoints = True
+                    bpy.context.scene.tool_settings.curve_paint_settings.error_threshold = 8
+                    bpy.context.scene.tool_settings.curve_paint_settings.fit_method = 'REFIT'
+                    bpy.context.scene.tool_settings.curve_paint_settings.use_corners_detect = False
+                    bpy.context.scene.tool_settings.curve_paint_settings.radius_taper_start = 1
+                    bpy.context.scene.tool_settings.curve_paint_settings.radius_taper_end = 1
+                    bpy.context.scene.tool_settings.curve_paint_settings.radius_min = 0
+                    bpy.context.scene.tool_settings.curve_paint_settings.radius_max = 4
+                    bpy.context.scene.tool_settings.curve_paint_settings.use_pressure_radius = False
+                    bpy.context.scene.tool_settings.curve_paint_settings.surface_offset = 0.02
+                    bpy.context.scene.tool_settings.curve_paint_settings.surface_plane = 'VIEW'
+                    bpy.context.scene.tool_settings.curve_paint_settings.curve_type = 'BEZIER'
 
 
             
@@ -2379,6 +2389,8 @@ def getChildren(parentobj):
     return children
 
 def secretpaint_viewport_mask_function(*args,**kwargs): 
+
+    importpainting_multiple_assets = kwargs.get("importpainting_multiple_assets") if "importpainting_multiple_assets" in kwargs else False
 
     if "activeobj" in kwargs: activeobj = kwargs.get("activeobj")
     else: activeobj = bpy.context.active_object
@@ -2472,7 +2484,7 @@ def secretpaint_viewport_mask_function(*args,**kwargs):
                 for i in ucol:
                     layer_collection = bpy.context.view_layer.layer_collection  
                     Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-                    bpy.context.view_layer.active_layer_collection = Coll_of_Active
+                    
 
                 
                 for ob in bpy.context.scene.objects:
@@ -2482,11 +2494,28 @@ def secretpaint_viewport_mask_function(*args,**kwargs):
                 
                 if not maskobj or force_new_maskObj:
                     if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
-                    bpy.ops.mesh.primitive_cube_add(size=5, enter_editmode=False, align='WORLD',location=activeobj.location)
+
+
+                    mesh = bpy.data.meshes.new("Secret Paint Viewport Mask")  
+                    maskobj = bpy.data.objects.new("Secret Paint Viewport Mask", mesh)  
+                    masksize=5
+                    half_x = masksize / 2  
+                    verts = [(-half_x, -half_x, -half_x), (half_x, -half_x, -half_x), (half_x, half_x, -half_x), (-half_x, half_x, -half_x), (-half_x, -half_x, half_x), (half_x, -half_x, half_x), (half_x, half_x, half_x), (-half_x, half_x, half_x)]  
+                    faces = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (2, 3, 7, 6), (0, 3, 7, 4), (1, 2, 6, 5)]  
+                    mesh.from_pydata(verts, [], faces)  
+                    maskobj.location = activeobj.location
+                    if Coll_of_Active.name == "Scene Collection": bpy.context.scene.collection.objects.link(maskobj)  
+                    else: bpy.data.collections[Coll_of_Active.name].objects.link(maskobj)  
+
+                    if importpainting_multiple_assets ==False:
+                        for obbb in bpy.context.selected_objects: obbb.select_set(False)
+                        maskobj.select_set(True)
+                        bpy.context.view_layer.objects.active = maskobj
+
                     
                     
-                    maskobj = bpy.context.active_object
-                    maskobj.name = "Secret Paint Viewport Mask"
+                    
+
                     
                     
                     
@@ -2874,22 +2903,20 @@ def secretpaint_create_curve(self,context,**kwargs):
     return hairCurves
     
 def secretpaint_function(self,*args,**kwargs):  
-
+    pass #print"######################################-----------#####################")
     context=None
     event=None
     for i in args:
         if type(i).__name__ == "Context": context = i
         elif type(i).__name__ == "Event": event = i
 
-    if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
-    else:activeobj = bpy.context.active_object
+    activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
-    if "objselection" in kwargs:objselection = kwargs.get("objselection")
-    else: objselection = bpy.context.selected_objects
+    objselection = kwargs.get("objselection") if "objselection" in kwargs else bpy.context.selected_objects
     if activeobj not in objselection: objselection.append(activeobj)
 
-    if "auto_Mask_Optimization" in kwargs: auto_Mask_Optimization = kwargs.get("auto_Mask_Optimization")
-    else:auto_Mask_Optimization=True
+    auto_Mask_Optimization = kwargs.get("auto_Mask_Optimization") if "auto_Mask_Optimization" in kwargs else True
+    importpainting_multiple_assets = kwargs.get("importpainting_multiple_assets") if "importpainting_multiple_assets" in kwargs else False
 
     if activeobj == None: return {'FINISHED'}
 
@@ -2937,12 +2964,13 @@ def secretpaint_function(self,*args,**kwargs):
         for obj in objselection: 
             if obj != activeobj:
                 selobj = obj
+                break
                 selobj_BoundingBox_State = selobj.display_type
 
     
     Coll_of_Active=[]
     original_collection = bpy.context.view_layer.active_layer_collection   
-    ucol = activeobj.users_collection
+    
     
     for i in activeobj.users_collection:
         layer_collection = bpy.context.view_layer.layer_collection   
@@ -2951,39 +2979,38 @@ def secretpaint_function(self,*args,**kwargs):
     
     collection_of_one_of_selected=[]
     if N_Of_Selected >=3:
-        ucol = selobj.users_collection
+        
+        
         
         for i in selobj.users_collection:
+        
             layer_collection = bpy.context.view_layer.layer_collection 
             collection_of_one_of_selected = recurLayerCollection(layer_collection, i.name)
+    pass #print"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@",collection_of_one_of_selected,"--",tempooo,"____",[x.name for x in objselection])
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-
-    
-
-
-
 
 
 
 
-    
-    if ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type == "MESH" \
-            or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type == "EMPTY" \
-            or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type == "CURVE":
 
+
+
+    
+    if ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type in ["MESH","EMPTY","CURVE"]:
         hairCurves = secretpaint_create_curve(self,context,targetOBJ=activeobj,targetCollection=Coll_of_Active, brushOBJ=selobj, transfer_modifier=False)
         
 
@@ -3020,9 +3047,19 @@ def secretpaint_function(self,*args,**kwargs):
 
         
         for x in objselection: bpy.data.objects[x.name].select_set(False)
-        bpy.context.view_layer.objects.active = hairCurves
         
-        context3sculptbrush(context)
+
+        
+        if importpainting_multiple_assets:
+            allTerrainArea = sum(face.area for face in activeobj.data.polygons)  
+            if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask:
+                hairCurves.modifiers[0]["Input_98"] = False  
+                hairCurves.modifiers[0]["Input_97"] = None
+                secretpaint_viewport_mask_function(self, context, objselection=[hairCurves], activeobj=hairCurves, importpainting_multiple_assets=importpainting_multiple_assets)
+            hairCurves.modifiers[0]["Input_69"] = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurves
+            context3sculptbrush(context)
 
         
         hairCurves.modifiers[0]["Input_99"] = False
@@ -3098,6 +3135,7 @@ def secretpaint_function(self,*args,**kwargs):
 
     
     elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "MESH" and not biome_detected:  
+        pass #print"scatter sel collection on ACTIVE surface")
 
         
         
@@ -3137,23 +3175,33 @@ def secretpaint_function(self,*args,**kwargs):
         
 
         for x in objselection: x.select_set(False)
-        bpy.context.view_layer.objects.active = hairCurves
-        context3sculptbrush(context, activeobj=hairCurves)
+
+
+        
+        if importpainting_multiple_assets:
+            allTerrainArea = sum(face.area for face in activeobj.data.polygons)  
+            if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask:
+                hairCurves.modifiers[0]["Input_98"] = False  
+                hairCurves.modifiers[0]["Input_97"] = None
+                secretpaint_viewport_mask_function(self, context, objselection=[hairCurves], activeobj=hairCurves, importpainting_multiple_assets=importpainting_multiple_assets)
+            hairCurves.modifiers[0]["Input_69"] = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurves
+            context3sculptbrush(context, activeobj=hairCurves)
+
 
         
         hairCurves.modifiers[0]["Input_99"] = False
 
-        pass #print"scatter sel collection on active surface")
+
 
 
 
 
 
     
-    elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "CURVES" and selobj.type == "MESH" \
-            or ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "CURVES" and selobj.type == "EMPTY" \
-            or ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "CURVES" and selobj.type == "CURVE":
-
+    elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "CURVES" and selobj.type in ["MESH","EMPTY","CURVE"]:
+        pass #print"-----------------------scatter selected coll with active hair settings on same surface")
         hairCurves = secretpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=selobjs_without_active, targetCollection=Coll_of_Active, transfer_modifier=True)
 
         
@@ -3212,13 +3260,24 @@ def secretpaint_function(self,*args,**kwargs):
         
         
         for x in objselection: x.select_set(False)
-        bpy.context.view_layer.objects.active = hairCurves
-        context3sculptbrush(context, activeobj=hairCurves)
+
+        
+        if importpainting_multiple_assets:
+            allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  
+            if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask:
+                hairCurves.modifiers[0]["Input_98"] = False  
+                hairCurves.modifiers[0]["Input_97"] = None
+                secretpaint_viewport_mask_function(self, context, objselection=[hairCurves], activeobj=hairCurves, importpainting_multiple_assets=importpainting_multiple_assets)
+            hairCurves.modifiers[0]["Input_69"] = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurves
+            context3sculptbrush(context, activeobj=hairCurves)
+
 
         
         hairCurves.modifiers[0]["Input_99"] = False
 
-        pass #print"scatter selected coll with active hair settings on same surface")
+
 
 
 
@@ -3716,8 +3775,21 @@ def secretpaint_function(self,*args,**kwargs):
         
 
         for x in objselection: bpy.data.objects[x.name].select_set(False)
-        bpy.context.view_layer.objects.active = hairCurves
-        if not activeobj.modifiers[0]["Input_69"]: context3sculptbrush(context, activeobj=hairCurves) 
+
+        
+        if importpainting_multiple_assets:
+            allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  
+            if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask:
+                hairCurves.modifiers[0]["Input_98"] = False  
+                hairCurves.modifiers[0]["Input_97"] = None
+                secretpaint_viewport_mask_function(self, context, objselection=[hairCurves], activeobj=hairCurves, importpainting_multiple_assets=importpainting_multiple_assets)
+            hairCurves.modifiers[0]["Input_69"] = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurves
+            if not activeobj.modifiers[0]["Input_69"]: context3sculptbrush(context, activeobj=hairCurves) 
+            
+
+        
         
 
         
@@ -4259,6 +4331,7 @@ def secretpaint_function(self,*args,**kwargs):
             hairCurves.modifiers[0]["Input_65"][1] = -1.5708
 
         curve_draw_tool(context, dont_set_drawing_tool=dont_set_drawing_tool)
+        context3sculptbrush(context)
         hairCurves.modifiers[0]["Input_2"] = activeobj
         hairCurves.location= bpy.context.scene.cursor.location
         pass #print"DRAW CURVE, OBJ MODE, 1 or 2")
@@ -6184,7 +6257,7 @@ def export_to_asset_library_function(self,context,event):
     
     
     
-    pass #print"SSSSSSSSSSSSSSSSSSSS",new_collection)
+    
     for obj in objselection:
         
         if obj.name not in new_collection.all_objects: new_collection.objects.link(obj)
@@ -6244,7 +6317,7 @@ def export_to_asset_library_function(self,context,event):
 
 
 
-
+    
 
 
 
@@ -6857,9 +6930,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
 
-
-
-
+            
             
             all_with_new_collections=[]
             for top_level_collection in bpy.context.scene.collection.children:
@@ -6902,7 +6973,9 @@ def paint_from_library_function(self, context, event, **kwargs):
                 
 
                 
-                if top_level_collection not in all_with_new_collections[:]: bpy.data.collections.remove(top_level_collection, do_unlink=True)  
+                if top_level_collection not in all_with_new_collections[:]:
+                    for xx in top_level_collection.all_objects: bpy.data.objects.remove(xx, do_unlink=True)
+                    bpy.data.collections.remove(top_level_collection, do_unlink=True)  
                 
                 
 
@@ -6923,6 +6996,7 @@ def paint_from_library_function(self, context, event, **kwargs):
             
             
 
+            
 
             
             all_materials = []
@@ -6946,13 +7020,13 @@ def paint_from_library_function(self, context, event, **kwargs):
                 
                 
 
-                ob.make_local() 
-                if ob.type in ["CURVES", "CURVE","LIGHT"]: ob.data.make_local()  
+                if ob.library: ob.make_local()  
+                if ob.type in ["CURVES", "CURVE","LIGHT"] and ob.data.library: ob.data.make_local()  
                 for mat_slot in ob.material_slots:
                     if mat_slot.material:
                         mat = mat_slot.material
                         mat_slot.link = 'OBJECT'
-                        if mat.library: mat.make_local()
+                        
                         try:mat_slot.material = mat  
                         except:
                             pass #print"objjjjj",ob.name, "matslot-------", mat_slot,) 
@@ -6961,6 +7035,7 @@ def paint_from_library_function(self, context, event, **kwargs):
             for matery in all_materials: matery.make_local()   
 
 
+            
 
 
 
@@ -7106,7 +7181,10 @@ def paint_from_library_function(self, context, event, **kwargs):
 
 
             
-            if activated_scatter: secretpaint_function(self, context, event, activeobj=activeobj, objselection=biome_to_use_as_paint)
+            importpainting_multiple_assets = True if len(sel_assets) >=2 else False
+            if activated_scatter: secretpaint_function(self, context, event, activeobj=activeobj, objselection=biome_to_use_as_paint, importpainting_multiple_assets=importpainting_multiple_assets)
+                
+
 
             elif switch_asset:
                 if asset_type == "Object":
@@ -9238,84 +9316,6 @@ class assembly(bpy.types.Operator):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -9350,6 +9350,7 @@ class secret_menu(bpy.types.AddonPreferences):
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
     checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f)
     trigger_viewport_mask: bpy.props.IntProperty(name="Trigger Viewport Mask", description="Automatically create the Viewport Mask whenever turning on the procedural distribution would create more than the specified number of instances. Useful to avoid slowing down the interface when working on huge terrains", default=15000)
+    checkboxOverrideBrushes: bpy.props.BoolProperty(name="Override Brush Settings", description="Whenever jumping into paint mode with Q, the brush settings will be automatically set to optimal values", default=True)
 
     all_libraries = [(lib.path,lib.name,"") for lib in bpy.context.preferences.filepaths.asset_libraries]
 
@@ -9371,6 +9372,7 @@ class secret_menu(bpy.types.AddonPreferences):
 
         layout.prop(self, "checkboxAdvancedModifier")
         layout.prop(self, "checkboxHideImported")
+        layout.prop(self, "checkboxOverrideBrushes")
         layout.prop(self, "trigger_viewport_mask")
 
         row = layout.row()
@@ -9572,8 +9574,7 @@ def register():
 
 
     km = kc.get("Object Mode")
-    if not km:
-        km = kc.new("Object Mode")
+    if not km: km = kc.new("Object Mode")
     kmi = km.keymap_items.new("secret.paint", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
@@ -9659,19 +9660,19 @@ def register():
     km = kc.get("Object Mode")
     if not km:
         km = kc.new("Object Mode")
-    kmi = km.keymap_items.new("secret.group", "M", "PRESS")
+    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True)
     addon_keymaps.append((km, kmi))
 
     km = kc.get("Outliner")
     if not km:
         km = kc.new("Outliner", space_type="OUTLINER")
-    kmi = km.keymap_items.new("secret.group", "M", "PRESS")
+    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True)
     addon_keymaps.append((km, kmi))
 
     km = kc.get("Object Mode")
     if not km:
         km = kc.new("Object Mode")
-    kmi = km.keymap_items.new("secret.instancecollfromactiveobj", "M", "PRESS", alt=True)
+    kmi = km.keymap_items.new("secret.instancecollfromactiveobj", "M", "PRESS", shift=True, alt=True)
     addon_keymaps.append((km, kmi))
 
     km = kc.get("Object Mode")
