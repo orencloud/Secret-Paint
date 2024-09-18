@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 2),
+    "version": (1, 5, 3),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -235,7 +235,6 @@ class orencurvepanel(bpy.types.Panel):
         row = layout.row()
 
 
-
         
         def list_hair(sibling,bgroup):
             
@@ -275,8 +274,12 @@ class orencurvepanel(bpy.types.Panel):
                 row.alert = True
             else:
                 row.alert = False
-            
-            select_button = row.operator("secret.select_object", text=str(namerow), icon=icon)
+            if sibling.modifiers[0]["Input_69"]:
+                n_of_instances = int(  (sum(face.area for face in sibling.parent.data.polygons)) /     (   (1/   ((sibling.modifiers[0]["Input_68"] ** 0.5) * (sibling.modifiers[0]["Input_100"]))   )   **2)       *sibling.modifiers[0]["Input_72"]/100   )
+
+            else: n_of_instances = len(sibling.data.curves) 
+            n_of_instancesFinal = f"{n_of_instances // 1000}.{(n_of_instances % 1000) // 100}k" if n_of_instances >= 1000 else f"0.{n_of_instances // 100}k"     
+            select_button = row.operator("secret.select_object", text=str(namerow)+" ["+str(n_of_instancesFinal)+"]", icon=icon)
             select_button.object_name = sibling.name
 
             
@@ -459,7 +462,6 @@ class orencurvepanel(bpy.types.Panel):
             row.alert = True if False not in [haa[0].modifiers[0]["Input_98"] for haa in hair_in_bgroup] else False       
             mask_button = row.operator("object.secretpaint_viewport_mask_biome", text="", icon='CLIPUV_HLT' if row.alert else "CLIPUV_DEHLT")
             mask_button.object_biome = str(bgroup)
-
 
 
 
@@ -775,8 +777,6 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     
 
     
-    nodes_to_switch = []
-    cleanup_generator = []
     carry_through = False
     try:  
         if bpy.app.version_string >= "4.0.0":
@@ -793,6 +793,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     except: pass #print"---------FAILED UPDATE 2")
 
     if carry_through:
+        nodes_to_switch = []
+        cleanup_generator = []
         for node_tree in bpy.data.node_groups:
             
             if not node_tree.library and node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
@@ -2903,7 +2905,7 @@ def secretpaint_create_curve(self,context,**kwargs):
     return hairCurves
     
 def secretpaint_function(self,*args,**kwargs):  
-    pass #print"######################################-----------#####################")
+    pass #print"###########-----  secretpaint_function(self,*args,**kwargs  ------############")
     context=None
     event=None
     for i in args:
@@ -2986,7 +2988,6 @@ def secretpaint_function(self,*args,**kwargs):
         
             layer_collection = bpy.context.view_layer.layer_collection 
             collection_of_one_of_selected = recurLayerCollection(layer_collection, i.name)
-    pass #print"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@",collection_of_one_of_selected,"--",tempooo,"____",[x.name for x in objselection])
 
     
     
@@ -3012,8 +3013,8 @@ def secretpaint_function(self,*args,**kwargs):
     
     if ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type in ["MESH","EMPTY","CURVE"]:
         hairCurves = secretpaint_create_curve(self,context,targetOBJ=activeobj,targetCollection=Coll_of_Active, brushOBJ=selobj, transfer_modifier=False)
-        
 
+        
         hairCurves.modifiers[0]["Input_2"] = bpy.data.objects[selobj.name]  
         
         hairCurves.modifiers[0]["Input_16"] = 5 
@@ -3026,8 +3027,12 @@ def secretpaint_function(self,*args,**kwargs):
         
 
         hairCurves.modifiers[0]["Input_15"] = 0.25 
+        hairCurves.modifiers[0]["Input_15"] = 0.25 
         hairCurves.modifiers[0]["Input_82"] = 1.04
         hairCurves.modifiers[0]["Input_62"] = 0.5 
+        
+        hairCurves.modifiers[0]["Input_60"] =   0.15*   ((hairCurves.modifiers[0]["Input_68"]    **0.5))     
+
         if bpy.app.version_string >= "4.0.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
         elif bpy.app.version_string < "4.0.0":
             try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value  
@@ -3165,6 +3170,7 @@ def secretpaint_function(self,*args,**kwargs):
         hairCurves.modifiers[0]["Input_6"][2] = 20  
         hairCurves.modifiers[0]["Input_15"] = 0.25 
         hairCurves.modifiers[0]["Input_62"] = 0.5 
+        hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
         if bpy.app.version_string >= "4.0.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
         elif bpy.app.version_string < "4.0.0":
             try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value  
@@ -3241,6 +3247,7 @@ def secretpaint_function(self,*args,**kwargs):
         hairCurves.modifiers[0]["Input_9"] = bpy.data.collections[collection_of_one_of_selected.name]
         hairCurves.modifiers[0]["Input_39"] = False  
         hairCurves.modifiers[0]["Input_6"][2] = 20.0
+        hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
         if bpy.app.version_string >= "4.0.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
         elif bpy.app.version_string < "4.0.0":
             try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value  
@@ -3367,10 +3374,10 @@ def secretpaint_function(self,*args,**kwargs):
                     hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  
                     hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  
 
-                    hairCurves.modifiers[0]["Input_60"] = hair.modifiers[0]["Input_60"]  
                     hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
                     hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
                     hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
+                    hairCurves.modifiers[0]["Input_60"] = hair.modifiers[0]["Input_60"]  
                     hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
 
                     hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
@@ -3588,6 +3595,7 @@ def secretpaint_function(self,*args,**kwargs):
             hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
             hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
             hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
+            hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
             hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
 
             hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
@@ -3750,6 +3758,7 @@ def secretpaint_function(self,*args,**kwargs):
         hairCurves.modifiers[0]["Input_2"] = selobj
         hairCurves.modifiers[0]["Input_9"] = None 
         hairCurves.modifiers[0]["Input_39"] = False  
+        hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
         
         
         
@@ -4660,7 +4669,7 @@ class orencurveswitch(bpy.types.Operator):
         paintbrushswitch_f(self, context, event)
         return{'FINISHED'}
 class clean_hair_orencurve(bpy.types.Operator):
-    """When the terrain sculpting with dynamic topology, the UVs need to be recreated in order to paint. Also snaps hair to the closest surfaces"""
+    """When sculpting the terrain with dynamic topology, the UVs need to be recreated in order to be able to paint manually (geometry node hair limitation). Also snaps hair to the closest surfaces"""
     bl_idname = "secret.fixdyntopo"
     bl_label = "Reproject"
     bl_options = {'REGISTER', 'UNDO'}
@@ -5603,16 +5612,17 @@ def realize_instances_f(self,context):
 
                 newobj.select_set(False)
                 bpy.ops.object.mode_set(mode="EDIT")
-                try: bpy.ops.curves.select_linked()
+                try: bpy.ops.curves.select_linked() 
                 except:pass
                 bpy.ops.curves.delete()
+                bpy.ops.curves.select_all(action='SELECT') 
 
 
                 obj.select_set(False)
                 newobj.select_set(True)
                 bpy.context.view_layer.objects.active = newobj
                 bpy.ops.object.mode_set(mode="EDIT")
-                try:bpy.ops.curves.select_linked()
+                try:bpy.ops.curves.select_linked()  
                 except:pass
                 bpy.ops.curves.select_all(action='INVERT')
                 bpy.ops.curves.delete()
@@ -6317,7 +6327,6 @@ def export_to_asset_library_function(self,context,event):
 
 
 
-    
 
 
 
@@ -6330,6 +6339,8 @@ def export_to_asset_library_function(self,context,event):
     
     temp_blend=(path+ "\\tempSecretPaintExport.blend").replace("\\", "\\\\")
     bpy.ops.wm.save_as_mainfile(copy=True, filepath=temp_blend)
+
+    
 
     
     
@@ -6356,6 +6367,9 @@ def export_to_asset_library_function(self,context,event):
 import bpy
 import os
 
+
+
+
 from pathlib import Path  
 import addon_utils
 
@@ -6381,7 +6395,7 @@ with bpy.data.libraries.load(source_file_path) as (data_from, data_to):
 hidden_to_restore=[]
 for coll in data_to.collections:     
     bpy.context.collection.children.link(coll)
-    
+
     if {newobjs_toDelete}:           
         for oob in coll.all_objects:
             
@@ -6395,10 +6409,18 @@ for coll in data_to.collections:
 
 
 
+
+
+blender_version = bpy.app.version_string
+addon_path=[]
+for mod in addon_utils.modules():
+    if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  
+        addon_path = os.path.dirname(mod.__file__)
+
 nodes_to_switch = []
 cleanup_generator = []
 for node_tree in bpy.data.node_groups:
-    if not node_tree.library and node_tree.name.startswith("Secret Paint"):
+    if not node_tree.library and node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
         node_tree.name = "Secret Paint_OLD"  
         if node_tree not in nodes_to_switch: nodes_to_switch.append(node_tree)
     if not node_tree.library and node_tree.name.startswith("Secret Generator"):
@@ -6406,15 +6428,10 @@ for node_tree in bpy.data.node_groups:
         if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
 
 
-
-
-for mod in addon_utils.modules():
-    if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  
-        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
-        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
-        break  
+if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
+elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
+elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
+elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
 inner_path = "NodeTree"
 object_name = "Secret Paint"
 try: bpy.ops.wm.append( 
@@ -6428,10 +6445,14 @@ orenpaintNode=[]
 for node_tree in bpy.data.node_groups:  
     if not node_tree.library and node_tree.name == "Secret Paint": orenpaintNode = node_tree
 
-for obj in bpy.data.objects:  
+
+for obj in bpy.data.objects:
     if obj.type in ["CURVES","CURVE"] and obj.modifiers and not obj.library:  
         for modif in obj.modifiers:
-            if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")): modif.node_group = orenpaintNode  
+            
+            if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode  
+            
+
 
 if nodes_to_switch[:]:
     for nod in nodes_to_switch[:]:
@@ -6439,6 +6460,7 @@ if nodes_to_switch[:]:
 if cleanup_generator[:]:
     for nod in cleanup_generator[:]:
         if nod: bpy.data.node_groups.remove(nod, do_unlink=True)
+
 
 
 
@@ -6797,6 +6819,7 @@ def paint_from_library_function(self, context, event, **kwargs):
     new_coll_was_created_so_hide_viewport=False
     coll_to_hide = None
 
+    pass #print"##########@@@@@@@@@@@@#############-----------------",bpy.context.view_layer.active_layer_collection)
     
     if justImport == False:
         if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported: 
@@ -6805,16 +6828,15 @@ def paint_from_library_function(self, context, event, **kwargs):
                 add_collections_to_list(top_level_collection, all_collections)
             for coll in all_collections: 
                 if coll.name.startswith("Secret Assets"):
-                    
-                    
+                    pass #print"SEEEEEEE FOUNDDDDDDDDDDDDDDDDDDDDDDD")
                     FoundHiddenCollection = recurLayerCollection(bpy.context.view_layer.layer_collection, coll.name)
                     FoundHiddenCollection_status = coll.hide_viewport
                     coll.hide_viewport = False  
                     bpy.context.view_layer.active_layer_collection = FoundHiddenCollection
                     coll_to_hide = coll   
-                    
                     break
             if not bpy.context.view_layer.active_layer_collection.name.startswith("Secret Assets"): 
+                pass #print"CREAAAAAAAAAAAAAAAAAATTTTTTT")
                 new_coll_was_created_so_hide_viewport =True
                 new_coll = bpy.data.collections.new("Secret Assets")
                 bpy.context.view_layer.active_layer_collection.collection.children.link(new_coll) 
@@ -6835,6 +6857,7 @@ def paint_from_library_function(self, context, event, **kwargs):
     if bpy.app.version_string >= "4.0.0": sel_assets = context.selected_assets
     elif bpy.app.version_string < "4.0.0": sel_assets = context.selected_asset_files
     for asset_file in sel_assets:
+        pass #print"ACTIVE COLLECTION",bpy.context.view_layer.active_layer_collection)
         
 
         
@@ -7140,7 +7163,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                     if obj.modifiers:
                         for modif in obj.modifiers:
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                                if obj.parent not in terrains_with_hair and obj.parent.library == None: terrains_with_hair.append(obj.parent)
+                                if obj.parent not in terrains_with_hair: terrains_with_hair.append(obj.parent)  
 
              
             if len(terrains_with_hair) >=1:
@@ -7215,13 +7238,13 @@ def paint_from_library_function(self, context, event, **kwargs):
             
 
 
-        if coll_to_hide: coll_to_hide.hide_viewport = FoundHiddenCollection_status 
-        if new_coll_was_created_so_hide_viewport: 
-            new_coll.hide_viewport = True
-            new_coll.hide_render = True
+    if coll_to_hide: coll_to_hide.hide_viewport = FoundHiddenCollection_status 
+    if new_coll_was_created_so_hide_viewport: 
+        new_coll.hide_viewport = True
+        new_coll.hide_render = True
 
-        
-        bpy.context.view_layer.active_layer_collection = original_collection
+    
+    
 
 
         
@@ -8089,7 +8112,7 @@ def assembly_2(self,context,**kwargs):
     return there_are_assemblies_to_update, processing_original_activeobj
 
 class assembly(bpy.types.Operator):
-    """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally. This works with everything, even complex rigs"""
+    """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally. This works with everything, even complex rigs. It's a better version of collection instances with none of the drawbacks"""
     bl_idname = "secret.assembly"
     bl_label = "Secret Assembly_f"
     bl_options = {'REGISTER', 'UNDO'}
@@ -8098,29 +8121,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
