@@ -3,9 +3,9 @@ schema_version = "1.0.0"
 
 
 id = "secret_paint"
-version = "1.5.3"
+version = "1.5.4"
 name = "Secret Paint"
-tagline = "Select an object, select a surface, press Q to paint"
+tagline = "Select an object, select a surface, paint"
 maintainer = "orencloud"
 
 type = "add-on"
