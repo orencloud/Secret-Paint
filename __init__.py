@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 4),
+    "version": (1, 5, 6),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -834,7 +834,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
         except:pass #print"SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
 
         for lib in bpy.data.libraries: 
-            if lib.name == "Secret Paint.blend": bpy.data.libraries.remove(lib, do_unlink=True)
+            
+            if lib.name in ["Secret Paint.blend","Secret Paint 4.0 and older.blend","Secret Paint 4.1.blend","Secret Paint 4.2.0.blend"]: bpy.data.libraries.remove(lib, do_unlink=True)
 
         
         orenpaintNode = [nod for nod in bpy.data.node_groups if nod not in all_previous_nodes and nod.name.startswith("Secret Paint")]
@@ -4864,7 +4865,8 @@ def context283482(context,**kwargs):
 
 
                     
-                    if Importing_Into_Active == False: orengrouprecentercollectionobj_function(context, objselection=objs)
+                    
+
                     
                     
                     
@@ -6659,7 +6661,7 @@ def paint_from_library_function(self, context, event, **kwargs):
     new_coll_was_created_so_hide_viewport=False
     coll_to_hide = None
 
-    pass #print"##########@@@@@@@@@@@@#############-----------------",bpy.context.view_layer.active_layer_collection)
+    
     
     if justImport == False:
         if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported: 
@@ -6691,13 +6693,19 @@ def paint_from_library_function(self, context, event, **kwargs):
 
 
 
-
+    pass #print"")
+    pass #print"")
+    pass #print"")
+    pass #print"@@@@@@@@@@ new loop @@@@@@@@")
+    pass #print"")
+    pass #print"")
+    pass #print"")
 
 
     if bpy.app.version_string >= "4.0.0": sel_assets = context.selected_assets
     elif bpy.app.version_string < "4.0.0": sel_assets = context.selected_asset_files
     for asset_file in sel_assets:
-        pass #print"ACTIVE COLLECTION",bpy.context.view_layer.active_layer_collection)
+        
         
 
         
@@ -6750,6 +6758,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
 
             all_previous_objects = set(bpy.data.objects)  
+            all_previous_nodes = set(bpy.data.node_groups)  
             all_previous_objectData = set(bpy.data.meshes) 
             
             all_previous_collections=[]
@@ -6776,7 +6785,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                     bpy.ops.wm.append(filepath=os.path.join(asset_filepath, asset_type, asset_name),
                                       directory=os.path.join(asset_filepath, asset_type), filename=asset_name,
                                       instance_collections=False, active_collection=True, do_reuse_local_id=True)
-            except: pass
+            except: pass #print"---- ERROR IMPORTT")
 
 
             
@@ -6837,16 +6846,19 @@ def paint_from_library_function(self, context, event, **kwargs):
 
                 
                 if top_level_collection not in all_with_new_collections[:]:
-                    for xx in top_level_collection.all_objects: bpy.data.objects.remove(xx, do_unlink=True)
+                    
                     bpy.data.collections.remove(top_level_collection, do_unlink=True)  
-                
                 
 
             
 
 
+
+
             new_obs = list(set(bpy.data.objects) - all_previous_objects)  
-            if not new_obs: return{'FINISHED'} 
+            if not new_obs:
+                pass #print"----ERROR no new_obs")
+                return{'FINISHED'} 
 
 
             
@@ -6863,42 +6875,128 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
             all_materials = []
-            for ob in new_obs:   
-                
-                
-
-                
+            
+            for ob in new_obs:
                 
 
-                
-                
+                ob.make_local()  
 
                 
-                
-                
-                
-                
-                
-                
-                
-                
+                if ob.name not in bpy.context.view_layer.objects:
+                    pass #print"# Not in View layer", ob.name)
+                    new_obs.remove(ob)
+                    bpy.data.objects.remove(ob,do_unlink=True)
+                    continue
 
-                if ob.library: ob.make_local()  
-                if ob.type in ["CURVES", "CURVE","LIGHT"] and ob.data.library: ob.data.make_local()  
+                if ob.type in ["CURVES", "CURVE", "LIGHT"]: ob.data.make_local()  
+
+
+
+                
                 for mat_slot in ob.material_slots:
                     if mat_slot.material:
                         mat = mat_slot.material
+                        
                         mat_slot.link = 'OBJECT'
                         
-                        try:mat_slot.material = mat  
+                        
+                        try:
+                            mat_slot.material = mat  
                         except:
-                            pass #print"objjjjj",ob.name, "matslot-------", mat_slot,) 
-                            pass
-                        if mat not in all_materials and mat!=None: all_materials.append(mat)
-            for matery in all_materials: matery.make_local()   
+                            
+                            pass #print"---####### ERROR: ",ob.name, mat_slot.material )  
+                        
+                        if mat not in all_materials and mat != None: all_materials.append(mat)
+            for matery in all_materials: matery.make_local()  
 
 
             
+                
+                
+                
+                
+                
+                    
+                    
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+
+
 
 
 
@@ -6910,6 +7008,12 @@ def paint_from_library_function(self, context, event, **kwargs):
             
             
 
+            
+            new_nodes = list(set(bpy.data.node_groups) - all_previous_nodes)  
+            for node in new_nodes:
+                if node.library:
+                    pass #printf"## LOCALIZED node: {node.name}")
+                    node.make_local()
 
 
 
@@ -6918,8 +7022,6 @@ def paint_from_library_function(self, context, event, **kwargs):
             moveinteration = 1
             all_coordinates = []
             for obj in bpy.context.scene.objects:
-                
-                
                 all_coordinates.append(str(obj.location))
 
 
@@ -6979,15 +7081,16 @@ def paint_from_library_function(self, context, event, **kwargs):
             
             obs_without_parent_for_recenter_coll_origin =[]
             center = sum((obj.location for obj in new_obs), mathutils.Vector()) / len(new_obs) 
+            
             for obj in new_obs:
-                if not obj.parent:
+                
+                if not obj.parent and obj.visible_get() or obj.parent not in new_obs and obj.visible_get(): 
+                    
                     
                     obj.location += target_location - Vector(center) 
                     obs_without_parent_for_recenter_coll_origin.append(obj)
 
                     
-
-
 
             
             
@@ -7005,7 +7108,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                                 if obj.parent not in terrains_with_hair: terrains_with_hair.append(obj.parent)  
 
-             
+            
             if len(terrains_with_hair) >=1:
                 
                 biome_to_use_as_paint = None
@@ -7024,8 +7127,11 @@ def paint_from_library_function(self, context, event, **kwargs):
                 
                 
 
-            else: 
-                biome_to_use_as_paint = new_obs
+            
+            
+            elif asset_type == "Collection": biome_to_use_as_paint = new_obs
+            elif asset_type == "Object": biome_to_use_as_paint = [obs_without_parent_for_recenter_coll_origin[0]]
+            
 
 
 
@@ -7045,7 +7151,9 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
             importpainting_multiple_assets = True if len(sel_assets) >=2 else False
-            if activated_scatter: secretpaint_function(self, context, event, activeobj=activeobj, objselection=biome_to_use_as_paint, importpainting_multiple_assets=importpainting_multiple_assets)
+            if activated_scatter:
+                pass #print"§§§§§§§§§§§§§ activated scatter", activeobj.name,"biome_to_use_as_paint", [x.name for x in biome_to_use_as_paint])
+                secretpaint_function(self, context, event, activeobj=activeobj, objselection=biome_to_use_as_paint, importpainting_multiple_assets=importpainting_multiple_assets)
                 
 
 
@@ -7951,6 +8059,7 @@ def assembly_2(self,context,**kwargs):
 
     return there_are_assemblies_to_update, processing_original_activeobj
 
+
 class assembly(bpy.types.Operator):
     """Group the Active Object, its children and constraints into a non-destructive assembly. Alt + Click to merge into a mesh. You can add new objects to the assembly by simply parenting them to the original object. You can then update the assembly by pressing the button again. You can also create assemblies within assemblies to keep modelling procedurally. This works with everything, even complex rigs. It's a better version of collection instances with none of the drawbacks"""
     bl_idname = "secret.assembly"
@@ -7961,115 +8070,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
