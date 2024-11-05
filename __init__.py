@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 6),
+    "version": (1, 5, 7),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -822,10 +822,10 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
         
         all_previous_nodes = set(bpy.data.node_groups)
-        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
-        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
+        if blender_version < "4.1": file_path= addon_path + "/Secret Paint 4.0 and older.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "/Secret Paint 4.1.blend"
+        elif blender_version < "4.2.1": file_path= addon_path + "/Secret Paint 4.2.0.blend"
+        elif blender_version >= "4.2.1": file_path= addon_path + "/Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Secret Paint"
         
@@ -850,6 +850,17 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode[0]  
                     
 
+        pass #print"################################## SECRET PAINT INFO 
+        pass #print"INIT PATH: ", os.path.abspath(__file__))
+        pass #print"ADDON PATH: ", addon_path)
+        pass #print"BLENDER 
+        pass #print"FILE PATH B VERS: ", file_path)
+        pass #print"Does File exists: ",os.path.isfile(file_path))
+        pass #print"LIST OF FILES",os.listdir(addon_path))
+        pass #print"--------")
+        
+        
+        pass #print"################################## SECRET PAINT INFO 
 
         
         
@@ -6268,10 +6279,10 @@ for node_tree in bpy.data.node_groups:
 
 
 all_previous_nodes = set(bpy.data.node_groups)
-if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
-elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
+if blender_version < "4.1": file_path= addon_path + "/Secret Paint 4.0 and older.blend"
+elif blender_version < "4.2.0": file_path= addon_path + "/Secret Paint 4.1.blend"
+elif blender_version < "4.2.1": file_path= addon_path + "/Secret Paint 4.2.0.blend"
+elif blender_version >= "4.2.1": file_path= addon_path + "/Secret Paint.blend"
 inner_path = "NodeTree"
 object_name = "Secret Paint"
 
@@ -7276,10 +7287,10 @@ def shared_material_f(self,context):
         
         
         
-        if blender_version < "4.1": file_path= addon_path + "\Secret Paint 4.0 and older.blend"
-        elif blender_version < "4.2.0": file_path= addon_path + "\Secret Paint 4.1.blend"
-        elif blender_version < "4.2.1": file_path= addon_path + "\Secret Paint 4.2.0.blend"
-        elif blender_version >= "4.2.1": file_path= addon_path + "\Secret Paint.blend"
+        if blender_version < "4.1": file_path= addon_path + "/Secret Paint 4.0 and older.blend"
+        elif blender_version < "4.2.0": file_path= addon_path + "/Secret Paint 4.1.blend"
+        elif blender_version < "4.2.1": file_path= addon_path + "/Secret Paint 4.2.0.blend"
+        elif blender_version >= "4.2.1": file_path= addon_path + "/Secret Paint.blend"
         inner_path = "NodeTree"
         object_name = "Shared"
         bpy.ops.wm.append(
@@ -8070,17 +8081,6 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
 
 
 
