@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 7),
+    "version": (1, 5, 8),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -787,9 +787,9 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     carry_through = False
     try:  
         if bpy.app.version_string >= "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and not node_tree.name.endswith("Secret Paint")]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
         elif bpy.app.version_string < "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library] or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:     carry_through = True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and not node_tree.name.endswith("Secret Paint")]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
     except: carry_through=True
 
     
