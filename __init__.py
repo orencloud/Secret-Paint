@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 8),
+    "version": (1, 5, 9),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -850,17 +850,17 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode[0]  
                     
 
-        pass #print"################################## SECRET PAINT INFO 
-        pass #print"INIT PATH: ", os.path.abspath(__file__))
-        pass #print"ADDON PATH: ", addon_path)
-        pass #print"BLENDER 
-        pass #print"FILE PATH B VERS: ", file_path)
-        pass #print"Does File exists: ",os.path.isfile(file_path))
-        pass #print"LIST OF FILES",os.listdir(addon_path))
-        pass #print"--------")
         
         
-        pass #print"################################## SECRET PAINT INFO 
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
         
         
@@ -2249,8 +2249,6 @@ def context3sculptbrush(context,**kwargs):
             if brush.curves_sculpt_tool == 'COMB': brush_comb=brush
 
         if not brush_density:
-            
-
             brush_density = bpy.data.brushes.new('Density Curves',mode="SCULPT_CURVES")
             brush_density.curves_sculpt_tool = 'DENSITY'
             brush_density.size = 150
@@ -2278,7 +2276,9 @@ def context3sculptbrush(context,**kwargs):
 
 
         
-        try: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")  
+        try: 
+            if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
+            else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
         except:pass
         if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
         
