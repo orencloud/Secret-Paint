@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 5, 9),
+    "version": (1, 6, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2224,9 +2224,13 @@ def context3sculptbrush(context,**kwargs):
 
     if activeobj.type == "CURVES":
 
-        if activeobj.data.users >= 2: activeobj.data.surface = activeobj.parent  
-
+        if activeobj.data.users >= 2 and activeobj.data.surface!=activeobj.parent: activeobj.data.surface = activeobj.parent  
         bpy.ops.object.mode_set(mode="SCULPT_CURVES")  
+
+        try: 
+            if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
+            else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
+        except: pass #print"FAILED BRUSH DENSITYYYYY")
         
 
         
@@ -2234,12 +2238,12 @@ def context3sculptbrush(context,**kwargs):
         
 
         
-        brush_density = []
-        brush_grow = []
-        brush_add = []
-        brush_delete = []
-        brush_puff = []
-        brush_comb = []
+        brush_density = None
+        brush_grow = None
+        brush_add = None
+        brush_delete = None
+        brush_puff = None
+        brush_comb = None
         for brush in bpy.data.brushes:
             if brush.curves_sculpt_tool == 'DENSITY': brush_density=brush
             if brush.curves_sculpt_tool == 'GROW_SHRINK': brush_grow=brush
@@ -2249,9 +2253,10 @@ def context3sculptbrush(context,**kwargs):
             if brush.curves_sculpt_tool == 'COMB': brush_comb=brush
 
         if not brush_density:
-            brush_density = bpy.data.brushes.new('Density Curves',mode="SCULPT_CURVES")
+            brush_density = bpy.data.brushes.new('Density Curvesss',mode="SCULPT_CURVES")
             brush_density.curves_sculpt_tool = 'DENSITY'
             brush_density.size = 150
+            
         if not brush_grow:
             brush_grow = bpy.data.brushes.new('Grow /Shrink Curves',mode="SCULPT_CURVES")
             brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
@@ -2276,34 +2281,31 @@ def context3sculptbrush(context,**kwargs):
 
 
         
-        try: 
-            if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
-            else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
-        except:pass
-        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
         
+        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
         else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
-        if bpy.app.version_string >= "4.2.0": brush_density.curves_sculpt_settings.points_per_curve = 2
-        elif bpy.app.version_string < "4.2.0": brush_density.curves_sculpt_settings.points_per_curve = 2
+        if bpy.app.version_string >= "4.2.0":
+            brush_density.curves_sculpt_settings.use_length_interpolate = False
+            brush_density.curves_sculpt_settings.use_shape_interpolate = False
+            brush_density.curves_sculpt_settings.use_point_count_interpolate = False
+        elif bpy.app.version_string < "4.2.0":
+            brush_density.curves_sculpt_settings.interpolate_length = False
+            brush_density.curves_sculpt_settings.interpolate_shape = False
+            brush_density.curves_sculpt_settings.interpolate_point_count = False
+        brush_density.curves_sculpt_settings.use_point_count_interpolate = False
+        brush_density.curves_sculpt_settings.points_per_curve = 2
+
 
         
         if bpy.context.preferences.addons[__package__].preferences.checkboxOverrideBrushes:
+
+            
             
             brush_density.curves_sculpt_settings.density_mode = 'AUTO'
             brush_density.strength = 1
             brush_density.falloff_shape = 'SPHERE'
             brush_density.curve_preset = 'SMOOTHER'
             brush_density.curves_sculpt_settings.density_add_attempts = 200
-            if bpy.app.version_string >= "4.2.0":
-                brush_density.curves_sculpt_settings.use_length_interpolate = False
-                brush_density.curves_sculpt_settings.curve_length = 0.32  
-                brush_density.curves_sculpt_settings.use_shape_interpolate = False
-                brush_density.curves_sculpt_settings.use_point_count_interpolate = False
-            elif bpy.app.version_string < "4.2.0":
-                brush_density.curves_sculpt_settings.interpolate_length = False
-                brush_density.curves_sculpt_settings.curve_length = 0.32  
-                brush_density.curves_sculpt_settings.interpolate_shape = False
-                brush_density.curves_sculpt_settings.interpolate_point_count = False
 
             
             brush_grow.strength = 0.1
@@ -2320,14 +2322,12 @@ def context3sculptbrush(context,**kwargs):
                 brush_add.curves_sculpt_settings.use_length_interpolate = False
                 brush_add.curves_sculpt_settings.use_shape_interpolate = False
                 brush_add.curves_sculpt_settings.use_point_count_interpolate = False
-                brush_add.curves_sculpt_settings.curve_length = 0.32  
-                brush_add.curves_sculpt_settings.points_per_curve = 2
             elif bpy.app.version_string < "4.2.0":
                 brush_add.curves_sculpt_settings.interpolate_length = False
                 brush_add.curves_sculpt_settings.interpolate_shape = False
                 brush_add.curves_sculpt_settings.interpolate_point_count = False
-                brush_add.curves_sculpt_settings.curve_length = 0.32  
-                brush_add.curves_sculpt_settings.points_per_curve = 2
+            brush_add.curves_sculpt_settings.curve_length = 0.32  
+            brush_add.curves_sculpt_settings.points_per_curve = 2
 
             
             brush_delete.falloff_shape = 'PROJECTED'
@@ -2340,10 +2340,6 @@ def context3sculptbrush(context,**kwargs):
             brush_comb.strength = 0.1
             brush_comb.falloff_shape = 'PROJECTED'
 
-
-            
-            
-            
 
 
 
@@ -8081,6 +8077,10 @@ class assembly(bpy.types.Operator):
         if event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
+
+
+
+
 
 
 
