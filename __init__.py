@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 6, 0),
+    "version": (1, 6, 1),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2292,7 +2292,6 @@ def context3sculptbrush(context,**kwargs):
             brush_density.curves_sculpt_settings.interpolate_length = False
             brush_density.curves_sculpt_settings.interpolate_shape = False
             brush_density.curves_sculpt_settings.interpolate_point_count = False
-        brush_density.curves_sculpt_settings.use_point_count_interpolate = False
         brush_density.curves_sculpt_settings.points_per_curve = 2
 
 
@@ -8074,10 +8073,11 @@ class assembly(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     def invoke(self, context, event):
-        if event.alt: convert_and_join_f(self,context)
+        if blender_version < "4.2.0":
+            self.report({'ERROR'}, "Secret Paint Assemblies are only available from Blender 4.2 due to a lack of nodes")
+        elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
 
 
 
