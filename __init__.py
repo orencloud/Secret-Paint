@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 6, 1),
+    "version": (1, 6, 2),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3484,6 +3484,12 @@ def secretpaint_function(self,*args,**kwargs):
                 
                 if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
 
+
+
+                
+                for ojgb in newlycreated_hair:
+                    ojgb.modifiers[0]["Input_99"] = False
+
         
         
         
@@ -3498,8 +3504,8 @@ def secretpaint_function(self,*args,**kwargs):
         if N_Of_Selected >= 2 and hairCurves.modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])
 
         
-        for ojgb in newlycreated_hair:
-            ojgb.modifiers[0]["Input_99"] = False
+        
+        
 
         pass #print"many HAIR on MANY MESHES")
 
@@ -8078,12 +8084,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
 
 
 
