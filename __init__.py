@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 6, 3),
+    "version": (1, 6, 4),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -478,9 +478,9 @@ class orencurvepanel(bpy.types.Panel):
 
 
         obj = context.object
-        global obj_parent
-        if obj and obj.type=="CURVES" and obj.parent: obj_parent = obj.parent
-        if bpy.context.active_object == None: obj = obj_parent
+        
+        
+        
 
         if obj:
             hair=[]
@@ -1390,9 +1390,10 @@ class SelectObjectOperator(bpy.types.Operator):
     object_name: StringProperty()
     
     def invoke(self, context, event):
-        if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
         activeobj = bpy.context.active_object
         objselection = bpy.context.selected_objects
+        if activeobj and bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+
         
 
         if event.alt & event.ctrl:
@@ -1426,7 +1427,6 @@ class SelectObjectOperator(bpy.types.Operator):
                     bpy.context.view_layer.active_layer_collection = original_collection
 
         elif event.shift & event.ctrl:
-            if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
             
             oob = bpy.data.objects.get(self.object_name)
             if oob.name in bpy.context.view_layer.objects:
