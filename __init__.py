@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 6, 4),
+    "version": (1, 6, 5),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -1080,8 +1080,8 @@ def apply_paint(self,context, **kwargs):
     
     
 
-    saveMode= bpy.context.object.mode
-    bpy.ops.object.mode_set(mode="OBJECT")
+    
+    
 
     
 
@@ -1124,7 +1124,8 @@ def apply_paint(self,context, **kwargs):
         
         node_to_use=[]
         if applyIDs or obj.modifiers[0]["Input_69"] == False:
-            if "Secret Paint Apply IDs" in bpy.data.node_groups: node_to_use = bpy.data.node_groups.get("Secret Paint Apply IDs")
+            if "Secret Paint Apply IDs" in bpy.data.node_groups:
+                node_to_use = bpy.data.node_groups.get("Secret Paint Apply IDs")
             else:
                 node_to_use = bpy.data.node_groups.new(type='GeometryNodeTree', name='Secret Paint Apply IDs')
                 input = node_to_use.nodes.new('NodeGroupInput')
@@ -1136,7 +1137,7 @@ def apply_paint(self,context, **kwargs):
 
                 GeometryNodeSetID = node_to_use.nodes.new('GeometryNodeSetID')
                 
-                GeometryNodeSetID2 = node_to_use.nodes.new('GeometryNodeSetID')
+                
                 
                 ID = node_to_use.nodes.new('GeometryNodeInputID')
                 
@@ -1148,16 +1149,16 @@ def apply_paint(self,context, **kwargs):
                 node_to_use.links.new(input.outputs[0], GeometryNodeSetID.inputs[0])
                 node_to_use.links.new(ID.outputs[0], MATH.inputs[0])
                 node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID.inputs[1])
-                node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID2.inputs[1])
-                node_to_use.links.new(GeometryNodeSetID.outputs[0], GeometryNodeSetID2.inputs[0])
-                node_to_use.links.new(GeometryNodeSetID2.outputs[0], output.inputs[0])
+                
+                
+                
+                node_to_use.links.new(GeometryNodeSetID.outputs[0], output.inputs[0])
 
         elif applyIDs == False:
             for node in bpy.data.node_groups:
                 if node.name.startswith("Secret Generator"):
                     node_to_use = node
                     break
-
         modifier = obj.modifiers.new(name="GeometryNodes", type='NODES')
         modifier.node_group =  bpy.data.node_groups.get(node_to_use.name)  
         modifier["Input_2"] = obj.parent  
@@ -1189,7 +1190,6 @@ def apply_paint(self,context, **kwargs):
             
             
             bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
-
 
         
 
@@ -1247,14 +1247,17 @@ def apply_paint(self,context, **kwargs):
         if obj.parent and obj.parent.modifiers:  
             for mod in obj.parent.modifiers: 
                 if mod.type=="ARMATURE":
-                    bpy.context.view_layer.objects.active = obj
-                    current_mode = bpy.context.object.mode
-                    if current_mode!= "SCULPT_CURVES": bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-                    bpy.ops.curves.snap_curves_to_surface(attach_mode='DEFORM')
+
                     
                     
                     
-                    bpy.ops.object.mode_set(mode=current_mode)
+
+                    
+                    bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
+                    
+
+                    
+                    
 
 
         
@@ -1279,7 +1282,8 @@ def apply_paint(self,context, **kwargs):
         
 
 
-    bpy.ops.object.mode_set(mode="OBJECT")
+    
+
     
     for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
     bpy.context.view_layer.objects.active = activeobj
@@ -4151,6 +4155,7 @@ def secretpaint_function(self,*args,**kwargs):
         
         
         
+
         
         if N_Of_Selected == 0:
             result = bpy.ops.view3d.select(location=(event.mouse_region_x, event.mouse_region_y))
@@ -4170,6 +4175,7 @@ def secretpaint_function(self,*args,**kwargs):
             for ob in objselection: 
                 bpy.data.objects[ob.name].select_set(False)
 
+
         
         elif N_Of_Selected == 1: 
             if activeobj.modifiers[0]["Input_69"] == True and activeobj.modifiers[0]["Input_83_use_attribute"] == 1:
@@ -4182,6 +4188,7 @@ def secretpaint_function(self,*args,**kwargs):
             elif activeobj.modifiers[0]["Input_69"] == False:
                 
                 apply_paint(self, context, activeobj=activeobj, objselection=[activeobj], applyIDs=True)
+
 
             
             
@@ -5029,8 +5036,9 @@ def reproject_function(self,context,**kwargs):
 
             uv_to_reproject = previously_active_UV_rendering
 
+            
             if surface.data.library:
-                self.report({'INFO'}, "Snapped the hair to the closest surface, but couldn't create new UVs since the object's geometry is linked from another .Blend file")
+                if not automatically_triggererd: self.report({'INFO'}, "Snapped the hair to the closest surface, but couldn't create new UVs since the object's geometry is linked from another .Blend file")
 
             else:
 
@@ -5058,8 +5066,11 @@ def reproject_function(self,context,**kwargs):
                     for area in screen.areas:
                         if area.type == 'VIEW_3D':
                             with context.temp_override(window=window, area=area):
-                                bpy.context.view_layer.objects.active = surface  
-                                changed_active_obj_so_restore_is_needed =True
+                                for x in actualobjselection: x.select_set(False)
+                                changed_selected_objs_so_restore_is_needed = True
+                                if bpy.context.active_object != surface:
+                                    bpy.context.view_layer.objects.active = surface  
+                                    changed_active_obj_so_restore_is_needed =True
                                 
                                 restoremode = bpy.context.object.mode
                                 if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
@@ -8444,17 +8455,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
 
 
 
