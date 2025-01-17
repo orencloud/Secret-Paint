@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 6, 5),
+    "version": (1, 7, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -316,13 +316,16 @@ class orencurvepanel(bpy.types.Panel):
             vertex_button = row.operator("secret.vertexgrouppaint", text="", icon='MOD_VERTEX_WEIGHT' if sibling.modifiers[0]["Input_83_use_attribute"] else 'GROUP_VERTEX')
             vertex_button.object_name = sibling.name
 
-            
-            
-            
-
-            if sibling.modifiers[0]["Input_99"] or sibling.modifiers[0]["Socket_2"]: row.alert = True
-            else: row.alert = False
-            hide_buttonre = row.operator("secret.toggle_visibilityrender", text="", icon='RESTRICT_RENDER_ON' if sibling.modifiers[0]["Input_99"] else 'RESTRICT_RENDER_OFF')
+            try: 
+                row.alert = True if sibling.modifiers[0]["Socket_15"] or sibling.modifiers[0]["Socket_14"] or sibling.modifiers[0]["Socket_2"] or sibling.modifiers[0]["Input_99"] else False
+                render_icon = "RESTRICT_RENDER_OFF"
+                if sibling.modifiers[0]["Input_99"]: render_icon = "RESTRICT_RENDER_ON"
+                elif sibling.modifiers[0]["Socket_14"]: render_icon = "RESTRICT_VIEW_ON"
+            except:
+                row.alert = True if sibling.modifiers[0]["Socket_2"] or sibling.modifiers[0]["Input_99"] else False
+                render_icon = "RESTRICT_RENDER_OFF"
+                if sibling.modifiers[0]["Input_99"]: render_icon = "RESTRICT_RENDER_ON"
+            hide_buttonre = row.operator("secret.toggle_visibilityrender", text="", icon=render_icon)
             hide_buttonre.object_name = sibling.name
             hide_buttonre.object_biome = str(bgroup)
 
@@ -454,10 +457,26 @@ class orencurvepanel(bpy.types.Panel):
             vertex_button.object_biome = str(bgroup)
 
 
-
             
-            row.alert = True if hair_in_bgroup[0][0].modifiers[0]["Socket_2"] else False  
-            hide_buttonre = row.operator("secret.toggle_visibilityrender_biome", text="", icon='RESTRICT_RENDER_ON' if row.alert else 'RESTRICT_RENDER_OFF')
+            try:
+                if hair_in_bgroup[0][0].modifiers[0]["Socket_2"]:
+                    render_icon = "RESTRICT_RENDER_ON"
+                    row.alert = True
+                elif hair_in_bgroup[0][0].modifiers[0]["Socket_15"]:
+                    render_icon = "RESTRICT_VIEW_ON"
+                    row.alert = True
+                else:
+                    render_icon = "RESTRICT_RENDER_OFF"
+                    row.alert = False
+            except:
+                if hair_in_bgroup[0][0].modifiers[0]["Socket_2"]:
+                    render_icon = "RESTRICT_RENDER_ON"
+                    row.alert = True
+                else:
+                    render_icon = "RESTRICT_RENDER_OFF"
+                    row.alert = False
+
+            hide_buttonre = row.operator("secret.toggle_visibilityrender_biome", text="", icon=render_icon)
             hide_buttonre.object_biome = str(bgroup)
 
 
@@ -769,7 +788,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 18 
+    current_node_version = 22 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -791,13 +810,21 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     
 
     
+    
+    
+    
+    
+
+    
     carry_through = False
     try:  
         if bpy.app.version_string >= "4.0.0":
             if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
         elif bpy.app.version_string < "4.0.0":
             if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
-    except: carry_through=True
+    except:
+        pass #print"FAILED, UPDATING")
+        carry_through=True
 
     
     
@@ -927,6 +954,8 @@ def toggleAdvancedModifier():
         if bpy.app.version_string >= "4.0.0": x = bpy.data.node_groups["Secret Paint"].interface.items_tree
         elif bpy.app.version_string < "4.0.0": x= bpy.data.node_groups["Secret Paint"].inputs
 
+        
+
         for input in x:          
 
             if bpy.app.version_string >= "4.0.0":
@@ -947,13 +976,14 @@ def toggleAdvancedModifier():
                 or input.name=="Wind Scale"\
                 or input.name=="Speed"\
                 or input.name=="Viewport Density"\
+                or input.name=="Clump Radius"\
+                or input.name=="Clump Density"\
                 or input.name=="Proxy Convex Hull"\
                 or input.name=="Proxy Bounding Box"\
                 or input.name=="Material Custom"\
                 or input.name=="Material Original /Custom"\
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
-                or input.name=="Faster Viewport Mask"\
                 or input.name=="Distribution Seed"\
                 or input.name=="TURN OFF SYSTEM":
                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
@@ -977,13 +1007,14 @@ def toggleAdvancedModifier():
                 or input.name=="Wind Scale"\
                 or input.name=="Speed"\
                 or input.name=="Viewport Density"\
+                or input.name=="Clump Radius"\
+                or input.name=="Clump Density"\
                 or input.name=="Proxy Convex Hull"\
                 or input.name=="Proxy Bounding Box"\
                 or input.name=="Material Custom"\
                 or input.name=="Material Original /Custom"\
                 or input.name=="Surface"\
                 or input.name=="Real Instances"\
-                or input.name=="Faster Viewport Mask"\
                 or input.name=="Distribution Seed"\
                 or input.name=="TURN OFF SYSTEM":
                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
@@ -1486,15 +1517,18 @@ class selectbrush(bpy.types.Operator):
 
 
 class biome_delete(bpy.types.Operator):
-    """Delete this biome"""
+    """Delete this biome. Shift+Click to only delete the selected hair within this biome"""
     bl_idname = "secret.biome_delete"
-    bl_label = "Delete this biome"
+    bl_label = "Delete Biome"
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: StringProperty()  
-    def execute(self, context):
+    
+    def invoke(self, context, event):
         if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
 
         obj = context.object
+
+
         if obj:
             hair=[]
             parent = obj.parent
@@ -1525,8 +1559,13 @@ class biome_delete(bpy.types.Operator):
         if obj in hair_in_bgroup:  
             parent_surface.select_set(True)
             bpy.context.view_layer.objects.active = parent_surface
-        for x in hair_in_bgroup:
-            bpy.data.objects.remove(x, do_unlink=True)
+
+        if event.shift:
+            for x in hair_in_bgroup:
+                if x in bpy.context.selected_objects: bpy.data.objects.remove(x, do_unlink=True)
+        else:
+            for x in hair_in_bgroup:
+                bpy.data.objects.remove(x, do_unlink=True)
 
         hair = find_all_listed_paintsystems(context, activeobj=parent_surface)
         biome_remove_gaps(context,hair) 
@@ -1771,10 +1810,10 @@ def biomegroupreorder_f(context,**kwargs):
 
     
     
-    they_are_all_hidden = True
-    for hayr in hair[:]:
-        if hayr[0].modifiers[0]["Socket_0"] == destination_biome and hayr[0].modifiers[0]["Socket_2"] == False: they_are_all_hidden = False
+    
+    
     hair_in_destination_biome = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == destination_biome]
+    
     
 
 
@@ -1785,12 +1824,14 @@ def biomegroupreorder_f(context,**kwargs):
             for modif in obj.modifiers:  
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                     modif["Socket_0"] = destination_biome
-                    if they_are_all_hidden and len(hair_in_destination_biome) >=1: modif["Socket_2"] = True
-                    else : modif["Socket_2"] = False
+                    
                     modif["Socket_3"] = False 
                     modif["Socket_4"] = False
                     modif["Socket_5"] = False
                     modif["Socket_6"] = False
+                    if len(hair_in_destination_biome) >=1:
+                        modif["Socket_2"] = hair_in_destination_biome[0].modifiers[0]["Socket_2"] 
+                        modif["Socket_15"] = hair_in_destination_biome[0].modifiers[0]["Socket_15"] 
                     
                     obj.location=obj.location
                     if hair_in_destination_biome: modif["Socket_8"] = hair_in_destination_biome[0].modifiers[0]["Socket_8"]   
@@ -1838,7 +1879,7 @@ class biomegroupreorder2(bpy.types.Operator):
         biomegroupreorder_f(context, direction= +1, activeobj = buttonobj, objselection=objselection, move_to_extreme=move_to_extreme)
         return{'FINISHED'}
 class ToggleVisibilityOperatorRender(bpy.types.Operator):
-    """Turn off Paint System. Alt+Click to 'Solo' a paint system, like a photoshop layer"""
+    """Turn off Paint System. Shift+Click to Disable in the Viewport. Alt+Click to 'Solo' a paint system, like a photoshop layer"""
     bl_idname = "secret.toggle_visibilityrender"
     bl_label = "Toggle Visibility"
     bl_options = {'REGISTER', 'UNDO'}
@@ -1846,7 +1887,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
     object_biome: bpy.props.StringProperty()
     
     def invoke(self, context, event):
-        secretpaint_update_modifier_f(context)
+        secretpaint_update_modifier_f(context) 
 
         buttonbiome = int(self.object_biome)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -1873,7 +1914,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
             
             if buttonobj.modifiers[0]["Socket_4"] == True:   
                 for hayii in hair_in_bgroup:
-                    if hayii.type == "CURVES" and hayii.modifiers:
+                    if hayii.type == "CURVES":
                         for modif in hayii.modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 if modif["Socket_3"]==True: modif["Input_99"] = not modif["Input_99"]  
@@ -1887,7 +1928,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
 
                 
                 for hayyur in hair_in_bgroup:  
-                    if hayyur.type == "CURVES" and hayyur.modifiers:
+                    if hayyur.type == "CURVES":
                         for modif in hayyur.modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 modif["Socket_3"] = False  
@@ -1895,7 +1936,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                                 hayyur.location = hayyur.location
 
                 for hayii in hair_in_bgroup:
-                    if hayii.type == "CURVES" and hayii.modifiers:
+                    if hayii.type == "CURVES":
                         for modif in hayii.modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
 
@@ -1914,20 +1955,55 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
 
                                 hayii.location=hayii.location 
 
+        
+        elif event.shift:
+            mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
+            mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
+
+            if mute_visibility_render == True:    
+                mute_visibility_render_new = False
+                mute_visibility_viewport_new = True
+            elif mute_visibility_viewport == True and mute_visibility_render == False: 
+                mute_visibility_render_new = False
+                mute_visibility_viewport_new = False
+            elif mute_visibility_viewport == False and mute_visibility_render == False:
+                mute_visibility_render_new = False
+                mute_visibility_viewport_new = True
+
+            for obj in objselection:
+                if obj.type == "CURVES":
+                    for modif in obj.modifiers:
+                        if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
+                            
+                            modif["Input_99"] = mute_visibility_render_new
+                            modif["Socket_14"] = mute_visibility_viewport_new
+                            obj.location=obj.location
+
 
 
         
         else:
-            mute_system = buttonobj.modifiers[0]["Input_99"]
+            mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
+            mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
+
+            if mute_visibility_render == True or mute_visibility_viewport == True:
+                mute_visibility_render_new = False
+                mute_visibility_viewport_new = False
+            else:
+                mute_visibility_render_new = not mute_visibility_render
+                mute_visibility_viewport_new = mute_visibility_viewport
+
             for obj in objselection:
-                if obj.type == "CURVES" and obj.modifiers:
+                if obj.type == "CURVES":
                     for modif in obj.modifiers:  
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Input_99"] = not mute_system
+                            
+                            modif["Input_99"] = mute_visibility_render_new
+                            modif["Socket_14"] = mute_visibility_viewport_new
                             obj.location=obj.location
 
             for hayyur in hair_in_bgroup:  
-                if hayyur.type == "CURVES" and hayyur.modifiers:
+                if hayyur.type == "CURVES":
                     for modif in hayyur.modifiers:  
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                             modif["Socket_3"] = False  
@@ -1957,7 +2033,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
 
         return {'FINISHED'}
 class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
-    """Turn off The entire biome. Alt+Click to 'Solo' a Biome and mute the other ones"""
+    """Turn off The entire biome. Shift+Click to Disable in the Viewport. Alt+Click to 'Solo' a Biome and mute the other ones"""
     bl_idname = "secret.toggle_visibilityrender_biome"
     bl_label = "Toggle Visibility"
     bl_options = {'REGISTER', 'UNDO'}
@@ -1987,7 +2063,7 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
             if True in [hairr.modifiers[0]["Socket_6"] for hairr in hair_in_bgroup]:
                 
                 for hayii in hair[:]:
-                    if hayii[0].type == "CURVES" and hayii[0].modifiers:
+                    if hayii[0].type == "CURVES":
                         for modif in hayii[0].modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 if modif["Socket_5"]==True: modif["Socket_2"] = not modif["Socket_2"]  
@@ -2002,7 +2078,7 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
 
                 
                 for hayyur in hair[:]:  
-                    if hayyur[0].type == "CURVES" and hayyur[0].modifiers:
+                    if hayyur[0].type == "CURVES":
                         for modif in hayyur[0].modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 modif["Socket_5"] = False  
@@ -2010,7 +2086,7 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                                 hayyur[0].location = hayyur[0].location
 
                 for hayii in hair[:]:
-                    if hayii[0].type == "CURVES" and hayii[0].modifiers:
+                    if hayii[0].type == "CURVES":
                         for modif in hayii[0].modifiers:  
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
 
@@ -2029,40 +2105,54 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
 
                                 hayii[0].location=hayii[0].location 
 
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
 
+        
+        elif event.shift:
+            mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  
+            mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  
 
+            if mute_biome_visibility_render == True:    
+                mute_biome_visibility_render_new = False
+                mute_biome_visibility_viewport_new = True
+            elif mute_biome_visibility_viewport == True and mute_biome_visibility_render == False: 
+                mute_biome_visibility_render_new = False
+                mute_biome_visibility_viewport_new = False
+            elif mute_biome_visibility_viewport == False and mute_biome_visibility_render == False:
+                mute_biome_visibility_render_new = False
+                mute_biome_visibility_viewport_new = True
 
+            for obj in hair_in_bgroup:
+                if obj.type == "CURVES":
+                    for modif in obj.modifiers:
+                        if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
+                            modif["Socket_2"] = mute_biome_visibility_render_new
+                            modif["Socket_15"] = mute_biome_visibility_viewport_new
+                            obj.location=obj.location
 
 
 
         
         else:
-            mute_system = True if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else False  
+            mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  
+            mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  
+
+            if mute_biome_visibility_render == True or mute_biome_visibility_viewport == True:
+                mute_biome_visibility_render_new = False
+                mute_biome_visibility_viewport_new = False
+            else:
+                mute_biome_visibility_render_new = not mute_biome_visibility_render
+                mute_biome_visibility_viewport_new = mute_biome_visibility_viewport
+
             for obj in hair_in_bgroup:
-                if obj.type == "CURVES" and obj.modifiers:
+                if obj.type == "CURVES":
                     for modif in obj.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Socket_2"] = mute_system
+                            modif["Socket_2"] = mute_biome_visibility_render_new
+                            modif["Socket_15"] = mute_biome_visibility_viewport_new
                             obj.location=obj.location
 
             for hayii in hair[:]:  
-                if hayii[0].type == "CURVES" and hayii[0].modifiers:
+                if hayii[0].type == "CURVES":
                     for modif in hayii[0].modifiers:  
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                             modif["Socket_5"] = False  
@@ -2999,6 +3089,7 @@ def secretpaint_function(self,*args,**kwargs):
     N_Of_Selected = len(objselection)  
     ActiveMode = bpy.context.object.mode
     all_meshes =[]
+    all_meshes_that_are_not_parents =[]
     selobjs_without_active =[]
     objs_with_orencurve =[]
     selobjs_without_active_with_orencurve = []
@@ -3015,11 +3106,14 @@ def secretpaint_function(self,*args,**kwargs):
                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"): 
                     if oobjj not in objs_with_orencurve: objs_with_orencurve.append(oobjj)
                     if oobjj != activeobj and oobjj not in selobjs_without_active_with_orencurve: selobjs_without_active_with_orencurve.append(oobjj)
-                    if oobjj.parent and oobjj.parent not in all_found_parents: all_found_parents.append(oobjj.parent)
-                    if oobjj != activeobj and oobjj.parent and oobjj.parent not in all_found_parents_without_activeobj: all_found_parents_without_activeobj.append(oobjj.parent)
+                    if oobjj.type == "CURVES" and oobjj.data.surface and oobjj.data.surface not in all_found_parents: all_found_parents.append(oobjj.data.surface)
+                    if oobjj != activeobj and oobjj.type == "CURVES" and oobjj.data.surface and oobjj.data.surface not in all_found_parents_without_activeobj: all_found_parents_without_activeobj.append(oobjj.data.surface)
                     if modifier["Input_83_attribute_name"]:
                         all_hair_with_Vgroup.append(oobjj)
                         if modifier["Input_83_attribute_name"] not in all_Vgroups: all_Vgroups.append(modifier["Input_83_attribute_name"])
+
+    for mesh in all_meshes:
+        if mesh not in all_found_parents: all_meshes_that_are_not_parents.append(mesh)
 
     biome_detected = False
     if len(all_found_parents)==1: biome_detected=True 
@@ -3082,6 +3176,7 @@ def secretpaint_function(self,*args,**kwargs):
 
     
     if ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type in ["MESH","EMPTY","CURVE"]:
+        pass #print"scatter sel obj on active surface")
         Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj) 
         hairCurves = secretpaint_create_curve(self,context,targetOBJ=activeobj,targetCollection=Coll_of_Active, brushOBJ=selobj, transfer_modifier=False)
 
@@ -3142,64 +3237,59 @@ def secretpaint_function(self,*args,**kwargs):
         hairCurves.modifiers[0]["Input_99"] = False
 
         
-        pass #print"scatter sel obj on active surface")
-
-
-
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 
 
 
 
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
 
@@ -3210,8 +3300,14 @@ def secretpaint_function(self,*args,**kwargs):
 
 
 
+
+
+
+
+
     
-    elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "MESH" and not biome_detected:  
+    elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "MESH" and len(selobjs_without_active_with_orencurve)==0:
+    
         pass #print"scatter sel collection on ACTIVE surface")
 
         Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj)  
@@ -3403,355 +3499,412 @@ def secretpaint_function(self,*args,**kwargs):
 
 
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
 
 
 
     
-    elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and len(all_meshes) >=2:
+    
+    elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(selobjs_without_active_with_orencurve)>=1:
     
     
     
-
-        
-        
-        for mesh in all_meshes:
-            if mesh not in all_found_parents:
-            
-
-                highest_distribution_density=0  
-                newlycreated_hair=[]
-                hair_thatNeedA_mask=[] 
-                if mesh.type == "MESH": allTerrainArea = sum(face.area for face in mesh.data.polygons)
-                elif mesh.type == "CURVES": allTerrainArea = sum(face.area for face in mesh.parent.data.polygons)  
-
-                for hair in selobjs_without_active_with_orencurve:
-                    
-                    
-
-                    hairCurves = secretpaint_create_curve(self,context, targetOBJ=mesh, brushOBJ=hair, targetCollection=Coll_of_Active, transfer_modifier=True)
-                    newlycreated_hair.append(hairCurves)
-                    
-                    
-
-                    
-                    
-                    
-                    
-                    
-
-
-
-                    
-                    if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  
-                    
-                    
-
-                    hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
-                    hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
-                    hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
-                    hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  
-                    hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  
-                    hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  
-
-                    hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
-                    hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
-                    hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
-                    hairCurves.modifiers[0]["Input_60"] = hair.modifiers[0]["Input_60"]  
-                    hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
-
-                    hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
-                    hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  
-                    hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  
-                    hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  
-                    hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  
-                    hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  
-                    hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  
-                    hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  
-
-                    if mesh.data.library:  
-                        hairCurves.modifiers[0]["Input_83_attribute_name"] = None
-                        hairCurves.modifiers[0]["Input_83_use_attribute"] = 0
-                    else:
-                        hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  
-                        hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  
-
-
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-
-                    
-                    if hairCurves.modifiers[0]["Input_98"] \
-                    or hairCurves.modifiers[0]["Input_97"]\
-                    or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))            > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:  
-                        if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-                        
-                        hairCurves.modifiers[0]["Input_98"] = False  
-                        hairCurves.modifiers[0]["Input_97"] = None
-                    
-
-                    if bpy.app.version_string >= "4.0.0" and bpy.app.version_string < "4.3.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
-                    elif bpy.app.version_string < "4.0.0":
-                        try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value
-                        except:pass
-
-
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-
-
-                    
-                    hairCurves.select_set(True)  
-                    bpy.context.view_layer.objects.active = hairCurves  
-
-
-
-                
-                for target_surface in all_meshes:
-                    if len([slot.material for slot in target_surface.material_slots if slot.material != None]) == 0 and all_found_parents[0]:
-                        for i, mat_slot in enumerate(all_found_parents[0].material_slots):
-                            if mat_slot.material:
-
-                                if target_surface.material_slots and target_surface.material_slots[i]:
-                                    target_surface.material_slots[i].material = mat_slot.material  
-                                else:
-                                    target_surface.data.materials.append(mat_slot.material)
-
-                                
-                                
-
-
-                NoMasksDetected = True
-                if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1: NoMasksDetected=True  
-                elif hair_thatNeedA_mask: NoMasksDetected = False  
-                else: NoMasksDetected=True
-                paint_the_vertex=False 
-                vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair, activeobj=newlycreated_hair[0], paint_the_vertex=paint_the_vertex)
-                
-                if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-
-
-
-                
-                for ojgb in newlycreated_hair:
-                    ojgb.modifiers[0]["Input_99"] = False
-
-        
-        
-        
-        
-            
-        
-        
-        
-
-
-        for x in objselection: bpy.data.objects[x.name].select_set(False)
-        if N_Of_Selected >= 2 and hairCurves.modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])
-
-        
-        
-        
-
+    
+    
         pass #print"many HAIR on MANY MESHES")
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    
-    elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(all_found_parents_without_activeobj)==1:
-        
-        
-        secretpaint_update_modifier_f(context)   
-
-        Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj)  
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        all_bgroups_starter=[]
-        for hayr in selobjs_without_active:
-            if hayr.modifiers[0]["Socket_0"] not in all_bgroups_starter: all_bgroups_starter.append(hayr.modifiers[0]["Socket_0"])
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-
-        
-        hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
-        all_bgroups = []
-        for hayr in hair[:]:
-            if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
-        all_bgroups.sort()
-        loop = 1
-        for biome_number in all_bgroups[:]:
-            for hayr in hair[:]:
-                if hayr[0].modifiers[0]["Socket_0"] == biome_number:
-                    hayr[0].modifiers[0]["Socket_0"] = loop
-                    hair.remove(hayr)
-            loop += 1
-
-
-        if all_bgroups: additional_biome_n = max(all_bgroups)
-        else: additional_biome_n= 0 
-
-        
-        
-
-
-        highest_distribution_density=0  
         newlycreated_hair=[]
-        hair_thatNeedA_mask=[] 
-        if activeobj.type == "MESH": allTerrainArea = sum(face.area for face in activeobj.data.polygons)
-        elif activeobj.type == "CURVES": allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  
-        
-        for hair in selobjs_without_active_with_orencurve:
 
-            hairCurves = secretpaint_create_curve(self,context, targetOBJ=activeobj, brushOBJ=hair, targetCollection=Coll_of_Active, transfer_modifier=True)
-            newlycreated_hair.append(hairCurves)
+
+
+        if activeobj.type == "CURVES" or len(all_meshes)==1: all_meshes_to_scatter_onto = [activeobj] 
+        else: all_meshes_to_scatter_onto = all_meshes_that_are_not_parents
+
+
+        for mesh in all_meshes_to_scatter_onto:
+
+            Coll_of_TaragetMesh = []
+            for i in mesh.users_collection:
+                Coll_of_TaragetMesh = recurLayerCollection(bpy.context.view_layer.layer_collection, i.name)
 
             
-            if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  
+            Check_if_trigger_UV_Reprojection(self, context, activeobj=mesh, objselection=[mesh])  
+
+
+
             
-            hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
-            hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
-            hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
-            hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  
-            hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  
-            hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  
-
-            hairCurves.modifiers[0]["Input_60"] = hair.modifiers[0]["Input_60"]  
-            hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
-            hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
-            hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
-            hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
-            hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
-
-            hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
-            hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  
-            hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  
-            hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  
-            hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  
-            hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  
-            hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  
-            hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  
-
-            hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  
-            if len(all_bgroups_starter)>=2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
-
-            if activeobj.data.library: 
-                hairCurves.modifiers[0]["Input_83_attribute_name"] = None
-                hairCurves.modifiers[0]["Input_83_use_attribute"]=0
-            else:
-                hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  
-                hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  
-
-            if hairCurves.modifiers[0]["Input_98"] \
-            or hairCurves.modifiers[0]["Input_97"] \
-            or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))     > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:      
-                if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-                hairCurves.modifiers[0]["Input_98"] = False  
-                hairCurves.modifiers[0]["Input_97"] = None
+            highest_distribution_density=0  
+            hair_thatNeedA_mask=[] 
+            if mesh.type == "MESH": allTerrainArea = sum(face.area for face in mesh.data.polygons)
+            elif mesh.type == "CURVES": allTerrainArea = sum(face.area for face in mesh.parent.data.polygons)  
 
 
-        
-        if len([slot.material for slot in activeobj.material_slots if slot.material != None]) == 0:
-            for i, mat_slot in enumerate(all_found_parents_without_activeobj[0].material_slots):
-                if mat_slot.material:
-                    if activeobj.material_slots and activeobj.material_slots[i]: activeobj.material_slots[i].material = mat_slot.material  
-                    else: activeobj.data.materials.append(mat_slot.material)
 
-        for x in objselection: bpy.data.objects[x.name].select_set(False)
-        for ojgb in newlycreated_hair: 
-            if ojgb.name in bpy.context.view_layer.objects:
-                ojgb.select_set(True)  
-                bpy.context.view_layer.objects.active = ojgb  
 
-        NoMasksDetected = True
-        if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1: NoMasksDetected=True  
-        elif hair_thatNeedA_mask: NoMasksDetected = False
-        else: NoMasksDetected=True
-        if auto_Mask_Optimization == False: NoMasksDetected=True  
+            
+            all_bgroups_starter = []
+            for hayr in selobjs_without_active_with_orencurve:
+                if hayr.modifiers[0]["Socket_0"] not in all_bgroups_starter: all_bgroups_starter.append(hayr.modifiers[0]["Socket_0"])
 
-        
-        vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, paint_the_vertex=True)
 
-        if N_Of_Selected >= 2 and hairCurves.modifiers[0]["Input_69"] == False:
-            for x in newlycreated_hair: x.select_set(False) 
-            context3sculptbrush(context, activeobj=newlycreated_hair[0])
-            NoMasksDetected = True 
 
-        
-        if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-        if bpy.app.version_string >= "4.0.0" and bpy.app.version_string < "4.3.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
-        elif bpy.app.version_string < "4.0.0":
-            try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value
-            except:pass
+
+
+
+
+            for parentt in all_found_parents:
+
+
+
+                
+                hair = find_all_listed_paintsystems(context, activeobj=mesh, objselection=[mesh])
+                all_bgroups = []
+                for hayr in hair[:]:
+                    if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
+                all_bgroups.sort()
+                loop = 1
+                for biome_number in all_bgroups[:]:
+                    for hayr in hair[:]:
+                        if hayr[0].modifiers[0]["Socket_0"] == biome_number:
+                            hayr[0].modifiers[0]["Socket_0"] = loop
+                            hair.remove(hayr)
+                    loop += 1
+                if all_bgroups: additional_biome_n = max(all_bgroups)
+                else: additional_biome_n = 0  
+
+
+
+
+                for hair in parentt.children:
+                    if hair in selobjs_without_active_with_orencurve:
+                        for modifier in hair.modifiers:
+                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
+
+
+
+                            
+                                hairCurves = secretpaint_create_curve(self,context, targetOBJ=mesh, brushOBJ=hair, targetCollection=Coll_of_TaragetMesh, transfer_modifier=True)
+                                newlycreated_hair.append(hairCurves)
+                                
+                                
+
+                                
+                                
+                                
+                                
+                                
+
+
+
+                                
+                                if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  
+                                
+                                
+
+                                hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
+                                hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
+                                hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
+                                hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  
+                                hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  
+                                hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  
+
+                                hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
+                                hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
+                                hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
+                                hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
+                                hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
+
+                                hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
+                                hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  
+                                hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  
+                                hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  
+                                hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  
+                                hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  
+                                hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  
+                                hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  
+
+                                hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  
+                                if len(all_bgroups_starter) >= 2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
+
+                                if mesh.data.library:  
+                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = None
+                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = 0
+                                else:
+                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  
+                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  
+
+                                
+                                if hairCurves.modifiers[0]["Input_98"] \
+                                or hairCurves.modifiers[0]["Input_97"]\
+                                or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))            > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:  
+                                    if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
+                                    
+                                    hairCurves.modifiers[0]["Input_98"] = False  
+                                    hairCurves.modifiers[0]["Input_97"] = None
+                                
+
+                                if bpy.app.version_string >= "4.0.0" and bpy.app.version_string < "4.3.0": hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value = hairCurves.modifiers[0].node_group.interface.items_tree[6].default_value 
+                                elif bpy.app.version_string < "4.0.0":
+                                    try: hairCurves.modifiers[0].node_group.inputs[1].default_value = hairCurves.modifiers[0].node_group.inputs[1].default_value
+                                    except:pass
+
+
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+
+
+                                
+                                hairCurves.select_set(True)  
+                                bpy.context.view_layer.objects.active = hairCurves  
+
+
+
+
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+
+
+            NoMasksDetected = True
+            if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1: NoMasksDetected=True  
+            elif hair_thatNeedA_mask: NoMasksDetected = False  
+            else: NoMasksDetected=True
+            paint_the_vertex=False 
+            vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair, activeobj=newlycreated_hair[0], paint_the_vertex=paint_the_vertex)
+            
+            if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
+
+
 
         
         for ojgb in newlycreated_hair:
             ojgb.modifiers[0]["Input_99"] = False
+            ojgb.location = ojgb.location 
 
-        pass #print"MANY HAIR on single MESH or HAIR")
+        
+        
+        
+        
+            
+        
+        
+        
+
+
+        for x in bpy.context.selected_objects: x.select_set(False)
+        if N_Of_Selected >= 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])   
+
+        
+        
+        
+
+
+
+
+
+
+
+
 
 
 
@@ -5081,9 +5234,19 @@ def reproject_function(self,context,**kwargs):
                                 
                             break
 
-                if changed_active_uv_so_restore_is_needed and previously_active_UV:
-                    previously_active_UV.active = True  
-                    
+                
+                
+                
+
+                
+                for UVV in surface.data.uv_layers:
+                    if UVV.active_render:
+                        UVV.active = True
+                        break
+
+            
+            
+            
 
 
 
@@ -5145,7 +5308,8 @@ def reproject_function(self,context,**kwargs):
         if changed_selected_objs_so_restore_is_needed:
             for xx in actualobjselection: xx.select_set(False)
 
-
+    
+    
 
 
     
@@ -8455,170 +8619,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
