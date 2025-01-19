@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 1),
+    "version": (1, 7, 2),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -5214,25 +5214,27 @@ def reproject_function(self,context,**kwargs):
                 
                 
                 
-                for window in context.window_manager.windows:
-                    screen = window.screen
-                    for area in screen.areas:
-                        if area.type == 'VIEW_3D':
-                            with context.temp_override(window=window, area=area):
-                                for x in actualobjselection: x.select_set(False)
-                                changed_selected_objs_so_restore_is_needed = True
-                                if bpy.context.active_object != surface:
-                                    bpy.context.view_layer.objects.active = surface  
-                                    changed_active_obj_so_restore_is_needed =True
-                                
-                                restoremode = bpy.context.object.mode
-                                if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
-                                bpy.ops.mesh.select_all(action='SELECT')
-                                bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-                                
-                                if restoremode != "EDIT": bpy.ops.object.mode_set(mode=restoremode)
-                                
-                            break
+                try:   
+                    for window in context.window_manager.windows:
+                        screen = window.screen
+                        for area in screen.areas:
+                            if area.type == 'VIEW_3D':
+                                with context.temp_override(window=window, area=area):
+                                    for x in actualobjselection: x.select_set(False)
+                                    changed_selected_objs_so_restore_is_needed = True
+                                    if bpy.context.active_object != surface:
+                                        bpy.context.view_layer.objects.active = surface  
+                                        changed_active_obj_so_restore_is_needed =True
+                                    
+                                    restoremode = bpy.context.object.mode
+                                    if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
+                                    bpy.ops.mesh.select_all(action='SELECT')
+                                    bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
+                                    
+                                    if restoremode != "EDIT": bpy.ops.object.mode_set(mode=restoremode)
+                                    
+                                break
+                except: pass #print"FAILED TO REPROJECT THE UV")
 
                 
                 
@@ -8619,8 +8621,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
 
 
 
