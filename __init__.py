@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 2),
+    "version": (1, 7, 3),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -788,7 +788,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 22 
+    current_node_version = 23 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -2445,7 +2445,7 @@ def context3sculptbrush(context,**kwargs):
                 brush_grow.curves_sculpt_settings.scale_uniform = True
 
             
-            brush_add.curves_sculpt_settings.add_amount = 2
+            brush_add.curves_sculpt_settings.add_amount = 1
             brush_add.falloff_shape = 'SPHERE'
             brush_add.use_frontface = True
             if bpy.app.version_string >= "4.2.0":
@@ -8340,7 +8340,18 @@ def assembly_1(self,context,**kwargs):
         if not ob.parent and len(ob.children) > len(parent_with_most_children.children) \
         or ob.parent and ob.parent not in bpy.context.selected_objects and len(ob.children) > len(parent_with_most_children.children):
             parent_with_most_children = ob
-    activeobj = original_activeobj = parent_with_most_children
+    
+    if len(parent_with_most_children.children)==0: activeobj = original_activeobj
+
+
+    
+    for ob in bpy.context.selected_objects:
+        if ob != activeobj:
+            if not ob.parent \
+            or ob.parent and ob.parent not in bpy.context.selected_objects:
+                ob_matrix_world = ob.matrix_world.copy()
+                ob.parent=activeobj   
+                ob.matrix_world = ob_matrix_world
 
 
     
@@ -8621,17 +8632,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
 
 
 
