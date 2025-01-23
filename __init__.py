@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 3),
+    "version": (1, 7, 4),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -819,9 +819,9 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     carry_through = False
     try:  
         if bpy.app.version_string >= "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
         elif bpy.app.version_string < "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint")]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
     except:
         pass #print"FAILED, UPDATING")
         carry_through=True
@@ -3103,7 +3103,9 @@ def secretpaint_function(self,*args,**kwargs):
             selobjs_without_active.append(oobjj)
         if oobjj.modifiers:
             for modifier in oobjj.modifiers:
-                if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"): 
+                
+                if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" \
+                or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modifier.node_group.name) and ".001" <= modifier.node_group.name[-4:] <= ".999" : 
                     if oobjj not in objs_with_orencurve: objs_with_orencurve.append(oobjj)
                     if oobjj != activeobj and oobjj not in selobjs_without_active_with_orencurve: selobjs_without_active_with_orencurve.append(oobjj)
                     if oobjj.type == "CURVES" and oobjj.data.surface and oobjj.data.surface not in all_found_parents: all_found_parents.append(oobjj.data.surface)
@@ -6832,12 +6834,12 @@ nodes_to_switch = []
 cleanup_generator = []
 for node_tree in bpy.data.node_groups:
     
-    if node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
-        if not node_tree.library: node_tree.name = "Secret Paint_OLD"  
+    if node_tree.name == "Secret Paint" or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999":  
+        if not node_tree.library: node_tree.name = "Secret Paint.001"  
         if node_tree not in nodes_to_switch: nodes_to_switch.append(node_tree)
     
-    if node_tree.name.startswith("Secret Generator"):
-        if not node_tree.library: node_tree.name = "Secret Generator_OLD"  
+    if node_tree.name == "Secret Generator" or node_tree.name.startswith("Secret Generator") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999": 
+        if not node_tree.library: node_tree.name = "Secret Generator.001"  
         if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
 
 
@@ -6857,25 +6859,32 @@ for lib in bpy.data.libraries:
     if lib.name == "Secret Paint.blend": bpy.data.libraries.remove(lib, do_unlink=True)
 
 
-orenpaintNode = [nod for nod in bpy.data.node_groups if nod not in all_previous_nodes and nod.name.startswith("Secret Paint")]
-
+for nod in bpy.data.node_groups:
+    if nod not in all_previous_nodes and nod.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", nod.name) and ".001" <= nod.name[-4:] <= ".999":
+        orenpaintNode= nod
+        break
 
 
 for obj in bpy.data.objects:
     
-    if obj.type in ["CURVES","CURVE"] and obj.modifiers:
+    if obj.type in ["CURVES","CURVE"]:
         for modif in obj.modifiers:
             
-            if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode[0]  
             
+            
+            if modif.type == 'NODES' and modif.node_group:
+                if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode  
 
 
-if nodes_to_switch[:]:
-    for nod in nodes_to_switch[:]:
-        if nod: bpy.data.node_groups.remove(nod, do_unlink=True)
-if cleanup_generator[:]:
-    for nod in cleanup_generator[:]:
-        if nod: bpy.data.node_groups.remove(nod, do_unlink=True)
+
+for nod in nodes_to_switch[:]:
+    
+    bpy.data.node_groups.remove(nod, do_unlink=True)
+
+for nod in cleanup_generator[:]:
+    
+    bpy.data.node_groups.remove(nod, do_unlink=True)
+    
 
 
 
@@ -8337,18 +8346,29 @@ def assembly_1(self,context,**kwargs):
     
     parent_with_most_children = bpy.context.selected_objects[0]
     for ob in bpy.context.selected_objects:
-        if not ob.parent and len(ob.children) > len(parent_with_most_children.children) \
+        ob_childrens = [children for children in ob.children if children in bpy.context.selected_objects]
+        parent_with_most_children_children = [children for children in parent_with_most_children.children if children in bpy.context.selected_objects]
+        if not ob.parent and len(ob_childrens) > len(parent_with_most_children_children) \
         or ob.parent and ob.parent not in bpy.context.selected_objects and len(ob.children) > len(parent_with_most_children.children):
             parent_with_most_children = ob
+    pass #print"COMMMMMMMMMMMMMM",parent_with_most_children)
     
-    if len(parent_with_most_children.children)==0: activeobj = original_activeobj
-
+    
+    common_parent_has_children_in_the_selected_objects = False
+    for children in parent_with_most_children.children: 
+        if children in bpy.context.selected_objects:
+            common_parent_has_children_in_the_selected_objects = True
+            break
+    if common_parent_has_children_in_the_selected_objects: activeobj = original_activeobj = parent_with_most_children
+    else: activeobj = original_activeobj
+    pass #print"ACTIVEOBJ",activeobj.name,"parent:",parent_with_most_children.name)
 
     
     for ob in bpy.context.selected_objects:
         if ob != activeobj:
             if not ob.parent \
             or ob.parent and ob.parent not in bpy.context.selected_objects:
+                pass #print"parentedddddddddddd to active obj", ob.name)
                 ob_matrix_world = ob.matrix_world.copy()
                 ob.parent=activeobj   
                 ob.matrix_world = ob_matrix_world
@@ -8366,6 +8386,7 @@ def assembly_1(self,context,**kwargs):
                         if input.socket_type == "NodeSocketObject" and input.name == "Parent":
                             all_assemblies_and_their_parent.append((obj,modif[input.identifier]))
                             if modif[input.identifier] not in all_objs_used_as_parents: all_objs_used_as_parents.append(modif[input.identifier])
+
 
 
     
@@ -8464,7 +8485,8 @@ def assembly_2(self,context,**kwargs):
                     node_group_inputs_temp = modif.node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else modif.node_group.inputs
                     for input in node_group_inputs_temp:
                         if input.socket_type == "NodeSocketObject" and input.name == "Parent" and modif[input.identifier] == activeobj and modif not in all_modif_to_update:
-                            all_modif_to_update.append(modif)
+                            
+                            all_modif_to_update.append((obj,modif))
                             there_are_assemblies_to_update = True
                             break 
 
@@ -8475,11 +8497,18 @@ def assembly_2(self,context,**kwargs):
 
 
         
+        if all_modif_to_update and len(all_modif_to_update) != all_modif_to_update[0][0].data.users: 
+            new_mesh_data = all_modif_to_update[0][0].data.copy()
+            for obbb in all_modif_to_update:
+                obbb[0].data = new_mesh_data
+
+
+        
         node_group = bpy.data.node_groups[activeobj.name + "ASSEMBLY"] if activeobj.name + "ASSEMBLY" in bpy.data.node_groups else None
         if node_group and node_group.users==0: bpy.data.node_groups.remove(node_group) 
         node_group = bpy.data.node_groups.new("GeometryNodeGroup", 'GeometryNodeTree')
         node_group.name = activeobj.name + "ASSEMBLY"
-        for modif in all_modif_to_update: modif.node_group = node_group 
+        for modif in all_modif_to_update: modif[1].node_group = node_group 
 
 
 
@@ -8609,6 +8638,10 @@ def assembly_2(self,context,**kwargs):
                         obj.data.materials.clear() 
                         for mat in all_materials_of_parent_and_children:
                             if mat.name not in obj.data.materials: obj.data.materials.append(mat)
+                        
+                        
+                        
+                        
                         loop = 0
                         for input in node_group_inputs:
                             if loop <= 2: modif[input.identifier] = activeobj
@@ -8632,39 +8665,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
