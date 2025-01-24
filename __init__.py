@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 4),
+    "version": (1, 7, 5),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -1048,6 +1048,8 @@ def apply_paint(self,context, **kwargs):
     if "applyIDs" in kwargs:applyIDs = kwargs.get("applyIDs")
     else:applyIDs = False
 
+    keep_active_brush = kwargs.get("keep_active_brush") if "keep_active_brush" in kwargs else False
+
     
     if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
 
@@ -1168,7 +1170,7 @@ def apply_paint(self,context, **kwargs):
 
                 GeometryNodeSetID = node_to_use.nodes.new('GeometryNodeSetID')
                 
-                
+                GeometryNodeSetID2 = node_to_use.nodes.new('GeometryNodeSetID')
                 
                 ID = node_to_use.nodes.new('GeometryNodeInputID')
                 
@@ -1177,13 +1179,17 @@ def apply_paint(self,context, **kwargs):
                 MATH.inputs[1].default_value = MATH.inputs[2].default_value = 0
                 
 
+                
+                
+                
+                
+
                 node_to_use.links.new(input.outputs[0], GeometryNodeSetID.inputs[0])
                 node_to_use.links.new(ID.outputs[0], MATH.inputs[0])
                 node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID.inputs[1])
-                
-                
-                
-                node_to_use.links.new(GeometryNodeSetID.outputs[0], output.inputs[0])
+                node_to_use.links.new(MATH.outputs[0], GeometryNodeSetID2.inputs[1])
+                node_to_use.links.new(GeometryNodeSetID.outputs[0], GeometryNodeSetID2.inputs[0])
+                node_to_use.links.new(GeometryNodeSetID2.outputs[0], output.inputs[0])
 
         elif applyIDs == False:
             for node in bpy.data.node_groups:
@@ -1318,7 +1324,7 @@ def apply_paint(self,context, **kwargs):
     
     for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
     bpy.context.view_layer.objects.active = activeobj
-    context3sculptbrush(context, activeobj=activeobj)
+    context3sculptbrush(context, activeobj=activeobj, keep_active_brush=keep_active_brush)
     
 
 
@@ -2307,6 +2313,7 @@ def context3sculptbrush(context,**kwargs):
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
+    keep_active_brush = kwargs.get("keep_active_brush") if "keep_active_brush" in kwargs else False
 
     
 
@@ -2358,11 +2365,12 @@ def context3sculptbrush(context,**kwargs):
 
         bpy.ops.object.mode_set(mode="SCULPT_CURVES")  
 
-        try: 
-            if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
-            else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
-        except: pass #print"FAILED BRUSH DENSITYYYYY")
-        
+        if not keep_active_brush:
+            try: 
+                if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
+                else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
+            except: pass #print"FAILED BRUSH DENSITYYYYY")
+            
 
         
         
@@ -4134,7 +4142,9 @@ def secretpaint_function(self,*args,**kwargs):
 
 
         
-        elif result != {'PASS_THROUGH'} and hoverobj.type == "MESH" and hoverobj != activeobj.parent and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
+        
+        elif result != {'PASS_THROUGH'} and hoverobj.type == "MESH" and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
+            pass #print"KKKKKKKKKKKKKKKKKKKK")
             
             siblings_with_same_weight_paint=[]
             
@@ -4178,30 +4188,37 @@ def secretpaint_function(self,*args,**kwargs):
                                                 paint_type = "WEIGHT_PAINT"
                                                 found_to_paint = []  
                                                 found_to_paint.append(children)
+                                                pass #print"(((UUUUUUUUUUUUUUUUUUUUUUU")
                                             elif modif["Input_69"] == False:
                                                 paint_type = "SCULPT_CURVES"
                                                 found_to_paint = []
                                                 found_to_paint.append(children)
+                                                pass #print"(((lllllllllllllllllllllllllll")
                                             
                                         if modif["Input_69"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_69"]:
                                             if modif["Input_69"] == True and modif["Input_83_use_attribute"]:
                                                 paint_type="WEIGHT_PAINT"
                                                 found_to_paint=[] 
                                                 found_to_paint.append(children)
+                                                pass #print"(((IIIIIIIIIIIIIIIIII")
                                             elif modif["Input_69"] == False:
                                                 paint_type="SCULPT_CURVES"
                                                 found_to_paint=[]
                                                 found_to_paint.append(children)
+                                                pass #print"(((ooooooooooooooooooooo")
                                             
                                         if modif["Input_69"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_69"] and modif["Input_83_use_attribute"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_83_use_attribute"]:
                                             if modif["Input_69"] == True and modif["Input_83_use_attribute"]:
                                                 paint_type = "WEIGHT_PAINT"
+                                                pass #print"(((YYYYYYYYYYYYYYYY")
                                                 found_to_paint = []  
                                                 found_to_paint.append(children)
                                             elif modif["Input_69"] == False:
                                                 paint_type = "SCULPT_CURVES"
+                                                pass #print"(((TTTTTTTTTTTTTTTTTTT")
                                                 found_to_paint = []
                                                 found_to_paint.append(children)
+                                                pass #print"(((9999999999999999999")
                                             
                                             
 
@@ -4213,6 +4230,13 @@ def secretpaint_function(self,*args,**kwargs):
                                             paint_type="WEIGHT_PAINT"
                                             found_to_paint.append(children)
 
+
+        
+        
+        
+        
+        
+
         
         if found_to_paint:
             bpy.context.view_layer.objects.active = found_to_paint[0]
@@ -4220,7 +4244,9 @@ def secretpaint_function(self,*args,**kwargs):
             elif paint_type=="WEIGHT_PAINT": vertexgrouppaint_function(self, context, NoMasksDetected=True)
             elif paint_type=="SCULPT_CURVES":
                 
-                apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True )
+                if ActiveMode == "SCULPT_CURVES": apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True,keep_active_brush=True)
+                else: apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True )
+                pass #print"(((8888888888888888888888888")
 
 
         
@@ -6082,40 +6108,50 @@ def realize_instances_f(self,context):
     activeobj.select_set(True)
     objselection = bpy.context.selected_objects  
 
-    
-    
-    
-    
-    
-    
-    surface_to_parent_to = activeobj.parent
 
-    all_brush_coll_instans = []  
-    all_assemblies_modifiers = []  
-    realized_partial_hair = False
+    
+    
+    
+    
+    
+    
+
     for obj in objselection:
-        if obj.type == "CURVES" and obj.modifiers:
+        all_brush_coll_instans = []  
+        all_assemblies_modifiers = []  
+        realized_partial_hair = False
+        objs_to_delete_afterwards = []
+
+        for x in bpy.context.selected_objects: x.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        if obj.type in ["CURVES","CURVE"] and obj.modifiers:
 
             
-            if bpy.context.object.mode != "OBJECT":
+            hide_original_paint_system = True
+            if bpy.context.object.mode != "OBJECT" and obj.type == "CURVES":
                 realized_partial_hair =True
 
                 apply_paint(self, context)
 
+                
                 Coll_of_Active = []
                 original_collection = bpy.context.view_layer.active_layer_collection  
                 ucol = obj.users_collection
                 for i in ucol:
                     layer_collection = bpy.context.view_layer.layer_collection  
                     Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-                    bpy.context.view_layer.active_layer_collection = Coll_of_Active
+                    
                 newobj = obj.copy()
-                bpy.context.view_layer.active_layer_collection = original_collection
+                objs_to_delete_afterwards.append(newobj)
+                
                 newobj.data = obj.data.copy()
                 bpy.context.collection.objects.link(newobj)
                 
                 
 
+                
                 newobj.select_set(False)
                 bpy.ops.object.mode_set(mode="EDIT")
                 try: bpy.ops.curves.select_linked() 
@@ -6123,8 +6159,8 @@ def realize_instances_f(self,context):
                 bpy.ops.curves.delete()
                 bpy.ops.curves.select_all(action='SELECT') 
 
-
-                obj.select_set(False)
+                
+                
                 newobj.select_set(True)
                 bpy.context.view_layer.objects.active = newobj
                 bpy.ops.object.mode_set(mode="EDIT")
@@ -6133,9 +6169,20 @@ def realize_instances_f(self,context):
                 bpy.ops.curves.select_all(action='INVERT')
                 bpy.ops.curves.delete()
                 bpy.ops.object.mode_set(mode="OBJECT")
-                activeobj = newobj
-                objselection = [activeobj]
+                
+                
 
+                
+                hide_original_paint_system = False
+
+            
+            if hide_original_paint_system and obj.type == "CURVES":
+                for modif in obj.modifiers:
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" \
+                    or modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999":
+                        modif["Input_99"] = True
+
+            
             for modif in obj.modifiers:  
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
 
@@ -6156,85 +6203,94 @@ def realize_instances_f(self,context):
                                 if obij.modifiers[0] not in all_assemblies_modifiers: all_assemblies_modifiers.append(obij.modifiers[0])
                                 obij.modifiers[0].show_viewport = False
 
-    all_data = []
-    if all_brush_coll_instans:
-        for instance in all_brush_coll_instans:
-            
-            for x in instance.instance_collection.all_objects:
-                if x.data not in all_data: all_data.append(x.data)
 
-    
-
-
-
-
-
-
-    all_previous_objects = set(bpy.context.scene.objects)
-    bpy.ops.object.duplicates_make_real()
-    objs_to_delete_afterwards = []
-    for ob in objselection:
-        if ob.type == "EMPTY" and not ob.instance_collection:
-            bpy.data.objects.remove(ob, do_unlink=True)  
-        
-        elif ob.type == "CURVES" and ob.modifiers or ob.type == "CURVE" and ob.modifiers:
-            for modif in ob.modifiers:  
-                if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                    if ob.type == "CURVES" and ob not in objs_to_delete_afterwards: objs_to_delete_afterwards.append(ob)   
-                    if ob.type == "CURVE":
-                        ob.modifiers[0].show_viewport = False
-                        ob.modifiers[0].show_render = False
-                    ob.location = ob.location  
-
-    
-    for modif in all_assemblies_modifiers: modif.show_viewport = True
-
-    new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
-
-
-    
-    for ob in new_obs:
-
-        
-        if ob.modifiers and ob.modifiers[0].type == "NODES" and ob.modifiers[0].node_group and "ASSEMBLY" in ob.modifiers[0].node_group.name and ob.modifiers[0].show_viewport == False:
-            ob.modifiers[0].show_viewport = True 
-            
-
-
-
-        if ob.type == "EMPTY":
+        all_data = []
+        if all_brush_coll_instans:
             for instance in all_brush_coll_instans:
-                if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  
-                    ob.instance_type = 'COLLECTION'
-                    ob.instance_collection = instance.instance_collection  
-            if not ob.instance_collection: objs_to_delete_afterwards.append(ob)  
-        elif ob.type != "EMPTY" and ob.data and ob.data in all_data and ob not in objs_to_delete_afterwards:
-            objs_to_delete_afterwards.append(ob)
-        if activeobj.type == "CURVE":
-            if ob != new_obs[0]: ob.parent = new_obs[0]
-            ob.matrix_parent_inverse = new_obs[0].matrix_world.inverted()  
-        elif activeobj.type == "CURVES":
-            ob.parent = surface_to_parent_to  
-            ob.matrix_parent_inverse = surface_to_parent_to.matrix_world.inverted()  
-        else:
-            ob.parent = surface_to_parent_to  
+                
+                for x in instance.instance_collection.all_objects:
+                    if x.data not in all_data: all_data.append(x.data)
 
 
 
-    
-    all_empties_coordinates = []
-    for ob in new_obs:
-        if ob.type == "EMPTY" and str(ob.location) not in all_empties_coordinates:
+
+
+        all_previous_objects = set(bpy.context.scene.objects)
+
+
+        bpy.ops.object.duplicates_make_real()
+
+        for ob in objselection:
+            if ob.type == "EMPTY" and not ob.instance_collection:
+                bpy.data.objects.remove(ob, do_unlink=True)  
+        
+        if obj.type == "CURVE":
+            for modif in obj.modifiers:
+                if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
+                    obj.modifiers[0].show_viewport = False
+                    obj.modifiers[0].show_render = False
+                    obj.location = obj.location  
+
+
+        
+        for modif in all_assemblies_modifiers: modif.show_viewport = True
+        
+
+        new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
+
+        
+        
+        
+        
+        
+        
+
+        
+        for ob in new_obs:
+
             
-            all_empties_coordinates.append(str(ob.location))
-        elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
+            if ob.modifiers and ob.modifiers[0].type == "NODES" and ob.modifiers[0].node_group and "ASSEMBLY" in ob.modifiers[0].node_group.name and ob.modifiers[0].show_viewport == False:
+                ob.modifiers[0].show_viewport = True 
+                
+
+
+
+            if ob.type == "EMPTY":
+                for instance in all_brush_coll_instans:
+                    if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  
+                        ob.instance_type = 'COLLECTION'
+                        ob.instance_collection = instance.instance_collection  
+                if not ob.instance_collection: objs_to_delete_afterwards.append(ob)  
+            elif ob.type != "EMPTY" and ob.data and ob.data in all_data and ob not in objs_to_delete_afterwards:
+                objs_to_delete_afterwards.append(ob)
+            if obj.type == "CURVE":
+                
+                
+                ob.parent = obj
+                ob.matrix_parent_inverse = obj.matrix_world.inverted()  
+            elif obj.type == "CURVES":
+                ob.parent = obj.parent  
+                ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
+            else:
+                ob.parent = obj.parent  
+                ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
+
+
+
+        
+        all_empties_coordinates = []
+        for ob in new_obs:
+            if ob.type == "EMPTY" and str(ob.location) not in all_empties_coordinates:
+                
+                all_empties_coordinates.append(str(ob.location))
+            elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
+                
+                objs_to_delete_afterwards.append(ob)
+
+
+
             
-            objs_to_delete_afterwards.append(ob)
-
-
-
-    
-    for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
+            for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
 
 
 
@@ -8665,6 +8721,1975 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
