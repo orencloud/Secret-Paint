@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 5),
+    "version": (1, 7, 6),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -668,7 +668,7 @@ class subpanelutils(bpy.types.Panel):
         row = layout.row()
         row = layout.row()
         row = layout.row()
-        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxAdvancedModifier", toggle = False, expand=False)
+        
         
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxOverrideBrushes", toggle = False, expand=False)  
@@ -788,7 +788,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 23 
+    current_node_version = 24 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -939,87 +939,88 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     if activeobj: bpy.context.view_layer.objects.active = activeobj
 
 
-    toggleAdvancedModifier() 
-    
-def toggleAdvancedModifier():    
-    if bpy.data.node_groups.get("Secret Paint"):
 
-        
-        
-        
-        
-        
-        
-        
-        if bpy.app.version_string >= "4.0.0": x = bpy.data.node_groups["Secret Paint"].interface.items_tree
-        elif bpy.app.version_string < "4.0.0": x= bpy.data.node_groups["Secret Paint"].inputs
 
-        
 
-        for input in x:          
 
-            if bpy.app.version_string >= "4.0.0":
-                if input.name=="Scale"\
-                or input.name=="Edge Blur"\
-                or input.name=="Noise W"\
-                or input.name=="MASK Weight"\
-                or input.name=="MASK Object"\
-                or input.name=="MASK Viewport"\
-                or input.name=="MASK Obj in Viewport"\
-                or input.name=="MASK Texture"\
-                or input.name=="UV for Texture" \
-                or input.name=="Scale of Surface" \
-                or input.socket_type == "NodeSocketString" and input.default_value == "LOCATION"\
-                or input.name=="Move origin"\
-                or input.socket_type == "NodeSocketString" and input.default_value == "Wind"\
-                or input.name=="Strenght"\
-                or input.name=="Wind Scale"\
-                or input.name=="Speed"\
-                or input.name=="Viewport Density"\
-                or input.name=="Clump Radius"\
-                or input.name=="Clump Density"\
-                or input.name=="Proxy Convex Hull"\
-                or input.name=="Proxy Bounding Box"\
-                or input.name=="Material Custom"\
-                or input.name=="Material Original /Custom"\
-                or input.name=="Surface"\
-                or input.name=="Real Instances"\
-                or input.name=="Distribution Seed"\
-                or input.name=="TURN OFF SYSTEM":
-                    if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-                    elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
 
-            elif bpy.app.version_string < "4.0.0":
-                if input.name=="Scale"\
-                or input.name=="Edge Blur"\
-                or input.name=="Noise W"\
-                or input.name=="MASK Weight"\
-                or input.name=="MASK Object"\
-                or input.name=="MASK Viewport"\
-                or input.name=="MASK Obj in Viewport"\
-                or input.name=="MASK Texture"\
-                or input.name=="UV for Texture" \
-                or input.name=="Scale of Surface" \
-                or input.type == "STRING" and input.default_value == "LOCATION"\
-                or input.name=="Move origin"\
-                or input.type == "STRING" and input.default_value == "Wind"\
-                or input.name=="Strenght"\
-                or input.name=="Wind Scale"\
-                or input.name=="Speed"\
-                or input.name=="Viewport Density"\
-                or input.name=="Clump Radius"\
-                or input.name=="Clump Density"\
-                or input.name=="Proxy Convex Hull"\
-                or input.name=="Proxy Bounding Box"\
-                or input.name=="Material Custom"\
-                or input.name=="Material Original /Custom"\
-                or input.name=="Surface"\
-                or input.name=="Real Instances"\
-                or input.name=="Distribution Seed"\
-                or input.name=="TURN OFF SYSTEM":
-                    if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-                    elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class secretpaint_update_modifier(bpy.types.Operator):
     """Reimport the Secret Paint node tree: Useful when opening older blend files. Blender developers often change how the Geometry Node tree calculates attributes. So when opening an old scene with a new blender version, reimport the latest Node Tree which will account for those changes"""
     bl_idname = "secret.secretpaint_update_modifier"
@@ -8385,12 +8386,19 @@ def get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_as
 
 
 def get_first_parent_Upwards(activeobj, context):
-    parent_of_current_object = activeobj.modifiers[0]["Socket_1"] if activeobj.modifiers and activeobj.modifiers[0].name.startswith("Secret Assembly") and activeobj.modifiers[0].type=="NODES" and activeobj.modifiers[0].node_group and "ASSEMBLY" in activeobj.modifiers[0].node_group.name else None
+    
+    parent_of_current_object = None
+    if activeobj.modifiers and activeobj.modifiers[0].name.startswith("Secret Assembly") and activeobj.modifiers[0].type=="NODES" and activeobj.modifiers[0].node_group and "ASSEMBLY" in activeobj.modifiers[0].node_group.name:
+        for input in activeobj.modifiers[0].node_group.interface.items_tree:
+            if input.name == "Parent":
+                parent_of_current_object = activeobj.modifiers[0][input.identifier]
+                break
     if parent_of_current_object != None: return get_first_parent_Upwards(parent_of_current_object, context)
     else: return activeobj
 
 
 def assembly_1(self,context,**kwargs):
+    start_time = time.perf_counter()
 
     original_activeobj = activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     
@@ -8407,7 +8415,6 @@ def assembly_1(self,context,**kwargs):
         if not ob.parent and len(ob_childrens) > len(parent_with_most_children_children) \
         or ob.parent and ob.parent not in bpy.context.selected_objects and len(ob.children) > len(parent_with_most_children.children):
             parent_with_most_children = ob
-    pass #print"COMMMMMMMMMMMMMM",parent_with_most_children)
     
     
     common_parent_has_children_in_the_selected_objects = False
@@ -8417,14 +8424,12 @@ def assembly_1(self,context,**kwargs):
             break
     if common_parent_has_children_in_the_selected_objects: activeobj = original_activeobj = parent_with_most_children
     else: activeobj = original_activeobj
-    pass #print"ACTIVEOBJ",activeobj.name,"parent:",parent_with_most_children.name)
 
     
     for ob in bpy.context.selected_objects:
         if ob != activeobj:
             if not ob.parent \
             or ob.parent and ob.parent not in bpy.context.selected_objects:
-                pass #print"parentedddddddddddd to active obj", ob.name)
                 ob_matrix_world = ob.matrix_world.copy()
                 ob.parent=activeobj   
                 ob.matrix_world = ob_matrix_world
@@ -8489,8 +8494,12 @@ def assembly_1(self,context,**kwargs):
         self.report({'INFO'}, "Updated Existing Assembly")
         for ob in final_assemblies_to_process: ob.select_set(True)
 
+    end_time = time.perf_counter()
+    pass #print"Milliseconds 1111 (Ping):",(end_time - start_time) * 1000)
+    start_time = time.perf_counter()
     return{'FINISHED'}
 def assembly_2(self,context,**kwargs):
+    start_time_2 = time.perf_counter()
 
     original_activeobj = kwargs.get("original_activeobj") if "original_activeobj" in kwargs else bpy.context.active_object
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
@@ -8599,16 +8608,26 @@ def assembly_2(self,context,**kwargs):
         node_group.interface.clear()
         if bpy.app.version_string >= "4.0.0":
             node_group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+            node_group.interface.new_socket(name='Realize Instances', in_out='INPUT', socket_type='NodeSocketBool')
+            
+            
             node_group.interface.new_socket(name='Parent', in_out='INPUT', socket_type='NodeSocketObject')
         elif bpy.app.version_string < "4.0.0":
+            node_group.outputs.new(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
             node_group.outputs.new(type='NodeSocketGeometry', name='Geometry')
             node_group.outputs.new(type='NodeSocketObject', name='Parent')
+
         output = node_group.nodes.new('NodeGroupOutput')
-        output.location = (+1100,0)
+        output.location = (+1200,0)
         if bpy.app.version_string >= "4.0.0": node_group.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
         elif bpy.app.version_string < "4.0.0": node_group.inputs.new(type='NodeSocketGeometry', name='GEO')
         JoinGeometry = node_group.nodes.new('GeometryNodeJoinGeometry')
         JoinGeometry.location = (+800,0)
+        realize_instances_node = node_group.nodes.new(type='GeometryNodeRealizeInstances')
+        realize_instances_node.location = (+1000,0)
+        realize_instances_node.inputs[2].default_value = False
+        
+
         
 
 
@@ -8628,7 +8647,9 @@ def assembly_2(self,context,**kwargs):
         node_group.links.new(parent_info_node.outputs[2], CombineTransform.inputs[1])
         node_group.links.new(parent_info_node.outputs[3], CombineTransform.inputs[2])
         node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
-        node_group.links.new(input.outputs[1], parent_info_node.inputs[0])
+        node_group.links.new(input.outputs[2], parent_info_node.inputs[0])
+        node_group.links.new(JoinGeometry.outputs[0], realize_instances_node.inputs[0])
+        node_group.links.new(input.outputs[1], realize_instances_node.inputs[2]) 
 
 
         get_all_children(activeobj,all_children,context)
@@ -8640,7 +8661,7 @@ def assembly_2(self,context,**kwargs):
                     if hasattr(con, 'target') and con.target == activeobj and ob not in all_children \
                     or hasattr(con, 'target') and con.target in all_children and ob not in all_children: all_children.append(ob)
 
-        childloop = 1
+        childloop = 2
         for children in all_children:
 
             
@@ -8700,12 +8721,16 @@ def assembly_2(self,context,**kwargs):
                         
                         loop = 0
                         for input in node_group_inputs:
-                            if loop <= 2: modif[input.identifier] = activeobj
-                            elif loop >= 3: modif[input.identifier] = all_children[loop - 3]
+                            if loop == 3: modif[input.identifier] = activeobj
+                            elif loop >= 4: modif[input.identifier] = all_children[loop - 4]
                             loop += 1
 
-        node_group.links.new(JoinGeometry.outputs[0], output.inputs[0])  
 
+        node_group.links.new(realize_instances_node.outputs[0], output.inputs[0])  
+
+    end_time = time.perf_counter()
+    pass #print"Milliseconds 22222 (Ping):",(end_time - start_time_2) * 1000)
+    start_time = time.perf_counter()
     return there_are_assemblies_to_update, processing_original_activeobj
 
 
@@ -8721,31 +8746,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -12071,7 +12071,7 @@ class secret_menu(bpy.types.AddonPreferences):
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
-    checkboxAdvancedModifier: bpy.props.BoolProperty(name="Advanced Modifier", description="Access additional modifier settings such as Proxy Convex Hull", default=False, update=secretpaint_update_modifier_f)
+    
     trigger_viewport_mask: bpy.props.IntProperty(name="Trigger Viewport Mask", description="Automatically create the Viewport Mask whenever turning on the procedural distribution would create more than the specified number of instances. Useful to avoid slowing down the interface when working on huge terrains", default=15000)
     trigger_auto_uvs: bpy.props.IntProperty(name="Trigger UV Reprojection", description="Set to 0 to disable. When the terrain has incorrect UVs, for example after sculpting the terrain with dynamic topology,the UVs will automatically be recreated on objects that have less than this specified number of triangles. This is needed in order to be able to paint manually (geometry node hair limitation; only needed for manual painting, not for the procedural distribution)", default=150000)
     checkboxOverrideBrushes: bpy.props.BoolProperty(name="Override Brush Settings", description="Whenever jumping into paint mode with Q, the brush settings will be automatically set to optimal values", default=True)
@@ -12094,7 +12094,7 @@ class secret_menu(bpy.types.AddonPreferences):
         if auto_updater_status == True: addon_updater_ops.update_settings_ui(self, context)
 
 
-        layout.prop(self, "checkboxAdvancedModifier")
+        
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxOverrideBrushes")
         layout.prop(self, "trigger_viewport_mask")
