@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 6),
+    "version": (1, 7, 7),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -6223,6 +6223,7 @@ def realize_instances_f(self,context):
 
         for ob in objselection:
             if ob.type == "EMPTY" and not ob.instance_collection:
+                
                 bpy.data.objects.remove(ob, do_unlink=True)  
         
         if obj.type == "CURVE":
@@ -6290,8 +6291,9 @@ def realize_instances_f(self,context):
 
 
 
-            
-            for objj in objs_to_delete_afterwards: bpy.data.objects.remove(objj, do_unlink=True)  
+        
+        for objj in objs_to_delete_afterwards:
+            bpy.data.objects.remove(objj, do_unlink=True)  
 
 
 
@@ -8746,8 +8748,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
 
 
 
