@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 7),
+    "version": (1, 7, 8),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -788,7 +788,7 @@ def contextorencurveappend(context,**kwargs):
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
 
-    current_node_version = 24 
+    current_node_version = 25 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -1036,7 +1036,7 @@ def all_variables_are_equal(variables):
     first_value = variables[0]
     return all(value == first_value for value in variables)
 def apply_paint(self,context, **kwargs):
-
+    pass #print"AAAAAAAAAAAPPPPPPPPPPPPPPLYYYYYYYYY")
     
 
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
@@ -1119,7 +1119,7 @@ def apply_paint(self,context, **kwargs):
 
     
 
-    Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=objselection)  
+    
 
     for obj in all_selected_hair:
 
@@ -1330,9 +1330,8 @@ def apply_paint(self,context, **kwargs):
 
 
 
-
-
-
+    
+    Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=objselection)  
 
 
         
@@ -5057,11 +5056,8 @@ def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
         triangles = sum(polygon.loop_total // 3 for polygon in terrain.data.polygons)
 
         if triangles < bpy.context.preferences.addons[__package__].preferences.trigger_auto_uvs:
-            start_time = time.perf_counter()
-            reproject_function(self,context,automatically_triggererd=True,activeobj=activeobj, objselection=objselection)
-            end_time = time.perf_counter()
-            pass #print"REPROJECTING:", activeobj)
-            pass #print"@@reproject Milliseconds (Ping):",(end_time - start_time) * 1000)
+            
+            reproject_function(self,context,automatically_triggererd=True,activeobj=terrain, objselection=[terrain])
             
             
             
@@ -5142,12 +5138,14 @@ def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
 
 
 def reproject_function(self,context,**kwargs):
+    start_time = time.perf_counter()
 
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     objselection = kwargs.get("objselection") if "objselection" in kwargs else bpy.context.selected_objects
     if not isinstance(objselection, (list, tuple)): objselection = [objselection]  
     if activeobj not in objselection: objselection.append(activeobj)
     automatically_triggererd = kwargs.get("automatically_triggererd") if "automatically_triggererd" in kwargs else False
+
 
     actualobjselection = bpy.context.selected_objects
     actualactiveobj = bpy.context.active_object
@@ -5243,6 +5241,7 @@ def reproject_function(self,context,**kwargs):
                 
                 
                 
+                pass #print"REPROJIIIIIII", surface)
                 try:   
                     for window in context.window_manager.windows:
                         screen = window.screen
@@ -5305,23 +5304,22 @@ def reproject_function(self,context,**kwargs):
 
 
         
-        if not automatically_triggererd:
-            for x in objselection: bpy.data.objects[x.name].select_set(False)
-            changed_selected_objs_so_restore_is_needed = True
-            loop = 0
-            for ob in hairlist:
-                if ob not in unselected_siblings_list:
-                    if loop == 0:
-                        bpy.context.view_layer.objects.active = ob
-                        changed_active_obj_so_restore_is_needed = True
-                    loop+=1 
+        
+        for x in objselection: bpy.data.objects[x.name].select_set(False)
+        changed_selected_objs_so_restore_is_needed = True
+        loop = 0
+        for ob in hairlist:
+            if ob not in unselected_siblings_list:
+                if loop == 0:
+                    bpy.context.view_layer.objects.active = ob
+                    changed_active_obj_so_restore_is_needed = True
+                loop+=1 
 
-                    bpy.data.objects[ob.name].select_set(True)
-                    bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
-            
-            
-            
-
+                bpy.data.objects[ob.name].select_set(True)
+                bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
+        
+        
+        
 
 
 
@@ -5370,7 +5368,9 @@ def reproject_function(self,context,**kwargs):
     
     
 
-    pass #printf"#### Reprojected UVs: reproject_function,snap hair to closest surface:{not automatically_triggererd}")
+    end_time = time.perf_counter()
+
+    pass #printf"@@@ Reprojected UVs: reproject_function,snap hair to closest surface:{not automatically_triggererd}", "Milliseconds:",(end_time - start_time) * 1000)
     
     return {'FINISHED'}
 class clean_hair_orencurve(bpy.types.Operator):
