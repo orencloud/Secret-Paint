@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 8),
+    "version": (1, 7, 9),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -780,13 +780,16 @@ def contextorencurveappend(context,**kwargs):
     if activeobj == None: activeobj = bpy.context.active_object
 
     
-    secretpaint_update_modifier_f(context) 
+    secretpaint_update_modifier_f(context,upadte_provenance="def contextorencurveappend(context,**kwargs):") 
 
     modifier = activeobj.modifiers.new(name="Secret Paint", type='NODES')
     modifier.node_group = bpy.data.node_groups.get("Secret Paint")
     return {"FINISHED"}
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
 
+
+
+    upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
 
     current_node_version = 25 
     pass #print"######################### secretpaint_update_modifier_f 
@@ -814,18 +817,18 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     
     
     
+    
 
     
     carry_through = False
     try:  
         if bpy.app.version_string >= "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:     carry_through=True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:    carry_through=True
         elif bpy.app.version_string < "4.0.0":
-            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint")]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
+            if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].outputs[1].default_value != current_node_version:                 carry_through = True
     except:
         pass #print"FAILED, UPDATING")
         carry_through=True
-
     
     
     
@@ -838,7 +841,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
     
     if carry_through:
-        pass #print"######################### secretpaint_update_modifier_f CARRY THROUGH WITH REAPPEND UPDATE")
+        pass #print"######################### secretpaint_update_modifier_f CARRY THROUGH WITH REAPPEND UPDATE Update Triggered By: ", upadte_provenance)
 
         reupdate_hair_material(context, objselection=[ob for ob in bpy.data.objects])  
 
@@ -1028,7 +1031,7 @@ class secretpaint_update_modifier(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        secretpaint_update_modifier_f(context)
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.secretpaint_update_modifier")
         return {'FINISHED'}
 def all_variables_are_equal(variables):
     if not variables:
@@ -1374,6 +1377,7 @@ class orenscatterinstancesmodifiers(bpy.types.Operator):
         
         
         
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.applypaint")
         apply_paint(self,context,activeobj=activeobj, objselection=[activeobj])
         
         return {'FINISHED'}
@@ -1385,6 +1389,9 @@ class toggle_procedural(bpy.types.Operator):
     object_name: StringProperty()
     
     def execute(self, context):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_procedural")
+
         if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
         
         activeobj= bpy.data.objects.get(self.object_name)
@@ -1431,6 +1438,9 @@ class SelectObjectOperator(bpy.types.Operator):
     object_name: StringProperty()
     
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.select_object")
+
         activeobj = bpy.context.active_object
         objselection = bpy.context.selected_objects
         if activeobj and bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
@@ -1530,6 +1540,9 @@ class biome_delete(bpy.types.Operator):
     object_biome: StringProperty()  
     
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context, upadte_provenance="secret.biome_delete")
+
         if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
 
         obj = context.object
@@ -1587,11 +1600,16 @@ class SelectBiomeOperator(bpy.types.Operator):
     object_biome: bpy.props.StringProperty(name= "Custom Biome Name", default="")  
 
     def execute(self, context):  
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.select_biome - execute")
+
         for ob in self.hair_in_bgroup:
             ob.modifiers[0]["Socket_8"] = self.object_biome
         return {'FINISHED'}
 
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.select_biome - invoke")
 
         obj = context.object
         if obj:
@@ -1695,7 +1713,7 @@ class SelectBiomeOperator(bpy.types.Operator):
             elif event.ctrl:    
                 self.biom_temp_numb = int(self.object_biome)     
                 self.hair_in_bgroup = hair_in_bgroup
-                secretpaint_update_modifier_f(context) 
+                secretpaint_update_modifier_f(context,upadte_provenance="secret.select_biome - invoke at the end") 
                 return context.window_manager.invoke_props_dialog(self)
 
 
@@ -1800,7 +1818,7 @@ def biomegroupreorder_f(context,**kwargs):
     if "move_to_extreme" in kwargs:move_to_extreme = kwargs.get("move_to_extreme")
     else:move_to_extreme = False
 
-    secretpaint_update_modifier_f(context)
+    secretpaint_update_modifier_f(context,upadte_provenance="def biomegroupreorder_f(context,**kwargs):")
 
     
     hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
@@ -1893,7 +1911,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
     object_biome: bpy.props.StringProperty()
     
     def invoke(self, context, event):
-        secretpaint_update_modifier_f(context) 
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_visibilityrender") 
 
         buttonbiome = int(self.object_biome)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -2046,7 +2064,7 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
     object_biome: bpy.props.StringProperty()
     
     def invoke(self, context, event):
-        secretpaint_update_modifier_f(context)
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_visibilityrender_biome")
 
         hair = find_all_listed_paintsystems(context, activeobj=context.object)
         hair_in_bgroup =[]
@@ -2173,7 +2191,7 @@ class toggle_display_bounds(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_name: StringProperty()
     def invoke(self, context, event):
-        secretpaint_update_modifier_f(context)
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_display_bounds")
         buttonobj = bpy.data.objects.get(self.object_name)
         objselection = bpy.context.selected_objects
         if buttonobj not in objselection: objselection.append(buttonobj)
@@ -2217,6 +2235,9 @@ class toggle_display_bounds_biome(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: StringProperty()
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_display_bounds_biome")
+
         obj = bpy.context.active_object
         hair = []
         parent = obj.parent
@@ -2254,6 +2275,9 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: StringProperty()
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="object.secretpaint_viewport_mask_biome")
+
         obj = bpy.context.active_object
         hair = []
         parent = obj.parent
@@ -2788,6 +2812,9 @@ class secretpaint_viewport_mask(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.secretpaint_viewport_mask")
+
         obbb= bpy.data.objects.get(self.object_name)
         if event.alt: 
             for x in bpy.context.selected_objects: x.select_set(False) 
@@ -2977,7 +3004,7 @@ def secretpaint_create_curve(self,context,**kwargs):
     else: bpy.data.collections[targetCollection.name].objects.link(hairCurves) 
     if transfer_modifier:
         
-        secretpaint_update_modifier_f(context) 
+        secretpaint_update_modifier_f(context,upadte_provenance="def secretpaint_create_curve(self,context,**kwargs)") 
     else: contextorencurveappend(context,activeobj=hairCurves)
     
     
@@ -4109,7 +4136,7 @@ def secretpaint_function(self,*args,**kwargs):
     
     elif ActiveMode in ["SCULPT_CURVES", "WEIGHT_PAINT", "EDIT"]:
         
-        secretpaint_update_modifier_f(context)  
+        secretpaint_update_modifier_f(context,upadte_provenance="SWICTH WHICH HAIR SYSTEM TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE")  
         found_to_paint = []
         paint_type = []
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -4332,7 +4359,7 @@ def secretpaint_function(self,*args,**kwargs):
     or ActiveMode == "OBJECT" and N_Of_Selected == 0:
         
         
-        secretpaint_update_modifier_f(context)  
+        secretpaint_update_modifier_f(context,upadte_provenance="RESUME PAINTING SELECTED HAIR, HOVER IF NO SELECTED OBJS")  
         
         
         
@@ -5335,7 +5362,10 @@ def reproject_function(self,context,**kwargs):
     else:
         if changed_active_obj_so_restore_is_needed: bpy.context.view_layer.objects.active = actualactiveobj
         if changed_selected_objs_so_restore_is_needed:
-            for xx in actualobjselection: xx.select_set(False)
+            
+            for ob in bpy.context.selected_objects:
+                if ob not in actualobjselection: ob.select_set(False)
+            for xx in actualobjselection: xx.select_set(True)
 
     
     
@@ -5744,6 +5774,9 @@ class vertexgrouppaint(bpy.types.Operator):
     object_name: bpy.props.StringProperty()
     
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.vertexgrouppaint")
+
         if event.alt: remove_vgroup=True  
         else: remove_vgroup=False  
         vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton=True, activeobj=bpy.data.objects.get(self.object_name), remove_vgroup=remove_vgroup)
@@ -5756,6 +5789,8 @@ class vertexgrouppaint_biome(bpy.types.Operator):
     object_biome: bpy.props.StringProperty()
     
     def invoke(self, context, event):
+
+        secretpaint_update_modifier_f(context,upadte_provenance="secret.vertexgrouppaint_biome")
 
         obj = context.object
         if obj:
@@ -7754,7 +7789,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
             
-            secretpaint_update_modifier_f(context)  
+            secretpaint_update_modifier_f(context,upadte_provenance="def paint_from_library_function(self, context, event, **kwargs)")  
 
             
             
@@ -8748,41 +8783,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
