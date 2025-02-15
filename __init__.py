@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 9),
+    "version": (1, 7, 10),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2401,106 +2401,120 @@ def context3sculptbrush(context,**kwargs):
         
 
         
-        brush_density = None
-        brush_grow = None
-        brush_add = None
-        brush_delete = None
-        brush_puff = None
-        brush_comb = None
+        brush_density = []
+        brush_grow = []
+        brush_add = []
+        brush_delete = []
+        brush_puff = []
+        brush_comb = []
         for brush in bpy.data.brushes:
-            if brush.curves_sculpt_tool == 'DENSITY': brush_density=brush
-            if brush.curves_sculpt_tool == 'GROW_SHRINK': brush_grow=brush
-            if brush.curves_sculpt_tool == 'ADD': brush_add=brush
-            if brush.curves_sculpt_tool == 'DELETE': brush_delete=brush
-            if brush.curves_sculpt_tool == 'PUFF': brush_puff=brush
-            if brush.curves_sculpt_tool == 'COMB': brush_comb=brush
+            if brush.curves_sculpt_tool == 'DENSITY': brush_density.append(brush)
+            elif brush.curves_sculpt_tool == 'GROW_SHRINK': brush_grow.append(brush)
+            elif brush.curves_sculpt_tool == 'ADD': brush_add.append(brush)
+            elif brush.curves_sculpt_tool == 'DELETE': brush_delete.append(brush)
+            elif brush.curves_sculpt_tool == 'PUFF': brush_puff.append(brush)
+            elif brush.curves_sculpt_tool == 'COMB': brush_comb.append(brush)
+
+
 
         if not brush_density:
-            brush_density = bpy.data.brushes.new('Density Curvesss',mode="SCULPT_CURVES")
-            brush_density.curves_sculpt_tool = 'DENSITY'
-            brush_density.size = 150
+            new_brush_density = bpy.data.brushes.new('Density Curvesss',mode="SCULPT_CURVES")
+            new_brush_density.curves_sculpt_tool = 'DENSITY'
+            new_brush_density.size = 150
+            brush_density.append(new_brush_density)
             
         if not brush_grow:
-            brush_grow = bpy.data.brushes.new('Grow /Shrink Curves',mode="SCULPT_CURVES")
-            brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
-            brush_grow.size = 150
+            new_brush_grow = bpy.data.brushes.new('Grow /Shrink Curves',mode="SCULPT_CURVES")
+            new_brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
+            new_brush_grow.size = 150
+            brush_grow.append(new_brush_grow)
         if not brush_add:
-            brush_add = bpy.data.brushes.new('Add Curves',mode="SCULPT_CURVES")
-            brush_add.curves_sculpt_tool = 'ADD'
-            brush_add.size = 150
+            new_brush_add = bpy.data.brushes.new('Add Curves',mode="SCULPT_CURVES")
+            new_brush_add.curves_sculpt_tool = 'ADD'
+            new_brush_add.size = 150
+            brush_add.append(new_brush_add)
         if not brush_delete:
-            brush_delete = bpy.data.brushes.new('Delete Curves',mode="SCULPT_CURVES")
-            brush_delete.curves_sculpt_tool = 'DELETE'
-            brush_delete.size = 150
+            new_brush_delete = bpy.data.brushes.new('Delete Curves',mode="SCULPT_CURVES")
+            new_brush_delete.curves_sculpt_tool = 'DELETE'
+            new_brush_delete.size = 150
+            brush_delete.append(new_brush_delete)
         if not brush_puff:
-            brush_puff = bpy.data.brushes.new('Puff Curves',mode="SCULPT_CURVES")
-            brush_puff.curves_sculpt_tool = 'PUFF'
-            brush_puff.size = 150
+            new_brush_puff = bpy.data.brushes.new('Puff Curves',mode="SCULPT_CURVES")
+            new_brush_puff.curves_sculpt_tool = 'PUFF'
+            new_brush_puff.size = 150
+            brush_puff.append(new_brush_puff)
         if not brush_comb:
-            brush_comb = bpy.data.brushes.new('Comb Curves',mode="SCULPT_CURVES")
-            brush_comb.curves_sculpt_tool = 'COMB'
-            brush_comb.size = 150
+            new_brush_comb = bpy.data.brushes.new('Comb Curves',mode="SCULPT_CURVES")
+            new_brush_comb.curves_sculpt_tool = 'COMB'
+            new_brush_comb.size = 150
+            brush_comb.append(new_brush_comb)
 
 
 
         
-        
-        if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: brush_density.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
-        else: brush_density.curves_sculpt_settings.minimum_distance = 0.1
-        if bpy.app.version_string >= "4.2.0":
-            brush_density.curves_sculpt_settings.use_length_interpolate = False
-            brush_density.curves_sculpt_settings.use_shape_interpolate = False
-            brush_density.curves_sculpt_settings.use_point_count_interpolate = False
-        elif bpy.app.version_string < "4.2.0":
-            brush_density.curves_sculpt_settings.interpolate_length = False
-            brush_density.curves_sculpt_settings.interpolate_shape = False
-            brush_density.curves_sculpt_settings.interpolate_point_count = False
-        brush_density.curves_sculpt_settings.points_per_curve = 2
-
+        for bb in brush_density:
+            if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: bb.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
+            else: bb.curves_sculpt_settings.minimum_distance = 0.1
+            if bpy.app.version_string >= "4.2.0":
+                bb.curves_sculpt_settings.use_length_interpolate = False
+                bb.curves_sculpt_settings.use_shape_interpolate = False
+                bb.curves_sculpt_settings.use_point_count_interpolate = False
+            elif bpy.app.version_string < "4.2.0":
+                bb.curves_sculpt_settings.interpolate_length = False
+                bb.curves_sculpt_settings.interpolate_shape = False
+                bb.curves_sculpt_settings.interpolate_point_count = False
+            bb.curves_sculpt_settings.curve_length = 0.32  
+            bb.curves_sculpt_settings.points_per_curve = 2
 
         
         if bpy.context.preferences.addons[__package__].preferences.checkboxOverrideBrushes:
 
             
-            
-            brush_density.curves_sculpt_settings.density_mode = 'AUTO'
-            brush_density.strength = 1
-            brush_density.falloff_shape = 'SPHERE'
-            brush_density.curve_preset = 'SMOOTHER'
-            brush_density.curves_sculpt_settings.density_add_attempts = 200
+            for bb in brush_density:
+                bb.curves_sculpt_settings.density_mode = 'AUTO'
+                bb.strength = 1
+                bb.falloff_shape = 'SPHERE'
+                bb.curve_preset = 'SMOOTHER'
+                bb.curves_sculpt_settings.density_add_attempts = 200
 
             
-            brush_grow.strength = 0.1
-            if bpy.app.version_string >= "4.2.0":
-                brush_grow.curves_sculpt_settings.use_uniform_scale = True
-            elif bpy.app.version_string < "4.2.0":
-                brush_grow.curves_sculpt_settings.scale_uniform = True
+            for bb in brush_grow:
+                bb.strength = 0.1
+                if bpy.app.version_string >= "4.2.0":
+                    bb.curves_sculpt_settings.use_uniform_scale = True
+                elif bpy.app.version_string < "4.2.0":
+                    bb.curves_sculpt_settings.scale_uniform = True
 
             
-            brush_add.curves_sculpt_settings.add_amount = 1
-            brush_add.falloff_shape = 'SPHERE'
-            brush_add.use_frontface = True
-            if bpy.app.version_string >= "4.2.0":
-                brush_add.curves_sculpt_settings.use_length_interpolate = False
-                brush_add.curves_sculpt_settings.use_shape_interpolate = False
-                brush_add.curves_sculpt_settings.use_point_count_interpolate = False
-            elif bpy.app.version_string < "4.2.0":
-                brush_add.curves_sculpt_settings.interpolate_length = False
-                brush_add.curves_sculpt_settings.interpolate_shape = False
-                brush_add.curves_sculpt_settings.interpolate_point_count = False
-            brush_add.curves_sculpt_settings.curve_length = 0.32  
-            brush_add.curves_sculpt_settings.points_per_curve = 2
+            for bb in brush_add:
+                bb.curves_sculpt_settings.add_amount = 1
+                bb.falloff_shape = 'SPHERE'
+                bb.use_frontface = True
+                if bpy.app.version_string >= "4.2.0":
+                    bb.curves_sculpt_settings.use_length_interpolate = False
+                    bb.curves_sculpt_settings.use_shape_interpolate = False
+                    bb.curves_sculpt_settings.use_point_count_interpolate = False
+                elif bpy.app.version_string < "4.2.0":
+                    bb.curves_sculpt_settings.interpolate_length = False
+                    bb.curves_sculpt_settings.interpolate_shape = False
+                    bb.curves_sculpt_settings.interpolate_point_count = False
+                bb.curves_sculpt_settings.curve_length = 0.32  
+                
+                bb.curves_sculpt_settings.points_per_curve = 2
 
             
-            brush_delete.falloff_shape = 'PROJECTED'
+            for bb in brush_delete:
+                bb.falloff_shape = 'PROJECTED'
 
             
-            brush_puff.strength = 10
-            brush_puff.falloff_shape = 'PROJECTED'
+            for bb in brush_puff:
+                bb.strength = 10
+                bb.falloff_shape = 'PROJECTED'
 
             
-            brush_comb.strength = 0.1
-            brush_comb.falloff_shape = 'PROJECTED'
+            for bb in brush_comb:
+                bb.strength = 0.1
+                bb.falloff_shape = 'PROJECTED'
 
 
 
@@ -8783,20 +8797,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

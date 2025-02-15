@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 
 
 id = "secret_paint"
-version = "1.7.9"
+version = "1.7.10"
 name = "Secret Paint"
 tagline = "Select an object, select a surface, paint"
 maintainer = "orencloud"
