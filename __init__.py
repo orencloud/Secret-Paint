@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 10),
+    "version": (1, 7, 11),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -791,7 +791,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
     upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
 
-    current_node_version = 25 
+    current_node_version = 26 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -2456,12 +2456,12 @@ def context3sculptbrush(context,**kwargs):
             if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: bb.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
             else: bb.curves_sculpt_settings.minimum_distance = 0.1
             if bpy.app.version_string >= "4.2.0":
-                bb.curves_sculpt_settings.use_length_interpolate = False
-                bb.curves_sculpt_settings.use_shape_interpolate = False
+                bb.curves_sculpt_settings.use_length_interpolate = True
+                bb.curves_sculpt_settings.use_shape_interpolate = True
                 bb.curves_sculpt_settings.use_point_count_interpolate = False
             elif bpy.app.version_string < "4.2.0":
-                bb.curves_sculpt_settings.interpolate_length = False
-                bb.curves_sculpt_settings.interpolate_shape = False
+                bb.curves_sculpt_settings.interpolate_length = True
+                bb.curves_sculpt_settings.interpolate_shape = True
                 bb.curves_sculpt_settings.interpolate_point_count = False
             bb.curves_sculpt_settings.curve_length = 0.32  
             bb.curves_sculpt_settings.points_per_curve = 2
@@ -2479,7 +2479,7 @@ def context3sculptbrush(context,**kwargs):
 
             
             for bb in brush_grow:
-                bb.strength = 0.1
+                bb.strength = 0.03
                 if bpy.app.version_string >= "4.2.0":
                     bb.curves_sculpt_settings.use_uniform_scale = True
                 elif bpy.app.version_string < "4.2.0":
@@ -2491,12 +2491,12 @@ def context3sculptbrush(context,**kwargs):
                 bb.falloff_shape = 'SPHERE'
                 bb.use_frontface = True
                 if bpy.app.version_string >= "4.2.0":
-                    bb.curves_sculpt_settings.use_length_interpolate = False
-                    bb.curves_sculpt_settings.use_shape_interpolate = False
+                    bb.curves_sculpt_settings.use_length_interpolate = True
+                    bb.curves_sculpt_settings.use_shape_interpolate = True
                     bb.curves_sculpt_settings.use_point_count_interpolate = False
                 elif bpy.app.version_string < "4.2.0":
-                    bb.curves_sculpt_settings.interpolate_length = False
-                    bb.curves_sculpt_settings.interpolate_shape = False
+                    bb.curves_sculpt_settings.interpolate_length = True
+                    bb.curves_sculpt_settings.interpolate_shape = True
                     bb.curves_sculpt_settings.interpolate_point_count = False
                 bb.curves_sculpt_settings.curve_length = 0.32  
                 
