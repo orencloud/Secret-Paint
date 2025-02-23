@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 12),
+    "version": (1, 7, 13),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -670,6 +670,7 @@ class subpanelutils(bpy.types.Panel):
         row = layout.row()
         
         
+        layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxKeepManualWhenTransferBiome", toggle = False, expand=False)  
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", toggle = False, expand=False)  
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxOverrideBrushes", toggle = False, expand=False)  
         layout.prop(bpy.context.preferences.addons[__package__].preferences, "trigger_viewport_mask", expand=False)
@@ -791,7 +792,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
     upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
 
-    current_node_version = 27 
+    current_node_version = 28 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
@@ -3827,12 +3828,12 @@ def secretpaint_function(self,*args,**kwargs):
                                 
 
 
+                                
+                                
+                                if bpy.context.preferences.addons[__package__].preferences.checkboxKeepManualWhenTransferBiome == False:
+                                    if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  
 
                                 
-                                if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  
-                                
-                                
-
                                 hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
                                 hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
                                 hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
@@ -12038,7 +12039,6 @@ class assembly(bpy.types.Operator):
 
 
 
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -12067,6 +12067,7 @@ class secret_menu(bpy.types.AddonPreferences):
     updater_interval_hours : bpy.props.IntProperty(name='Hours',description="Number of hours between checking for updates",default=0,min=0,max=23)
     updater_interval_minutes : bpy.props.IntProperty(name='Minutes',description="Number of minutes between checking for updates",default=0,min=0,max=59)
 
+    checkboxKeepManualWhenTransferBiome: bpy.props.BoolProperty(name="Keep Manual When Transferring Biomes", description="When transferring biomes from a terrain to another: keep the paint systems in manual mode instead of automatically switching everything to procedural", default=False)
     checkboxHideImported: bpy.props.BoolProperty(name="Hide Imported Paint Assets", description="When importing and painting objects from the asset browser (Q), hide them in a new collection called Hidden Assets (instead of having them visible next to the terrain)", default=False)
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
@@ -12095,9 +12096,11 @@ class secret_menu(bpy.types.AddonPreferences):
 
 
         
+        layout.prop(self, "checkboxKeepManualWhenTransferBiome")
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxOverrideBrushes")
         layout.prop(self, "trigger_viewport_mask")
+        layout.prop(self, "trigger_auto_uvs")
 
         row = layout.row()
         row = layout.row()
