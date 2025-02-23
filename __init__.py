@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 13),
+    "version": (1, 7, 14),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3894,7 +3894,6 @@ def secretpaint_function(self,*args,**kwargs):
                                 
 
 
-                                
                                 hairCurves.select_set(True)  
                                 bpy.context.view_layer.objects.active = hairCurves  
 
@@ -3944,7 +3943,8 @@ def secretpaint_function(self,*args,**kwargs):
 
 
         for x in bpy.context.selected_objects: x.select_set(False)
-        if N_Of_Selected >= 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])   
+        
+        if N_Of_Selected == 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])   
 
         
         
