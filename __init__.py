@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 17),
+    "version": (1, 7, 18),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2338,25 +2338,25 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
 
 
 
-def brush_density_while_painting_f(context):   
-    def check_modal_finishedd():  
 
-        if activeobj != bpy.context.active_object or bpy.context.mode != 'SCULPT_CURVES' or context.tool_settings.curves_sculpt.brush.curves_sculpt_tool != 'DENSITY':  
-            pass #print"stoppp")
-            return None  
-        else:
-            try: activeobj.modifiers[0]["Socket_11"] = context.tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance
-            except:  
-                pass #print"failed")
-                return None  
-        return 0  
 
-    activeobj = bpy.context.active_object
-    bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")  
-    bpy.ops.sculpt_curves.min_distance_edit('INVOKE_DEFAULT')  
-    bpy.app.timers.register(check_modal_finishedd)  
 
-    return{'FINISHED'}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class brush_density_while_painting(bpy.types.Operator):
     """While hovering with the mouse on the terrain, press the shortcut to change the brush density. The Addon will remember the density you chose for each system independently"""
     bl_idname = "secret.brush_density_while_painting"
@@ -2364,8 +2364,8 @@ class brush_density_while_painting(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         
-
-        bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")  
+        context3sculptbrush(context)
+        
         bpy.ops.sculpt_curves.min_distance_edit('INVOKE_DEFAULT')  
         context.window_manager.modal_handler_add(self)  
         self._cancel = False  
