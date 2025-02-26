@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 15),
+    "version": (1, 7, 16),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -1223,7 +1223,7 @@ def apply_paint(self,context, **kwargs):
         modifier["Input_45"] = obj.modifiers[0]["Input_85"] 
         if obj.modifiers[0]["Input_83_attribute_name"] and obj.modifiers[0]["Input_83_use_attribute"]:
             modifier["Input_14_attribute_name"] = obj.modifiers[0]["Input_83_attribute_name"] 
-            modifier["Input_14_use_attribute"] = 1 
+            modifier["Input_14_use_attribute"] = True 
         obj.modifiers[0]["Input_69"] = False 
 
         
@@ -3861,8 +3861,8 @@ def secretpaint_function(self,*args,**kwargs):
                                 if len(all_bgroups_starter) >= 2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
 
                                 if mesh.data.library:  
-                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = None
-                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = 0
+                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = ""
+                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = False
                                 else:
                                     hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  
                                     hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  
@@ -4387,7 +4387,7 @@ def secretpaint_function(self,*args,**kwargs):
             if result != {'PASS_THROUGH'} and hoverobj.type == "CURVES" and hoverobj.modifiers:
                 for modif in hoverobj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                        if modif["Input_69"] == True and modif["Input_83_use_attribute"] == 1: vertexgrouppaint_function(self, context, NoMasksDetected=True)
+                        if modif["Input_69"] == True and modif["Input_83_use_attribute"] == True: vertexgrouppaint_function(self, context, NoMasksDetected=True)
                         elif modif["Input_69"] == False:
                             
                             apply_paint(self, context, activeobj=hoverobj, objselection=[hoverobj], applyIDs=True)
@@ -4402,10 +4402,10 @@ def secretpaint_function(self,*args,**kwargs):
 
         
         elif N_Of_Selected == 1: 
-            if activeobj.modifiers[0]["Input_69"] == True and activeobj.modifiers[0]["Input_83_use_attribute"] == 1:
+            if activeobj.modifiers[0]["Input_69"] == True and activeobj.modifiers[0]["Input_83_use_attribute"] == True:
                 vertexgrouppaint_function(self, context,NoMasksDetected=True)
 
-            elif activeobj.modifiers[0]["Input_69"] == True and activeobj.modifiers[0]["Input_83_use_attribute"] == 0:
+            elif activeobj.modifiers[0]["Input_69"] == True and activeobj.modifiers[0]["Input_83_use_attribute"] == False:
                 apply_paint(self, context, activeobj=activeobj)
 
             
@@ -5672,7 +5672,7 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                         hair.modifiers[0]["Input_83_attribute_name"] = biomename
                         hair.modifiers[0]["Input_69"] = True
 
-                        if hair.modifiers[0]["Input_83_use_attribute"] == 0: hair.modifiers[0]["Input_83_use_attribute"] = 1 
+                        if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] =True 
                         
                         
                         
@@ -5701,8 +5701,8 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
         parent_of_hair=None
         for hair in only_hair_from_selected:
             if hair.modifiers[0]["Input_83_attribute_name"] and hair.modifiers[0]["Input_83_attribute_name"] not in removed_vgroups: removed_vgroups.append(hair.modifiers[0]["Input_83_attribute_name"])
-            hair.modifiers[0]["Input_83_attribute_name"] = None
-            if hair.modifiers[0]["Input_83_use_attribute"] == 1: hair.modifiers[0]["Input_83_use_attribute"] = 0  
+            hair.modifiers[0]["Input_83_attribute_name"] = ""
+            if hair.modifiers[0]["Input_83_use_attribute"] == True: hair.modifiers[0]["Input_83_use_attribute"] = False  
             hair.location = hair.location
             if hair.parent: parent_of_hair=hair.parent
 
@@ -5724,7 +5724,7 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
 
 
     
-    elif activeobj.modifiers[0]["Input_83_use_attribute"]==0:
+    elif activeobj.modifiers[0]["Input_83_use_attribute"]==False:
     
     
     
@@ -5740,7 +5740,7 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
              
             hair.modifiers[0]["Input_83_attribute_name"] = biomename
             hair.modifiers[0]["Input_69"] = True
-            if hair.modifiers[0]["Input_83_use_attribute"] == 0: hair.modifiers[0]["Input_83_use_attribute"] = 1  
+            if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  
             
             
             
@@ -5768,7 +5768,7 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                 
                 hair.modifiers[0]["Input_83_attribute_name"] = biomeofactive
                 hair.modifiers[0]["Input_69"] = True
-                if hair.modifiers[0]["Input_83_use_attribute"] == 0: hair.modifiers[0]["Input_83_use_attribute"] = 1  
+                if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  
                 
                 
                 
@@ -6702,11 +6702,11 @@ def export_to_asset_library_function(self,context,event):
             for hair in cubeOBJ.children:
                 if len(cubeOBJ.children)==1:
                     hair.modifiers[0]["Input_69"] = True
-                    if hair.modifiers[0]["Input_83_use_attribute"] == 1: hair.modifiers[0]["Input_83_use_attribute"] = 0  
+                    if hair.modifiers[0]["Input_83_use_attribute"] == True: hair.modifiers[0]["Input_83_use_attribute"] = False  
                     
                     
                     
-                    hair.modifiers[0]["Input_83_attribute_name"] = None
+                    hair.modifiers[0]["Input_83_attribute_name"] = ""
                     bpy.ops.object.mode_set(mode="OBJECT")
                 
                 if hair not in objselection: objselection.append(hair)
