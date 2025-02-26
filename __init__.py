@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 16),
+    "version": (1, 7, 17),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -217,7 +217,10 @@ class orencurvepanel(bpy.types.Panel):
 
         row = layout.row()
         row.scale_y = 3  
-        row.operator("secret.paint", icon= 'BRUSH_DATA', text= "Paint") 
+        if bpy.context.mode == 'SCULPT_CURVES': 
+            row.alert = True
+            row.operator("secret.brush_density_while_painting", icon= 'LIGHTPROBE_VOLUME', text= "Change Density (D)") 
+        else: row.operator("secret.paint", icon= 'BRUSH_DATA', text= "Paint") 
         
         row = layout.row()
         
@@ -654,6 +657,7 @@ class subpanelutils(bpy.types.Panel):
         
         row = layout.row()
         
+        row.operator("secret.brush_density_while_painting", icon="CURVE_BEZCIRCLE")
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
         row = layout.row()
@@ -2334,6 +2338,77 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
 
 
 
+def brush_density_while_painting_f(context):   
+    def check_modal_finishedd():  
+
+        if activeobj != bpy.context.active_object or bpy.context.mode != 'SCULPT_CURVES' or context.tool_settings.curves_sculpt.brush.curves_sculpt_tool != 'DENSITY':  
+            pass #print"stoppp")
+            return None  
+        else:
+            try: activeobj.modifiers[0]["Socket_11"] = context.tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance
+            except:  
+                pass #print"failed")
+                return None  
+        return 0  
+
+    activeobj = bpy.context.active_object
+    bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")  
+    bpy.ops.sculpt_curves.min_distance_edit('INVOKE_DEFAULT')  
+    bpy.app.timers.register(check_modal_finishedd)  
+
+    return{'FINISHED'}
+class brush_density_while_painting(bpy.types.Operator):
+    """While hovering with the mouse on the terrain, press the shortcut to change the brush density. The Addon will remember the density you chose for each system independently"""
+    bl_idname = "secret.brush_density_while_painting"
+    bl_label = "Change Brush Density"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        
+
+        bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")  
+        bpy.ops.sculpt_curves.min_distance_edit('INVOKE_DEFAULT')  
+        context.window_manager.modal_handler_add(self)  
+        self._cancel = False  
+        return {'RUNNING_MODAL'}  
+
+    def modal(self, context, event):
+        if self._cancel:
+            pass #print"FINN")
+            return {'CANCELLED'}  
+        if event.type in {'LEFTMOUSE', 'RIGHTMOUSE',"ESC"}:  
+            try: bpy.context.active_object.modifiers[0]["Socket_11"] = context.tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance  
+            except: pass #print"obj has no secret paint modifier")
+            bpy.app.timers.register(lambda: setattr(self, '_cancel', True), first_interval=0.001)  
+        return {'PASS_THROUGH'}  
+
+
+
+
+    
+    
+    
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def context3sculptbrush(context,**kwargs):
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
@@ -2455,7 +2530,8 @@ def context3sculptbrush(context,**kwargs):
 
         
         for bb in brush_density:
-            if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: bb.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     
+            
+            if bpy.context.object.modifiers[0]: bb.curves_sculpt_settings.minimum_distance = bpy.context.object.modifiers[0]["Socket_11"]
             else: bb.curves_sculpt_settings.minimum_distance = 0.1
             if bpy.app.version_string >= "4.2.0":
                 bb.curves_sculpt_settings.use_length_interpolate = True
@@ -3836,6 +3912,7 @@ def secretpaint_function(self,*args,**kwargs):
 
                                 
                                 hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
+                                hairCurves.modifiers[0]["Socket_11"] = hair.modifiers[0]["Socket_11"]  
                                 hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
                                 hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
                                 hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  
@@ -4153,6 +4230,13 @@ def secretpaint_function(self,*args,**kwargs):
     elif ActiveMode in ["SCULPT_CURVES", "WEIGHT_PAINT", "EDIT"]:
         
         secretpaint_update_modifier_f(context,upadte_provenance="SWICTH WHICH HAIR SYSTEM TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE")  
+
+        
+        
+        
+        
+        
+
         found_to_paint = []
         paint_type = []
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -11955,90 +12039,6 @@ class assembly(bpy.types.Operator):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
@@ -12262,6 +12262,7 @@ classes = [
     curveseparate,
     biome_delete,
     assembly,
+    brush_density_while_painting,
 
 
     ]
@@ -12360,6 +12361,12 @@ def register():
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
 
+    km = kc.get("Sculpt Curves")
+    if not km:
+        km = kc.new("Sculpt Curves")
+    kmi = km.keymap_items.new("secret.brush_density_while_painting", "D", "PRESS")
+    addon_keymaps.append((km, kmi))
+
     km = kc.get("Weight Paint")
     if not km:
         km = kc.new("Weight Paint")
@@ -12402,12 +12409,13 @@ def register():
     km = kc.get("Curve")
     if not km:
         km = kc.new("Curve")
-    kmi = km.keymap_items.new("secret.curveseparate", "Q", "PRESS", alt=True)
+    kmi = km.keymap_items.new("secret.curveseparate", "Q", "PRESS", ctrl=True)
     addon_keymaps.append((km, kmi))
+
     km = kc.get("Sculpt Curves")
     if not km:
         km = kc.new("Sculpt Curves")
-    kmi = km.keymap_items.new("secret.curveseparate", "Q", "PRESS", alt=True)
+    kmi = km.keymap_items.new("secret.curveseparate", "Q", "PRESS", ctrl=True)
     addon_keymaps.append((km, kmi))
 
 
