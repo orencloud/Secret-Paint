@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 14),
+    "version": (1, 7, 15),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -898,6 +898,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                     
                     
                     if modif.type == 'NODES' and modif.node_group:
+                        
                         if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode  
 
 
@@ -927,8 +928,8 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
             
 
 
-        
 
+        
         
         for nod in nodes_to_switch[:]:
             
@@ -6886,6 +6887,7 @@ def export_to_asset_library_function(self,context,event):
     move_objects_script_content = f'''
 import bpy
 import os
+import re
 
 
 
@@ -6952,6 +6954,8 @@ for node_tree in bpy.data.node_groups:
         if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
 
 
+
+
 all_previous_nodes = set(bpy.data.node_groups)
 if blender_version < "4.1": file_path= addon_path + "/Secret Paint 4.0 and older.blend"
 elif blender_version < "4.2.0": file_path= addon_path + "/Secret Paint 4.1.blend"
@@ -6962,16 +6966,21 @@ object_name = "Secret Paint"
 
 
 try: bpy.ops.wm.append(filepath=os.path.join(file_path, inner_path, object_name),directory=os.path.join(file_path, inner_path),filename=object_name)
-except:pass #print"SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
+except:pass #print"[[[[[[[[[[[[ SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
 
 for lib in bpy.data.libraries: 
-    if lib.name == "Secret Paint.blend": bpy.data.libraries.remove(lib, do_unlink=True)
+    
+    if lib.name in ["Secret Paint.blend","Secret Paint 4.0 and older.blend","Secret Paint 4.1.blend","Secret Paint 4.2.0.blend"]: bpy.data.libraries.remove(lib, do_unlink=True)
+
 
 
 for nod in bpy.data.node_groups:
-    if nod not in all_previous_nodes and nod.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", nod.name) and ".001" <= nod.name[-4:] <= ".999":
+    if nod not in all_previous_nodes and nod.name.startswith("Secret Paint"):
         orenpaintNode= nod
         break
+
+
+
 
 
 for obj in bpy.data.objects:
@@ -6980,9 +6989,12 @@ for obj in bpy.data.objects:
         for modif in obj.modifiers:
             
             
+            if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode  
             
-            if modif.type == 'NODES' and modif.node_group:
-                if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode  
+            
+            
+
+
 
 
 
@@ -8798,18 +8810,6 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
