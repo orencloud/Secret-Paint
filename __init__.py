@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 18),
+    "version": (1, 7, 19),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -657,7 +657,6 @@ class subpanelutils(bpy.types.Panel):
         
         row = layout.row()
         
-        row.operator("secret.brush_density_while_painting", icon="CURVE_BEZCIRCLE")
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
         row = layout.row()
@@ -2358,7 +2357,7 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
 
 
 class brush_density_while_painting(bpy.types.Operator):
-    """While hovering with the mouse on the terrain, press the shortcut to change the brush density. The Addon will remember the density you chose for each system independently"""
+    """While hovering with the mouse on the terrain, press the shortcut (D) to change the brush density. The Addon will remember the density you chose for each system independently"""
     bl_idname = "secret.brush_density_while_painting"
     bl_label = "Change Brush Density"
     bl_options = {'REGISTER', 'UNDO'}
@@ -8894,6 +8893,7 @@ class assembly(bpy.types.Operator):
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
+
 
 
 
