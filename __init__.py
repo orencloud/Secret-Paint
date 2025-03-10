@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 19),
+    "version": (1, 7, 20),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -667,6 +667,7 @@ class subpanelutils(bpy.types.Panel):
         row = layout.row()
         row.scale_y = 1  
         row.operator("secret.group", icon= 'COLLECTION_NEW')
+        row.operator("secret.export_unreal", icon= 'EXPORT')
         row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
         row = layout.row()
         row = layout.row()
@@ -8895,140 +8896,139 @@ class assembly(bpy.types.Operator):
         return {'FINISHED'}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def export_unreal_f(self,context,export_textures):
+    new_objects_to_delete =[]
+    
+    
+    
+    
+
+    blend_file_path = bpy.data.filepath
+    directory = os.path.dirname(blend_file_path)
+    subfolder = os.path.join(directory, 'UE5 Export')
+    if not os.path.exists(subfolder):
+        os.makedirs(subfolder)
+
+    
+    
+
+    activeobj = bpy.context.active_object  
+    objselection = bpy.context.selected_objects  
+
+
+    all_previous_objects = set(bpy.context.scene.objects)
+
+
+
+
+    for ob in objselection:
+        for x in bpy.context.selected_objects: x.select_set(False)
+
+        
+        all_children = []
+        get_all_children(activeobj, all_children, context)
+        for child in all_children:
+            if child.type in ["MESH","CURVE"]: child.select_set(True)
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+
+        Main_Parent = bpy.data.objects.new("Main Parent", None)
+        
+        Main_Parent.location = ob.location  
+        context.collection.objects.link(Main_Parent)
+
+        bpy.ops.object.duplicates_make_real()
+
+        new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
+
+        
+        secret_paint_and_assemblies_to_delete =[]
+        for objj in new_obs[:]:
+            for modif in objj.modifiers:
+                if modif.type == "NODES" and modif.node_group and "ASSEMBLY" in modif.node_group.name\
+                or objj.type == "CURVE" and modif.type=="NODES" and modif.node_group and modif.node_group.name.startswith("Secret Paint")\
+                or objj.type == "CURVE" and modif.type=="NODES" and modif.node_group and modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999":
+                    secret_paint_and_assemblies_to_delete.append(objj)
+                    new_obs.remove(objj)
+
+            if objj!=Main_Parent:
+                objj.parent = Main_Parent
+                objj.matrix_parent_inverse = Main_Parent.matrix_world.inverted()
+
+        saved_parent= ob.parent
+        ob.parent = Main_Parent
+        ob.matrix_parent_inverse = Main_Parent.matrix_world.inverted()
+
+
+        for obk in secret_paint_and_assemblies_to_delete: bpy.data.objects.remove(obk, do_unlink=True)
+
+        
+        
+        for x in bpy.context.selected_objects: x.select_set(False)
+        loop = 1
+        for obkk in all_children:
+            
+            if obkk.type in ["MESH","CURVE"]:
+                obkk.select_set(True)
+                if loop == 1: bpy.context.view_layer.objects.active = obkk
+                for mat_slot in obkk.material_slots: mat_slot.link = "DATA"
+            loop=+1
+        loop = 1
+        for obkk in new_obs:
+            
+            if obkk.type in ["MESH","CURVE"]:
+                obkk.select_set(True)
+                if loop == 1: bpy.context.view_layer.objects.active = obkk
+                for mat_slot in obkk.material_slots: mat_slot.link = "DATA"
+            loop=+1
+
+        
+
+
+        
+        Main_Parent.location = (0,0,0)
+        
+
+        bpy.context.view_layer.objects.active = Main_Parent
+        Main_Parent.select_set(True)
+        ob.select_set(True)
+        
+
+        bpy.ops.export_scene.fbx(filepath=subfolder + "\\" + ob.name + ".fbx", check_existing=True, filter_glob='*.fbx', use_selection=True, use_visible=False, use_active_collection=False, collection='',
+        global_scale=1.0,
+        apply_unit_scale=True,
+        apply_scale_options='FBX_SCALE_NONE',
+        use_space_transform=True,
+        bake_space_transform=True,
+        object_types={'ARMATURE', 'CAMERA', 'EMPTY', 'LIGHT', 'MESH', 'OTHER'},
+        use_mesh_modifiers=False,
+        use_mesh_modifiers_render=False,
+        mesh_smooth_type='OFF', colors_type='SRGB', prioritize_active_color=False, use_subsurf=False, use_mesh_edges=False, use_tspace=False, use_triangles=False, use_custom_props=False, add_leaf_bones=False,
+        primary_bone_axis='Y',
+        secondary_bone_axis='X', use_armature_deform_only=False, armature_nodetype='NULL',
+        bake_anim=False, bake_anim_use_all_bones=True, bake_anim_use_nla_strips=True, bake_anim_use_all_actions=True, bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=1.0, path_mode='AUTO', embed_textures=False, batch_mode='OFF', use_batch_own_dir=True, use_metadata=True,
+        axis_forward='Y',
+        axis_up='Z')
+
+
+        
+        if saved_parent:
+            ob.parent = saved_parent
+            ob.matrix_parent_inverse = saved_parent.matrix_world.inverted()
+        for ob in new_obs: bpy.data.objects.remove(ob, do_unlink=True)
+        for x in objselection: x.select_set(True)
+        if activeobj: bpy.context.view_layer.objects.active = activeobj
+        self.report({'INFO'}, "Exported selected Assemblies to FBX next to this .blend file")
+    return {'FINISHED'}
+class export_unreal(bpy.types.Operator):
+    """Export selected as FBX. Works with Assemblies, Paint Systems or regular meshes. In UE5: File > Import Into Level. Ideally the assembly should only contain normal meshes, secret paint curves or other nested assemblies"""
+    bl_idname = "secret.export_unreal"
+    bl_label = "UE5 Export"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        export_textures = True
+        export_unreal_f(self,context,export_textures)
+        return {'FINISHED'}
 
 
 
@@ -12263,6 +12263,7 @@ classes = [
     biome_delete,
     assembly,
     brush_density_while_painting,
+    export_unreal,
 
 
     ]
