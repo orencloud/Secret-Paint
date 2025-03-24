@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 21),
+    "version": (1, 7, 22),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -796,7 +796,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
     upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
 
-    current_node_version = 28 
+    current_node_version = 29 
     pass #print"######################### secretpaint_update_modifier_f 
     
     activeobj = bpy.context.active_object
