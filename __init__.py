@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 22),
+    "version": (1, 7, 23),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -640,7 +640,7 @@ class orencurvepanel(bpy.types.Panel):
             
 
 class subpanelutils(bpy.types.Panel):
-    bl_label = "Utilities"
+    bl_label = "Extra"
     bl_idname = "OREN_PT_subpanelutils"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -3832,6 +3832,7 @@ def secretpaint_function(self,*args,**kwargs):
 
 
         for mesh in all_meshes_to_scatter_onto:
+            newlycreated_hair_for_currentlyprocessing_mesh = []
 
             Coll_of_TaragetMesh = []
             for i in mesh.users_collection:
@@ -3895,6 +3896,7 @@ def secretpaint_function(self,*args,**kwargs):
                             
                                 hairCurves = secretpaint_create_curve(self,context, targetOBJ=mesh, brushOBJ=hair, targetCollection=Coll_of_TaragetMesh, transfer_modifier=True)
                                 newlycreated_hair.append(hairCurves)
+                                newlycreated_hair_for_currentlyprocessing_mesh.append(hairCurves)
                                 
                                 
 
@@ -3942,7 +3944,10 @@ def secretpaint_function(self,*args,**kwargs):
                                     hairCurves.modifiers[0]["Input_83_use_attribute"] = False
                                 else:
                                     hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  
-                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  
+                                    
+                                    if hair.modifiers[0]["Input_83_use_attribute"] == 1 or hair.modifiers[0]["Input_83_use_attribute"] == True: new_attribute_status_convert_int_to_boolean = True
+                                    elif hair.modifiers[0]["Input_83_use_attribute"] == 0 or hair.modifiers[0]["Input_83_use_attribute"] == False: new_attribute_status_convert_int_to_boolean = False
+                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = new_attribute_status_convert_int_to_boolean 
 
                                 
                                 if hairCurves.modifiers[0]["Input_98"] \
@@ -3999,7 +4004,8 @@ def secretpaint_function(self,*args,**kwargs):
             elif hair_thatNeedA_mask: NoMasksDetected = False  
             else: NoMasksDetected=True
             paint_the_vertex=False 
-            vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair, activeobj=newlycreated_hair[0], paint_the_vertex=paint_the_vertex)
+            
+            vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
             
             if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
 
@@ -4307,6 +4313,12 @@ def secretpaint_function(self,*args,**kwargs):
 
                                     
                                     if len(siblings_with_same_weight_paint) <= 1:
+                                        
+                                        
+                                        
+
+                                        
+                                        
                                         
                                         
                                         
@@ -5525,130 +5537,131 @@ def context283482(context,**kwargs):
     objs = bpy.context.selected_objects
 
 
-    for window in context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
-            if area.type == 'VIEW_3D':
-                with context.temp_override(window=window, area=area):
 
-                    
-                    if Importing_Into_Active:
-                        objs.remove(activeobj) 
-                        activeobj.select_set(False)
+    
+    
+    
+    
+    
 
-
-                    
-                    
-                    
-                    
-
-                    
-                    
-                    
+    
+    if Importing_Into_Active:
+        objs.remove(activeobj) 
+        activeobj.select_set(False)
 
 
-                    
-                    orengroupfirst = bpy.context.active_object
-                    orengroupfirstName = orengroupfirst.name
+    
+    
+    
+    
 
-                    
-                    
-
-                    
-                    C = bpy.context
-                    active_coll = C.view_layer.active_layer_collection.collection
-
-                    
-                    
-                    
-                    
-                    
-                    
-
-                    if Importing_Into_Active == False:
-                        coll_target = bpy.data.collections.new(orengroupfirstName) 
-                        active_coll.children.link(coll_target) 
-
-                        
-                        
-
-                        
-                        
-                        
+    
+    
+    
 
 
-                    
-                    if coll_target and objs:
+    
+    orengroupfirst = bpy.context.active_object
+    orengroupfirstName = orengroupfirst.name
 
-                        
-                        
-                        
-                        
+    
+    
 
-                        for ob in objs:
-                            for coll in ob.users_collection:
-                                coll.objects.unlink(ob) 
-                            coll_target.objects.link(ob) 
-                            ob.select_set(True)
+    
+    C = bpy.context
+    active_coll = C.view_layer.active_layer_collection.collection
 
+    
+    
+    
+    
+    
+    
 
+    if Importing_Into_Active == False:
+        coll_target = bpy.data.collections.new(orengroupfirstName) 
+        active_coll.children.link(coll_target) 
 
+        
+        
 
-
-
-
-                    
-                    
-
-                    
-                    
-                    
-                    
-                    
-
-
+        
+        
+        
 
 
-                    
-                    
+    
+    if coll_target and objs:
 
+        
+        
+        
+        
 
-                    
-                    
-                    
+        for ob in objs:
+            for coll in ob.users_collection:
+                coll.objects.unlink(ob) 
+            coll_target.objects.link(ob) 
+            ob.select_set(True)
 
 
 
 
 
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
 
-                break
+
+    
+    
+
+    
+    
+    
+    
+    
+
+
+
+
+    
+    
+
+
+    
+    
+    
+
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
 
     return {"FINISHED"}
 class orengroup(bpy.types.Operator):
@@ -9092,19 +9105,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
