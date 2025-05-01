@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 23),
+    "version": (1, 7, 24),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3137,10 +3137,12 @@ def secretpaint_create_curve(self,context,**kwargs):
                 if (attr.startswith("_") or attr in ["bl_rna"]): continue
                 if (mod.is_property_readonly(attr)): continue
                 setattr(mod_copy, attr, getattr(mod, attr))
-            try:
+            
                 for key, value in mod.items():
-                    mod_copy[key] = value
-            except: pass
+                    try:
+                        mod_copy[key] = value
+                    except: pass #print"failllllllllll", value)
+            
     hairCurves.modifiers[0]["Input_99"] = True    
     hairCurves.modifiers[0]["Input_71"] = float(random.choice(range(0, 10)))  
     hairCurves.modifiers[0]["Input_73"] = targetOBJsurface 
@@ -3915,26 +3917,26 @@ def secretpaint_function(self,*args,**kwargs):
                                 
                                 hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  
                                 hairCurves.modifiers[0]["Socket_11"] = hair.modifiers[0]["Socket_11"]  
-                                hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
-                                hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
-                                hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  
-                                hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  
-                                hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  
-
-                                hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  
-                                hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  
-                                hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  
                                 hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  
-                                hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  
-
-                                hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  
-                                hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  
-                                hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  
-                                hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  
-                                hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  
-                                hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  
-                                hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  
-                                hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
 
                                 hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  
                                 if len(all_bgroups_starter) >= 2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
@@ -9105,8 +9107,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
 
 
 
