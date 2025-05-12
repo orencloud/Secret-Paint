@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 24),
+    "version": (1, 7, 25),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3237,8 +3237,8 @@ def secretpaint_function(self,*args,**kwargs):
                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modifier.node_group.name) and ".001" <= modifier.node_group.name[-4:] <= ".999" : 
                     if oobjj not in objs_with_orencurve: objs_with_orencurve.append(oobjj)
                     if oobjj != activeobj and oobjj not in selobjs_without_active_with_orencurve: selobjs_without_active_with_orencurve.append(oobjj)
-                    if oobjj.type == "CURVES" and oobjj.data.surface and oobjj.data.surface not in all_found_parents: all_found_parents.append(oobjj.data.surface)
-                    if oobjj != activeobj and oobjj.type == "CURVES" and oobjj.data.surface and oobjj.data.surface not in all_found_parents_without_activeobj: all_found_parents_without_activeobj.append(oobjj.data.surface)
+                    if oobjj.type == "CURVES" and oobjj.parent and oobjj.parent not in all_found_parents: all_found_parents.append(oobjj.parent) 
+                    if oobjj != activeobj and oobjj.type == "CURVES" and oobjj.parent and oobjj.parent not in all_found_parents_without_activeobj: all_found_parents_without_activeobj.append(oobjj.parent)
                     if modifier["Input_83_attribute_name"]:
                         all_hair_with_Vgroup.append(oobjj)
                         if modifier["Input_83_attribute_name"] not in all_Vgroups: all_Vgroups.append(modifier["Input_83_attribute_name"])
@@ -3835,7 +3835,6 @@ def secretpaint_function(self,*args,**kwargs):
 
         for mesh in all_meshes_to_scatter_onto:
             newlycreated_hair_for_currentlyprocessing_mesh = []
-
             Coll_of_TaragetMesh = []
             for i in mesh.users_collection:
                 Coll_of_TaragetMesh = recurLayerCollection(bpy.context.view_layer.layer_collection, i.name)
@@ -3866,6 +3865,7 @@ def secretpaint_function(self,*args,**kwargs):
 
 
             for parentt in all_found_parents:
+                pass #print"111111111111111111111111111111111111", parentt)
 
 
 
@@ -3889,6 +3889,7 @@ def secretpaint_function(self,*args,**kwargs):
 
 
                 for hair in parentt.children:
+                    pass #print"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", hair)
                     if hair in selobjs_without_active_with_orencurve:
                         for modifier in hair.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
@@ -4006,6 +4007,8 @@ def secretpaint_function(self,*args,**kwargs):
             elif hair_thatNeedA_mask: NoMasksDetected = False  
             else: NoMasksDetected=True
             paint_the_vertex=False 
+            
+            
             
             vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
             
@@ -9107,9 +9110,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
 
 
 
