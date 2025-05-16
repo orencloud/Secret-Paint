@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 25),
+    "version": (1, 7, 26),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3816,7 +3816,7 @@ def secretpaint_function(self,*args,**kwargs):
 
 
 
-    
+
     
     elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(selobjs_without_active_with_orencurve)>=1:
     
@@ -3829,10 +3829,11 @@ def secretpaint_function(self,*args,**kwargs):
 
 
 
-        if activeobj.type == "CURVES" or len(all_meshes)==1: all_meshes_to_scatter_onto = [activeobj] 
+        if activeobj.type == "CURVES": all_meshes_to_scatter_onto = [activeobj.parent]     
+        elif len(all_meshes)==1:all_meshes_to_scatter_onto = [activeobj]                   
         else: all_meshes_to_scatter_onto = all_meshes_that_are_not_parents
 
-
+        pass #print"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",all_meshes_to_scatter_onto)
         for mesh in all_meshes_to_scatter_onto:
             newlycreated_hair_for_currentlyprocessing_mesh = []
             Coll_of_TaragetMesh = []
@@ -3865,7 +3866,6 @@ def secretpaint_function(self,*args,**kwargs):
 
 
             for parentt in all_found_parents:
-                pass #print"111111111111111111111111111111111111", parentt)
 
 
 
@@ -3889,7 +3889,6 @@ def secretpaint_function(self,*args,**kwargs):
 
 
                 for hair in parentt.children:
-                    pass #print"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", hair)
                     if hair in selobjs_without_active_with_orencurve:
                         for modifier in hair.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
@@ -4007,8 +4006,6 @@ def secretpaint_function(self,*args,**kwargs):
             elif hair_thatNeedA_mask: NoMasksDetected = False  
             else: NoMasksDetected=True
             paint_the_vertex=False 
-            
-            
             
             vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
             
@@ -9110,6 +9107,9 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
+
+
+
 
 
 
