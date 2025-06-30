@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 26),
+    "version": (1, 7, 27),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -7615,6 +7615,7 @@ def paint_from_library_function(self, context, event, **kwargs):
 
             
 
+            
 
             
             for top_level_collection in bpy.context.scene.collection.children[:]:
@@ -7649,6 +7650,16 @@ def paint_from_library_function(self, context, event, **kwargs):
             
             
 
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
             
 
             
@@ -7660,17 +7671,23 @@ def paint_from_library_function(self, context, event, **kwargs):
                 ob.make_local()  
 
                 
-                if ob.name not in bpy.context.view_layer.objects:
-                    pass #print"# Not in View layer", ob.name)
-                    new_obs.remove(ob)
-                    bpy.data.objects.remove(ob,do_unlink=True)
-                    continue
+                
+                
+                
+                
+                
 
-                if ob.type in ["CURVES", "CURVE", "LIGHT"]: ob.data.make_local()  
+                if ob.type == "LIGHT": ob.data.make_local()
+                elif ob.type in ["CURVES", "CURVE"]:
+                    for modif in ob.modifiers:
+                        if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" \
+                                or modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999":
+                                    ob.data.make_local()  
 
 
 
                 
+                pass #print"@@@@@@@@@@@@@@@@@@@@@@@",ob)
                 for mat_slot in ob.material_slots:
                     if mat_slot.material:
                         mat = mat_slot.material
@@ -7686,6 +7703,16 @@ def paint_from_library_function(self, context, event, **kwargs):
                         
                         if mat not in all_materials and mat != None: all_materials.append(mat)
             for matery in all_materials: matery.make_local()  
+
+
+            
+            pass #print"--------@@@@@@@@@@@@@@@@@@@@@@@@@----------", [x.name for x in new_obs])
+            for ob in new_obs:
+                if ob.name not in bpy.context.view_layer.objects:
+                    pass #print"# Not in View layer", ob.name)
+                    new_obs.remove(ob)
+                    bpy.data.objects.remove(ob,do_unlink=True)
+
 
 
             
@@ -7884,7 +7911,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                     if obj.modifiers:
                         for modif in obj.modifiers:
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                                if obj.parent not in terrains_with_hair: terrains_with_hair.append(obj.parent)  
+                                if obj.parent and obj.parent not in terrains_with_hair: terrains_with_hair.append(obj.parent)  
 
             
             if len(terrains_with_hair) >=1:
@@ -8652,10 +8679,14 @@ def assembly_1(self,context,**kwargs):
         bpy.ops.transform.translate('INVOKE_DEFAULT', use_proportional_edit=False)
     elif main_loops >=3:
         self.report({'INFO'}, "Updated Interdependent Assemblies")
-        for ob in final_assemblies_to_process: ob.select_set(True)
+        for ob in final_assemblies_to_process:
+            try:ob.select_set(True)
+            except:pass
     else:
         self.report({'INFO'}, "Updated Existing Assembly")
-        for ob in final_assemblies_to_process: ob.select_set(True)
+        for ob in final_assemblies_to_process:
+            try:ob.select_set(True)
+            except:pass
 
     end_time = time.perf_counter()
     pass #print"Milliseconds 1111 (Ping):",(end_time - start_time) * 1000)
@@ -9107,37 +9138,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
