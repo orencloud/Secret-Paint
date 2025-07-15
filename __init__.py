@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 27),
+    "version": (1, 7, 28),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -6278,7 +6278,6 @@ def realize_instances_f(self,context):
         bpy.context.view_layer.objects.active = obj
 
         if obj.type in ["CURVES","CURVE"] and obj.modifiers:
-
             
             hide_original_paint_system = True
             if bpy.context.object.mode != "OBJECT" and obj.type == "CURVES":
@@ -6383,6 +6382,11 @@ def realize_instances_f(self,context):
                     obj.modifiers[0].show_render = False
                     obj.location = obj.location  
 
+        if obj.type == "MESH" and obj.modifiers and obj.modifiers[0].type == "NODES" and obj.modifiers[0].node_group and "ASSEMBLY" in obj.modifiers[0].node_group.name and obj.modifiers[0].show_viewport == True:
+            bpy.data.objects.remove(obj, do_unlink=True)
+            objselection.remove(obj)
+            continue
+
 
         
         for modif in all_assemblies_modifiers: modif.show_viewport = True
@@ -6415,17 +6419,21 @@ def realize_instances_f(self,context):
                 if not ob.instance_collection: objs_to_delete_afterwards.append(ob)  
             elif ob.type != "EMPTY" and ob.data and ob.data in all_data and ob not in objs_to_delete_afterwards:
                 objs_to_delete_afterwards.append(ob)
+
             if obj.type == "CURVE":
                 
                 
                 ob.parent = obj
                 ob.matrix_parent_inverse = obj.matrix_world.inverted()  
             elif obj.type == "CURVES":
-                ob.parent = obj.parent  
-                ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
+                if obj.parent:
+                    ob.parent = obj.parent  
+                    ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
             else:
-                ob.parent = obj.parent  
-                ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
+                if obj.parent:
+                    ob.parent = obj.parent  
+                    ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  
+
 
 
 
@@ -9138,14 +9146,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
 
 
 
