@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 28),
+    "version": (1, 7, 30),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2387,7 +2387,7 @@ class brush_density_while_painting(bpy.types.Operator):
     
     
     
-        
+
 
 
 
@@ -2485,44 +2485,80 @@ def context3sculptbrush(context,**kwargs):
         brush_puff = []
         brush_comb = []
         for brush in bpy.data.brushes:
-            if brush.curves_sculpt_tool == 'DENSITY': brush_density.append(brush)
-            elif brush.curves_sculpt_tool == 'GROW_SHRINK': brush_grow.append(brush)
-            elif brush.curves_sculpt_tool == 'ADD': brush_add.append(brush)
-            elif brush.curves_sculpt_tool == 'DELETE': brush_delete.append(brush)
-            elif brush.curves_sculpt_tool == 'PUFF': brush_puff.append(brush)
-            elif brush.curves_sculpt_tool == 'COMB': brush_comb.append(brush)
-
-
+            if bpy.app.version_string >= "5.0.0":
+                if brush.curves_sculpt_brush_type == 'DENSITY':
+                    brush_density.append(brush)
+                elif brush.curves_sculpt_brush_type == 'GROW_SHRINK':
+                    brush_grow.append(brush)
+                elif brush.curves_sculpt_brush_type == 'ADD':
+                    brush_add.append(brush)
+                elif brush.curves_sculpt_brush_type == 'DELETE':
+                    brush_delete.append(brush)
+                elif brush.curves_sculpt_brush_type == 'PUFF':
+                    brush_puff.append(brush)
+                elif brush.curves_sculpt_brush_type == 'COMB':
+                    brush_comb.append(brush)
+            elif bpy.app.version_string < "5.0.0":
+                if brush.curves_sculpt_tool  == 'DENSITY':
+                    brush_density.append(brush)
+                elif brush.curves_sculpt_tool == 'GROW_SHRINK':
+                    brush_grow.append(brush)
+                elif brush.curves_sculpt_tool == 'ADD':
+                    brush_add.append(brush)
+                elif brush.curves_sculpt_tool == 'DELETE':
+                    brush_delete.append(brush)
+                elif brush.curves_sculpt_tool == 'PUFF':
+                    brush_puff.append(brush)
+                elif brush.curves_sculpt_tool == 'COMB':
+                    brush_comb.append(brush)
 
         if not brush_density:
             new_brush_density = bpy.data.brushes.new('Density Curvesss',mode="SCULPT_CURVES")
-            new_brush_density.curves_sculpt_tool = 'DENSITY'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_density.curves_sculpt_brush_type = 'DENSITY'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_density.curves_sculpt_tool = 'DENSITY'
             new_brush_density.size = 150
             brush_density.append(new_brush_density)
             
         if not brush_grow:
             new_brush_grow = bpy.data.brushes.new('Grow /Shrink Curves',mode="SCULPT_CURVES")
-            new_brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_grow.curves_sculpt_brush_type = 'GROW_SHRINK'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
             new_brush_grow.size = 150
             brush_grow.append(new_brush_grow)
         if not brush_add:
             new_brush_add = bpy.data.brushes.new('Add Curves',mode="SCULPT_CURVES")
-            new_brush_add.curves_sculpt_tool = 'ADD'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_add.curves_sculpt_brush_type = 'ADD'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_add.curves_sculpt_tool = 'ADD'
             new_brush_add.size = 150
             brush_add.append(new_brush_add)
         if not brush_delete:
             new_brush_delete = bpy.data.brushes.new('Delete Curves',mode="SCULPT_CURVES")
-            new_brush_delete.curves_sculpt_tool = 'DELETE'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_delete.curves_sculpt_brush_type = 'DELETE'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_delete.curves_sculpt_tool = 'DELETE'
             new_brush_delete.size = 150
             brush_delete.append(new_brush_delete)
         if not brush_puff:
             new_brush_puff = bpy.data.brushes.new('Puff Curves',mode="SCULPT_CURVES")
-            new_brush_puff.curves_sculpt_tool = 'PUFF'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_puff.curves_sculpt_brush_type = 'PUFF'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_puff.curves_sculpt_tool = 'PUFF'
             new_brush_puff.size = 150
             brush_puff.append(new_brush_puff)
         if not brush_comb:
             new_brush_comb = bpy.data.brushes.new('Comb Curves',mode="SCULPT_CURVES")
-            new_brush_comb.curves_sculpt_tool = 'COMB'
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_comb.curves_sculpt_brush_type = 'COMB'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_comb.curves_sculpt_tool = 'COMB'
             new_brush_comb.size = 150
             brush_comb.append(new_brush_comb)
 
@@ -2552,7 +2588,8 @@ def context3sculptbrush(context,**kwargs):
                 bb.curves_sculpt_settings.density_mode = 'AUTO'
                 bb.strength = 1
                 bb.falloff_shape = 'SPHERE'
-                bb.curve_preset = 'SMOOTHER'
+                if bpy.app.version_string >= "5.0.0": bb.curve_distance_falloff_preset = 'SMOOTHER'
+                elif bpy.app.version_string < "5.0.0": bb.curve_preset = 'SMOOTHER'
                 bb.curves_sculpt_settings.density_add_attempts = 200
 
             
@@ -4859,6 +4896,7 @@ def paintbrushswitch_f(self, *args, **kwargs):
     if "objselection" in kwargs:objselection = kwargs.get("objselection")
     else: objselection = bpy.context.selected_objects
     if ORIGINALactiveobj not in objselection: objselection.append(ORIGINALactiveobj)
+    ORIGINALobjselection= objselection
 
     if "current_mode" in kwargs:current_mode = kwargs.get("current_mode")
     else: current_mode = bpy.context.object.mode
@@ -4877,16 +4915,20 @@ def paintbrushswitch_f(self, *args, **kwargs):
     else:
         hair_thatneeds_to_switch = ORIGINALactiveobj
 
-    if len(objselection) == 1 and hair_thatneeds_to_switch.type == "CURVES" or \
-            len(objselection) == 1 and hair_thatneeds_to_switch.type == "CURVE":
-        
+    
+    
+
+    all_selected_are_meshes = True
+    for obj in objselection: 
+        if obj.type != "MESH": all_selected_are_meshes=False
+
+    if len(objselection) == 1 or all_selected_are_meshes:
         bpy.ops.view3d.select(location=(event.mouse_region_x, event.mouse_region_y))
 
         if bpy.context.active_object.type in ["MESH", "CURVES", "CURVE", "EMPTY"] and bpy.context.active_object != hair_thatneeds_to_switch and bpy.context.active_object != hair_thatneeds_to_switch.parent:
             
             hoverobj = bpy.context.active_object
             if hoverobj not in objselection: objselection.append(hoverobj)
-            
             bpy.data.objects[hair_thatneeds_to_switch.name].select_set(True)  
         else:
             for x in bpy.context.selected_objects: x.select_set(False)  
@@ -4906,8 +4948,11 @@ def paintbrushswitch_f(self, *args, **kwargs):
     all_selected_hair = []
     all_selected_non_hair = []
     selected_without_active = []
+    all_selected_are_meshes = True
     if N_Of_Selected:
         for obj in objselection: 
+
+            if obj.type != "MESH": all_selected_are_meshes=False
 
             if obj != hoverobj:
                 randomselectedobj = obj
@@ -4927,6 +4972,44 @@ def paintbrushswitch_f(self, *args, **kwargs):
             if obj.type != "CURVES": all_selected_non_hair.append(obj)
 
     
+    
+    
+    
+
+    if all_selected_are_meshes:
+
+        for ob in selected_without_active:
+            pass #printob)
+            ob.select_set(True)
+            ob.data = hoverobj.data
+
+            for i, mat_slot in enumerate(hoverobj.material_slots):
+                if mat_slot.material:
+                    if ob.material_slots and ob.material_slots[i]:
+                        ob.material_slots[i].link = mat_slot.link
+                        ob.material_slots[i].material = mat_slot.material  
+                    else: ob.data.materials.append(mat_slot.material)
+
+            
+            for m in ob.modifiers:  
+                ob.modifiers.remove(m)  
+            for mod in hoverobj.modifiers:
+                mod_copy = ob.modifiers.new(mod.name, mod.type)
+                for attr in sorted(dir(mod)):
+                    if (attr.startswith("_") or attr in ["bl_rna"]): continue
+                    if (mod.is_property_readonly(attr)): continue
+                    setattr(mod_copy, attr, getattr(mod, attr))
+                try:
+                    for key, value in mod.items():
+                        mod_copy[key] = value
+                except: pass
+
+
+        hoverobj.select_set(False)
+        bpy.context.view_layer.objects.active = ORIGINALactiveobj
+        return{'FINISHED'}
+
+
 
     
     if N_Of_Selected == 2 and randomselectedobj.type == "CURVES" and hoverobj.type != "CURVES" \
@@ -5525,7 +5608,7 @@ class clean_hair_orencurve(bpy.types.Operator):
     def execute(self, context):
         reproject_function(self, context)
         return {'FINISHED'}
-def context283482(context,**kwargs):    
+def context283482(self,context,**kwargs):    
 
 
     if "coll_target" in kwargs:
@@ -5664,6 +5747,7 @@ def context283482(context,**kwargs):
     
 
 
+    self.report({'INFO'}, "Added to collection of active")
 
     return {"FINISHED"}
 class orengroup(bpy.types.Operator):
@@ -5672,7 +5756,7 @@ class orengroup(bpy.types.Operator):
     bl_label = "Collection"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        context283482(context)
+        context283482(self,context)
         return {'FINISHED'}
 def context20398412(layerColl, collName):
     found = None
@@ -8848,7 +8932,7 @@ def assembly_2(self,context,**kwargs):
         node_group.links.new(parent_info_node.outputs[4], SetInstanceTransform.inputs[0])
         node_group.links.new(parent_info_node.outputs[2], CombineTransform.inputs[1])
         node_group.links.new(parent_info_node.outputs[3], CombineTransform.inputs[2])
-        node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
+        if activeobj.type != "ARMATURE": node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
         node_group.links.new(input.outputs[2], parent_info_node.inputs[0])
         node_group.links.new(JoinGeometry.outputs[0], realize_instances_node.inputs[0])
         node_group.links.new(input.outputs[1], realize_instances_node.inputs[2]) 
@@ -8899,7 +8983,7 @@ def assembly_2(self,context,**kwargs):
             node_group.links.new(children_info_node.outputs[3], CombineTransform.inputs[2])
             node_group.links.new(children_info_node.outputs[4], SetInstanceTransform.inputs[0])
             node_group.links.new(CombineTransform.outputs[0], SetInstanceTransform.inputs[2])
-            node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
+            if children.type != "ARMATURE": node_group.links.new(SetInstanceTransform.outputs[0], JoinGeometry.inputs[0])
             node_group.links.new(parent_info_node.outputs[1], VectorMath1.inputs[1])
 
             childloop += 1
@@ -9146,90 +9230,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
