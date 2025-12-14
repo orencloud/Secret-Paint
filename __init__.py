@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 7, 30),
+    "version": (1, 7, 31),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3172,7 +3172,10 @@ def secretpaint_create_curve(self,context,**kwargs):
             mod_copy = hairCurves.modifiers.new(mod.name, mod.type)
             for attr in sorted(dir(mod)):
                 if (attr.startswith("_") or attr in ["bl_rna"]): continue
-                if (mod.is_property_readonly(attr)): continue
+                try:
+                    if (mod.is_property_readonly(attr)): continue
+                except:
+                    continue
                 setattr(mod_copy, attr, getattr(mod, attr))
             
                 for key, value in mod.items():
@@ -4997,7 +5000,10 @@ def paintbrushswitch_f(self, *args, **kwargs):
                 mod_copy = ob.modifiers.new(mod.name, mod.type)
                 for attr in sorted(dir(mod)):
                     if (attr.startswith("_") or attr in ["bl_rna"]): continue
-                    if (mod.is_property_readonly(attr)): continue
+                    try:
+                        if (mod.is_property_readonly(attr)): continue
+                    except:
+                        continue
                     setattr(mod_copy, attr, getattr(mod, attr))
                 try:
                     for key, value in mod.items():
@@ -6530,6 +6536,26 @@ def realize_instances_f(self,context):
             elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
                 
                 objs_to_delete_afterwards.append(ob)
+
+        
+        
+        mesh_instances_seen = {}
+        for ob in new_obs:
+            if ob.type == "MESH" and ob.data and ob not in objs_to_delete_afterwards:
+                
+                
+                
+                
+                loc = tuple(round(v, 2) for v in ob.location)
+                rot = tuple(round(v, 4) for v in ob.rotation_euler)
+                scale = tuple(round(v, 4) for v in ob.scale)
+                instance_key = (ob.data.name, loc, rot, scale)
+
+                if instance_key not in mesh_instances_seen:
+                    mesh_instances_seen[instance_key] = ob
+                else:
+                    
+                    objs_to_delete_afterwards.append(ob)
 
 
 
@@ -9160,62 +9186,62 @@ class assembly(bpy.types.Operator):
 
 def export_unreal_f(self,context,export_textures):
 
-    try:
-        blend_file_path = bpy.data.filepath
-        directory = os.path.dirname(blend_file_path)
-        
-        
-        
+    
+    blend_file_path = bpy.data.filepath
+    directory = os.path.dirname(blend_file_path)
+    
+    
+    
 
-        
-        bpy.ops.wm.usd_export(
-        filepath=directory + "\\" + os.path.basename(blend_file_path) + ".usdc",
-        selected_objects_only=True,
-        visible_objects_only=True,
-        export_animation=False,
-        export_hair=True,
-        export_uvmaps=True,
-        rename_uvmaps=True,
-        export_mesh_colors=True,
-        export_normals=True,
-        export_materials=True,
-        export_subdivision='BEST_MATCH',
-        export_armatures=True,
-        only_deform_bones=True,
-        export_shapekeys=True,
-        use_instancing=True,
-        evaluation_mode='VIEWPORT',
-        generate_preview_surface=True,
-        generate_materialx_network=False,
-        convert_orientation=False,
-        export_global_forward_selection='NEGATIVE_Z',
-        export_global_up_selection='Y',
-        export_textures=False,
-        
-        overwrite_textures=False,
-        relative_paths=True,
-        xform_op_mode='TOS',
-        root_prim_path="/root",
-        export_custom_properties=True,
-        custom_properties_namespace="userProperties",
-        author_blender_name=True,
-        convert_world_material=False,
-        allow_unicode=False,
-        export_meshes=True,
-        export_lights=False,
-        export_cameras=True,
-        export_curves=True,
-        
-        export_volumes=True,
-        triangulate_meshes=False,
-        quad_method='SHORTEST_DIAGONAL',
-        ngon_method='BEAUTY',
-        usdz_downscale_size='KEEP',
-        usdz_downscale_custom_size=128)
+    
+    bpy.ops.wm.usd_export(
+    filepath=directory + "\\" + os.path.basename(blend_file_path) + ".usdc",
+    selected_objects_only=True,
+    export_animation=False,
+    export_hair=True,
+    export_uvmaps=True,
+    rename_uvmaps=True,
+    export_mesh_colors=True,
+    export_normals=True,
+    export_materials=True,
+    export_subdivision='BEST_MATCH',
+    export_armatures=True,
+    only_deform_bones=True,
+    export_shapekeys=True,
+    use_instancing=True,
+    evaluation_mode='VIEWPORT',
+    generate_preview_surface=True,
+    generate_materialx_network=False,
+    convert_orientation=False,
+    export_global_forward_selection='NEGAT'
+    'IVE_Z',
+    export_global_up_selection='Y',
+    
+    
+    
+    relative_paths=True,
+    xform_op_mode='TOS',
+    root_prim_path="/root",
+    export_custom_properties=True,
+    custom_properties_namespace="userProperties",
+    author_blender_name=True,
+    convert_world_material=False,
+    allow_unicode=False,
+    export_meshes=True,
+    export_lights=False,
+    export_cameras=True,
+    export_curves=True,
+    
+    export_volumes=True,
+    triangulate_meshes=False,
+    quad_method='SHORTEST_DIAGONAL',
+    ngon_method='BEAUTY',
+    usdz_downscale_size='KEEP',
+    usdz_downscale_custom_size=128)
 
-    except:
-        self.report({'ERROR'}, "Save this project before exporting. The objects will be exported next to the Blend file")
-        return{'FINISHED'}
+    
+    
+    return{'FINISHED'}
 
     self.report({'INFO'}, "Exported Selected Objects as USD")
 
@@ -9230,32 +9256,6 @@ class export_unreal(bpy.types.Operator):
         export_textures = True
         export_unreal_f(self,context,export_textures)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
