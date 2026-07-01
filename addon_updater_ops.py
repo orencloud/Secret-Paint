@@ -31,7 +31,10 @@ from bpy.app.handlers import persistent
 # Prevents popups for users with invalid python installs e.g. missing libraries
 # and will replace with a fake class instead if it fails (so UI draws work).
 try:
-    from addon_updater import Updater as updater
+    try:
+        from .addon_updater import Updater as updater
+    except Exception:
+        from addon_updater import Updater as updater
 except Exception as e:
     print("ERROR INITIALIZING UPDATER")
     print(str(e))
@@ -121,6 +124,15 @@ def get_user_preferences(context=None):
     return None
 
 
+def online_access_disabled():
+    return hasattr(bpy.app, "online_access") and not bpy.app.online_access
+
+
+def online_access_disabled_message():
+    return ("Blender online access is disabled. Enable Online Access in "
+            "Blender preferences to check for updates.")
+
+
 # -----------------------------------------------------------------------------
 # Updater operators
 # -----------------------------------------------------------------------------
@@ -196,6 +208,10 @@ class AddonUpdaterInstallPopup(bpy.types.Operator):
         if updater.invalid_updater:
             return {'CANCELLED'}
 
+        if online_access_disabled() and not updater.manual_only:
+            self.report({'WARNING'}, online_access_disabled_message())
+            return {'CANCELLED'}
+
         if updater.manual_only:
             bpy.ops.wm.url_open(url=updater.website)
         elif updater.update_ready:
@@ -238,6 +254,10 @@ class AddonUpdaterCheckNow(bpy.types.Operator):
 
     def execute(self, context):
         if updater.invalid_updater:
+            return {'CANCELLED'}
+
+        if online_access_disabled():
+            self.report({'WARNING'}, online_access_disabled_message())
             return {'CANCELLED'}
 
         if updater.async_checking and updater.error is None:
@@ -294,6 +314,10 @@ class AddonUpdaterUpdateNow(bpy.types.Operator):
 
         if updater.manual_only:
             bpy.ops.wm.url_open(url=updater.website)
+            return {'FINISHED'}
+        if online_access_disabled():
+            self.report({'WARNING'}, online_access_disabled_message())
+            return {'CANCELLED'}
         if updater.update_ready:
             # if it fails, offer to open the website instead
             try:
@@ -370,6 +394,8 @@ class AddonUpdaterUpdateTarget(bpy.types.Operator):
     def poll(cls, context):
         if updater.invalid_updater:
             return False
+        if online_access_disabled():
+            return False
         return updater.update_ready is not None and len(updater.tags) > 0
 
     def invoke(self, context, event):
@@ -389,6 +415,9 @@ class AddonUpdaterUpdateTarget(bpy.types.Operator):
     def execute(self, context):
         # In case of error importing updater.
         if updater.invalid_updater:
+            return {'CANCELLED'}
+        if online_access_disabled():
+            self.report({'WARNING'}, online_access_disabled_message())
             return {'CANCELLED'}
 
         res = updater.run_update(
@@ -778,6 +807,8 @@ def check_for_update_background():
     """
     if updater.invalid_updater:
         return
+    if online_access_disabled():
+        return
     global ran_background_check
     if ran_background_check:
         # Global var ensures check only happens once.
@@ -806,6 +837,9 @@ def check_for_update_background():
 def check_for_update_nonthreaded(self, context):
     """Can be placed in front of other operators to launch when pressed"""
     if updater.invalid_updater:
+        return
+    if online_access_disabled():
+        self.report({'WARNING'}, online_access_disabled_message())
         return
 
     # Only check if it's ready, ie after the time interval specified should
@@ -965,6 +999,7 @@ def update_settings_ui(self, context, element=None):
     # auto-update settings
     box.label(text="Updater Settings")
     row = box.row()
+    online_disabled = online_access_disabled()
 
     # special case to tell user to restart blender, if set that way
     if not updater.auto_reload_post_update:
@@ -978,10 +1013,11 @@ def update_settings_ui(self, context, element=None):
 
     split = layout_split(row, factor=0.4)
     sub_col = split.column()
+    sub_col.enabled = not online_disabled
     sub_col.prop(settings, "auto_check_update")
     sub_col = split.column()
 
-    if not settings.auto_check_update:
+    if online_disabled or not settings.auto_check_update:
         sub_col.enabled = False
     sub_row = sub_col.row()
     sub_row.label(text="Interval between checks")
@@ -996,6 +1032,26 @@ def update_settings_ui(self, context, element=None):
     # check_col.prop(settings,"updater_interval_hours")
     # check_col = sub_row.column(align=True)
     # check_col.prop(settings,"updater_interval_minutes")
+
+    if online_disabled:
+        row = box.row()
+        row.alert = True
+        row.label(text=online_access_disabled_message(), icon='ERROR')
+        row = box.row()
+        row.scale_y = 2
+        row.operator(AddonUpdaterCheckNow.bl_idname)
+        if updater.website:
+            row = box.row()
+            row.operator("wm.url_open", text="Open Secret Paint website").url = updater.website
+        row = box.row()
+        row.scale_y = 0.7
+        last_check = updater.json["last_check"]
+        if last_check:
+            last_check = last_check[0: last_check.index(".")]
+            row.label(text="Last update check: " + last_check)
+        else:
+            row.label(text="Last update check: Never")
+        return
 
     # Checking / managing updates.
     row = box.row()
@@ -1128,6 +1184,16 @@ def update_settings_ui_condensed(self, context, element=None):
     settings = get_user_preferences(context)
     if not settings:
         row.label(text="Error getting updater preferences", icon='ERROR')
+        return
+    if online_access_disabled():
+        row.alert = True
+        row.label(text=online_access_disabled_message(), icon='ERROR')
+        row = element.row()
+        row.scale_y = 2
+        row.operator(AddonUpdaterCheckNow.bl_idname)
+        row = element.row()
+        row.enabled = False
+        row.prop(settings, "auto_check_update")
         return
 
     # Special case to tell user to restart blender, if set that way.

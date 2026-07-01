@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 
 
 id = "secret_paint"
-version = "1.7.31"
+version = "1.9.10"
 name = "Secret Paint"
 tagline = "Select an object, select a surface, paint"
 maintainer = "orencloud"
@@ -12,12 +12,13 @@ type = "add-on"
 
 
 website = "https://orencloud.art/secretpaint"
+support = "https://github.com/orencloud/Secret-Paint/issues"
 
 
 
 tags = ["Modeling", "Add Curve"]
 
-blender_version_min = "4.2.0"
+blender_version_min = "5.1.0"
 
 
 
@@ -35,5 +36,4 @@ copyright = ["2022-2024 orencloud"]
 
 
 [permissions]
-network = "Update from GitHub if installed as addon rather than extension"
 files = "Export objects and biomes to external blend files"
