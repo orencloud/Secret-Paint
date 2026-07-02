@@ -2092,6 +2092,7 @@ def _secret_paint_node_tree_needs_update():
             version_needs_update
             or not _secret_paint_generator_has_stable_id_nodes(generator_tree)
             or not _secret_paint_generator_uses_stable_id(generator_tree)
+            or not _secret_paint_node_tree_uses_manual_stable_id_fallback(node_tree)
         )
     except Exception:
         return True
@@ -2189,6 +2190,29 @@ def _secret_paint_generator_uses_stable_id(generator_tree):
     return False
 
 
+def _secret_paint_node_tree_uses_manual_stable_id_fallback(node_tree):
+    try:
+        legacy_switch = node_tree.nodes.get("Legacy Manual or Procedural ID")
+        fallback_switch = node_tree.nodes.get("Manual Stable ID Fallback")
+        stable_compare = node_tree.nodes.get("Stable Strand ID Is Set")
+        stable_attr = node_tree.nodes.get("Stable Strand ID Attribute")
+        stable_hash = node_tree.nodes.get("Stable Hash Z")
+        if not all((legacy_switch, fallback_switch, stable_compare, stable_attr, stable_hash)):
+            return False
+
+        legacy_false = _secret_paint_find_node_socket(legacy_switch.inputs, "False")
+        fallback_output = _secret_paint_find_node_socket(fallback_switch.outputs, "Output")
+        if legacy_false is None or fallback_output is None:
+            return False
+
+        for link in getattr(legacy_false, "links", ()):
+            if getattr(link, "from_node", None) == fallback_switch and getattr(link, "from_socket", None) == fallback_output:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _secret_paint_generator_uses_legacy_random_id(generator_tree):
     try:
         set_id_node = generator_tree.nodes.get("Set ID")
@@ -2278,7 +2302,7 @@ SECRET_PAINT_BAKED_PROCEDURAL_TRANSFORMS_SOCKET = "Baked Procedural Transforms"
 SECRET_PAINT_ENABLE_APPLY_IDS_MODIFIER = False
 SECRET_PAINT_WORLD_STABLE_IDS_READY_PROP = "secret_paint_stable_ids_ready"
 SECRET_PAINT_WORLD_NEXT_STABLE_ID_PROP = "secret_paint_next_stable_curve_id"
-SECRET_PAINT_NODE_VERSION = 43
+SECRET_PAINT_NODE_VERSION = 44
 SECRET_PAINT_SKIP_AUTO_ASSEMBLY_ON_Q_PROP = ".secret_paint_skip_auto_assembly_on_q"
 
 
