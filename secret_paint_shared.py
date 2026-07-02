@@ -130,7 +130,7 @@ SECRET_PAINT_PANEL_VERTEX_PROP = "secret_paint_panel_vertex_mask"
 SECRET_PAINT_PANEL_RENDER_PROP = "secret_paint_panel_render_hidden"
 SECRET_PAINT_PANEL_BOUNDS_PROP = "secret_paint_panel_display_bounds"
 SECRET_PAINT_PANEL_MASK_PROP = "secret_paint_panel_viewport_mask"
-SECRET_PAINT_WORLD_DENSITY_SPACING_PROP = "secret_paint_world_density_spacing"
+SECRET_PAINT_WORLD_DENSITY_SPACING_PROP = "secret_paint_density_spacing"
 SECRET_PAINT_PANEL_CHAIN_PROPS = (
     SECRET_PAINT_PANEL_SELECT_PROP,
     SECRET_PAINT_PANEL_APPLY_PROP,
@@ -2034,6 +2034,31 @@ def _get_side_panel_layout_model_cached(context, obj):
     return model
 
 
+def _secret_paint_panel_world_target_object(context):
+    try:
+        world_paint_module = _secret_paint_world_paint_module()
+        target_object = world_paint_module.world_paint_panel_target_object(context)
+        if _side_panel_object_alive(target_object):
+            return target_object
+    except Exception:
+        pass
+
+    obj = getattr(context, "active_object", None) or getattr(context, "object", None)
+    if getattr(obj, "type", "") == "CURVES" and _side_panel_object_alive(getattr(obj, "parent", None)):
+        return obj.parent
+    return obj if _side_panel_object_alive(obj) else None
+
+
+def _secret_paint_panel_surface_lock_enabled(context):
+    try:
+        world_paint_module = _secret_paint_world_paint_module()
+        return bool(world_paint_module.world_paint_surface_lock_enabled(context))
+    except Exception:
+        pass
+    preferences = _secret_paint_addon_preferences(context)
+    return bool(preferences and getattr(preferences, "paint_only_current_surface", False))
+
+
 @persistent
 def _side_panel_count_cache_on_load_post(_dummy):
     _clear_side_panel_count_cache(reason="load_post")
@@ -2251,8 +2276,8 @@ SECRET_PAINT_MANUAL_LEGACY_IDS_PROP = ".secret_paint_manual_legacy_ids"
 SECRET_PAINT_LEGACY_PROCEDURAL_IDS_SOCKET = "Legacy Procedural IDs"
 SECRET_PAINT_BAKED_PROCEDURAL_TRANSFORMS_SOCKET = "Baked Procedural Transforms"
 SECRET_PAINT_ENABLE_APPLY_IDS_MODIFIER = False
-SECRET_PAINT_WORLD_STABLE_IDS_READY_PROP = "secret_paint_world_stable_ids_ready"
-SECRET_PAINT_WORLD_NEXT_STABLE_ID_PROP = "secret_paint_world_next_stable_curve_id"
+SECRET_PAINT_WORLD_STABLE_IDS_READY_PROP = "secret_paint_stable_ids_ready"
+SECRET_PAINT_WORLD_NEXT_STABLE_ID_PROP = "secret_paint_next_stable_curve_id"
 SECRET_PAINT_NODE_VERSION = 43
 SECRET_PAINT_SKIP_AUTO_ASSEMBLY_ON_Q_PROP = ".secret_paint_skip_auto_assembly_on_q"
 
@@ -4648,15 +4673,31 @@ class subpanelutils(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        row = layout.row(align=True)
+        button_group = layout.column(align=True)
+        target_object = _secret_paint_panel_world_target_object(context)
+        if target_object is not None:
+            row = button_group.row(align=True)
+            row.operator_context = 'INVOKE_DEFAULT'
+            row.scale_y = 1.35
+            lock_enabled = _secret_paint_panel_surface_lock_enabled(context)
+            row.alert = lock_enabled
+            target_name = _side_panel_rna_name(target_object, "Terrain")
+            row.operator(
+                "secret.world_paint_toggle_lock_surface",
+                icon='VIEW_LOCKED' if lock_enabled else 'VIEW_UNLOCKED',
+                text=f"Lock Terrain: {target_name}",
+            )
+
+        row = button_group.row(align=True)
         row.scale_y = 1.35
         row.operator("secret.toggle_viewport_tab_bookmark", icon='CAMERA_DATA', text="Toggle View Bookmark")
 
-        row = layout.row(align=True)
+        row = button_group.row(align=True)
         row.scale_y = 1.35
         row.operator("secret.assembly", icon="MOD_EXPLODE", text="Assembly")
         row.operator("secret.realize_instances", icon="LIBRARY_DATA_OVERRIDE_NONEDITABLE", text="Realize")
-        row = layout.row(align=True)
+        row = button_group.row(align=True)
+        row.scale_y = 1.35
         row.operator("secret.paintbrushswitch", icon='BRUSHES_ALL', text="Switch")
         row.operator("secret.fixdyntopo", icon="GROUP_UVS", text="Reproject")
         layout.separator()
@@ -4666,20 +4707,23 @@ class subpanelutils(bpy.types.Panel):
         # row = layout.row()
         # row = layout.row()
         # row.prop(context.scene.mypropertieslist, "paint_default", expand=True)
-        row = layout.row()
+        utility_group = layout.column(align=True)
+        row = utility_group.row(align=True)
+        row.scale_y = 1.0
         # if bl_info["name"] == "orenpaint":
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
-        row = layout.row()
-        row.scale_y = 1.4  # Adjust the height of the button
+        row = utility_group.row(align=True)
+        row.scale_y = 1.0
         row.operator("secret.shared_material", icon= 'MATERIAL')
         row.scale_x = 0.25  # Adjust the height of the button
         row.prop(context.scene.mypropertieslist, "shared_material_index", expand=True, text="")
-        row = layout.row()
+        row = utility_group.row(align=True)
         row.scale_y = 1  # Adjust the height of the button
         row.operator("secret.group", icon= 'COLLECTION_NEW')
-        row.operator("secret.export_unreal", icon= 'EXPORT')
-        row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
+        # Temporarily disabled; keep operator code below for future re-enable.
+        # row.operator("secret.export_unreal", icon= 'EXPORT')
+        # row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
         # row.operator("oren.orengrouprecentercollectionobj", icon="ORIENTATION_CURSOR", text= "Recenter Collection Instance")
         # row.operator("oren.orenscatterduplicatehair")
         # row.operator("oren.orenpaintswitchtoweightzero", icon='OUTLINER_OB_GROUP_INSTANCE')
@@ -17976,7 +18020,8 @@ SHARED_SECRET_PAINT_CLASSES = [
     toggle_display_bounds,
     subpanelutils,
     subpanelexportbiome,
-    secretpaint_update_modifier,
+    # Temporarily disabled; keep the operator class above for future re-enable.
+    # secretpaint_update_modifier,
     orenscatterinstancesmodifiers,
     SelectObjectOperator,
     secret_paint_panel_select_object,
@@ -18011,7 +18056,8 @@ SHARED_SECRET_PAINT_CLASSES = [
     vertexgrouppaint_biome,
     biome_delete,
     assembly,
-    export_unreal,
+    # Temporarily disabled; keep the operator class above for future re-enable.
+    # export_unreal,
     *_secret_paint_world_paint_classes(),
 ]
 
