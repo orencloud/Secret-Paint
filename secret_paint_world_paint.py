@@ -138,7 +138,7 @@ WORLD_TOOL_FROM_WORKSPACE = {
 }
 
 WORLD_FLAG_ITEMS = (
-    ("LOCK_SURFACE", "Lock Terrain", "Toggle painting only on the current surface"),
+    ("LOCK_SURFACE", "Lock Terrain", "Lock painting to the current terrain or all selected terrains; select multiple terrains before pressing the button to paint and target all of them"),
     ("TARGET_SURFACE", "Target Surface", "Allow the current Secret Paint system to be painted on as a target surface"),
     ("ALLOW_WIRE_BOUNDS_SURFACES", "Wire", "Allow painting on surfaces whose display type is Wire or Bounds"),
     ("INTERPOLATE", "Interpolate", "Toggle interpolation for Add/Density brushes"),
@@ -383,6 +383,75 @@ WORLD_NATIVE_BRUSH_DEBUG_LOG_PATH = None
 WORLD_NATIVE_BRUSH_DEBUG_ENABLED = False
 WORLD_SHIFT_DELETE_DEBUG_LOG_PATH = None
 WORLD_SHIFT_DELETE_DEBUG_ENABLED = False
+
+
+def _world_float_equal(value, target, epsilon=1.0e-6):
+    try:
+        return abs(float(value) - float(target)) <= epsilon
+    except Exception:
+        return False
+
+
+def _world_attr_value(owner, prop_name, default=None):
+    if owner is None or not hasattr(owner, prop_name):
+        return default
+    try:
+        return getattr(owner, prop_name)
+    except Exception:
+        return default
+
+
+def _world_set_attr_if_different(owner, prop_name, value, *, epsilon=None):
+    if owner is None or not hasattr(owner, prop_name):
+        return False
+    current = _world_attr_value(owner, prop_name)
+    try:
+        if epsilon is not None:
+            if _world_float_equal(current, value, epsilon):
+                return False
+        elif current == value:
+            return False
+    except Exception:
+        pass
+    try:
+        setattr(owner, prop_name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _world_idprop_value(owner, key, default=None):
+    if owner is None:
+        return default
+    try:
+        value = owner.get(key, default)
+    except Exception:
+        value = default
+    if value is default:
+        try:
+            value = owner[key]
+        except Exception:
+            value = default
+    return value
+
+
+def _world_set_idprop_if_different(owner, key, value, *, epsilon=None):
+    if owner is None:
+        return False
+    current = _world_idprop_value(owner, key, None)
+    try:
+        if epsilon is not None:
+            if _world_float_equal(current, value, epsilon):
+                return False
+        elif current == value:
+            return False
+    except Exception:
+        pass
+    try:
+        owner[key] = value
+        return True
+    except Exception:
+        return False
 
 
 def _native_brush_debug_value(value):
@@ -3413,6 +3482,22 @@ def _majority_brush_collection(selected_objects):
     return winners[0]
 
 
+def _objects_share_collection(first_obj, second_obj):
+    first_collections = set(getattr(first_obj, "users_collection", ()) or ())
+    second_collections = set(getattr(second_obj, "users_collection", ()) or ())
+    return bool(first_collections.intersection(second_collections))
+
+
+def selected_pair_should_use_non_active_source(context):
+    selected = list(getattr(context, "selected_objects", []) or [])
+    active_object = getattr(context, "active_object", None)
+    if len(selected) != 2 or active_object not in selected:
+        return False
+
+    selected_source = next((obj for obj in selected if obj != active_object), None)
+    return bool(selected_source is not None and not _objects_share_collection(active_object, selected_source))
+
+
 def _selected_source_from_context(self, context):
     selected = list(context.selected_objects)
     active_object = context.active_object
@@ -3427,6 +3512,12 @@ def _selected_source_from_context(self, context):
                 "brush_object": None,
                 "brush_collection": brush_collection,
             }
+        if len(selected) == 2 and active_object in selected:
+            selected_source = next((obj for obj in selected if obj != active_object), None)
+            if selected_source is not None and not _objects_share_collection(active_object, selected_source):
+                source_data = _source_data_from_object_pick(self, context, selected_source, use_system_as_brush=True)
+                if source_data is not None:
+                    return source_data
         if active_object is not None:
             return _source_data_from_object_pick(self, context, active_object)
         return None
@@ -3436,14 +3527,14 @@ def _selected_source_from_context(self, context):
     return _source_data_from_object_pick(self, context, selected[0])
 
 
-def _source_data_from_object_pick(self, context, selected_obj):
+def _source_data_from_object_pick(self, context, selected_obj, *, use_system_as_brush=False):
     if selected_obj is None:
         return None
 
     if _is_secret_paint_source_system(selected_obj):
         source_data = _source_data_from_system(selected_obj)
         if source_data is not None:
-            if selected_obj.type == "CURVE":
+            if use_system_as_brush or selected_obj.type == "CURVE":
                 source_data = dict(source_data)
                 source_data["origin_kind"] = "OBJECT"
             return source_data
@@ -3619,6 +3710,10 @@ def _brush_object_list(source_data):
             return []
     if _safe_rna_name(brush_object):
         return [brush_object]
+    if source_data.get("origin_kind") == "SYSTEM":
+        origin_system = source_data.get("origin_object")
+        if _is_secret_paint_source_system(origin_system):
+            return [origin_system]
     return []
 
 
@@ -3837,6 +3932,13 @@ def _world_system_match_candidates(source_data):
         and source_data.get("brush_object") is None
         and source_data.get("brush_collection") is None
     ):
+        operator = _world_operator()
+        if (
+            operator is not None and
+            getattr(operator, "surface_lock", False) and
+            len(_operator_locked_target_infos(operator)) > 1
+        ):
+            return bpy.context.scene.objects
         origin_system = _explicit_world_source_system(source_data)
         return [origin_system] if origin_system is not None else []
     return bpy.context.scene.objects
@@ -5101,6 +5203,34 @@ def _scene_locked_terrain_data_from_target(target_info):
     }
 
 
+def _scene_locked_terrain_data_key(data):
+    if not isinstance(data, dict):
+        return None
+    target_kind = str(data.get("kind", WORLD_TARGET_KIND_MESH))
+    return (
+        target_kind,
+        str(data.get("surface_object", "")),
+        str(data.get("target_owner", "")),
+    )
+
+
+def _scene_locked_terrain_data_from_targets(target_infos):
+    data_items = []
+    seen = set()
+    for target_info in target_infos or []:
+        data = _scene_locked_terrain_data_from_target(target_info)
+        data_key = _scene_locked_terrain_data_key(data)
+        if data is None or data_key in seen:
+            continue
+        seen.add(data_key)
+        data_items.append(data)
+    if not data_items:
+        return None
+    if len(data_items) == 1:
+        return data_items[0]
+    return {"targets": data_items}
+
+
 def _clear_scene_locked_terrain(context):
     scene = getattr(context, "scene", None) if context is not None else None
     if scene is None or WORLD_PAINT_LOCKED_TERRAIN_PROP not in scene:
@@ -5112,11 +5242,11 @@ def _clear_scene_locked_terrain(context):
         return False
 
 
-def _store_scene_locked_terrain(context, target_info):
+def _store_scene_locked_terrains(context, target_infos):
     scene = getattr(context, "scene", None) if context is not None else None
     if scene is None:
         return False
-    data = _scene_locked_terrain_data_from_target(target_info)
+    data = _scene_locked_terrain_data_from_targets(target_infos)
     if data is None:
         return False
     try:
@@ -5130,6 +5260,10 @@ def _store_scene_locked_terrain(context, target_info):
         return False
 
 
+def _store_scene_locked_terrain(context, target_info):
+    return _store_scene_locked_terrains(context, [target_info])
+
+
 def _load_scene_locked_terrain_data(context):
     scene = getattr(context, "scene", None) if context is not None else None
     raw_data = scene.get(WORLD_PAINT_LOCKED_TERRAIN_PROP, "") if scene is not None else ""
@@ -5140,12 +5274,25 @@ def _load_scene_locked_terrain_data(context):
     except Exception:
         _clear_scene_locked_terrain(context)
         return None
-    return loaded_data if isinstance(loaded_data, dict) else None
+    if isinstance(loaded_data, (dict, list)):
+        return loaded_data
+    _clear_scene_locked_terrain(context)
+    return None
 
 
-def _scene_locked_terrain_target_info(context):
-    data = _load_scene_locked_terrain_data(context)
-    if not data:
+def _scene_locked_terrain_entries_from_data(data):
+    if isinstance(data, list):
+        return [entry for entry in data if isinstance(entry, dict)]
+    if isinstance(data, dict):
+        targets = data.get("targets")
+        if isinstance(targets, list):
+            return [entry for entry in targets if isinstance(entry, dict)]
+        return [data]
+    return []
+
+
+def _scene_locked_terrain_target_info_from_data(context, data, *, clear_missing=False):
+    if not isinstance(data, dict):
         return None
 
     target_kind = data.get("kind", WORLD_TARGET_KIND_MESH)
@@ -5155,7 +5302,8 @@ def _scene_locked_terrain_target_info(context):
             return None
         target_owner = bpy.data.objects.get(str(data.get("target_owner", "")))
         if target_owner is None:
-            _clear_scene_locked_terrain(context)
+            if clear_missing:
+                _clear_scene_locked_terrain(context)
             return None
         proxy = _ensure_proxy_surface(context, target_owner)
         if proxy is None:
@@ -5173,7 +5321,8 @@ def _scene_locked_terrain_target_info(context):
         owner_name = str(data.get("target_owner", "")) or surface_name
         surface_obj = bpy.data.objects.get(surface_name) or bpy.data.objects.get(owner_name)
         if surface_obj is None:
-            _clear_scene_locked_terrain(context)
+            if clear_missing:
+                _clear_scene_locked_terrain(context)
             return None
         target_owner = bpy.data.objects.get(owner_name) or surface_obj
         if _safe_object_type(surface_obj) != "MESH":
@@ -5192,6 +5341,33 @@ def _scene_locked_terrain_target_info(context):
     return _copy_target_info(target_info)
 
 
+def _scene_locked_terrain_target_infos(context):
+    data = _load_scene_locked_terrain_data(context)
+    entries = _scene_locked_terrain_entries_from_data(data)
+    if not entries:
+        return []
+
+    target_infos = []
+    seen = set()
+    for entry in entries:
+        target_info = _scene_locked_terrain_target_info_from_data(
+            context,
+            entry,
+            clear_missing=len(entries) == 1,
+        )
+        target_key = _target_key(target_info)
+        if target_info is None or not target_key or target_key in seen:
+            continue
+        seen.add(target_key)
+        target_infos.append(target_info)
+    return target_infos
+
+
+def _scene_locked_terrain_target_info(context):
+    target_infos = _scene_locked_terrain_target_infos(context)
+    return target_infos[0] if target_infos else None
+
+
 def _target_info_display_target_object(target_info):
     if not target_info:
         return None
@@ -5204,12 +5380,14 @@ def _target_info_from_lock_object(context, obj):
     if obj is None:
         return None
     if _is_secret_paint_source_system(obj):
-        return _target_info_from_system(
+        target_info = _target_info_from_system(
             context,
             obj,
             allow_wire_bounds_surfaces=True,
             ignore_display_type_block=True,
         )
+        if target_info is not None:
+            return target_info
 
     surface_obj = None
     if getattr(obj, "type", "") == "MESH":
@@ -5232,24 +5410,85 @@ def _target_info_from_lock_object(context, obj):
     }
 
 
-def _context_lock_target_info(context):
+def _dedupe_target_infos(target_infos):
+    deduped = []
+    seen = set()
+    for target_info in target_infos or []:
+        copied = _copy_target_info(target_info)
+        target_key = _target_key(copied)
+        if copied is None or not target_key or target_key in seen:
+            continue
+        seen.add(target_key)
+        deduped.append(copied)
+    return deduped
+
+
+def _target_info_key_set(target_infos):
+    return {
+        target_key
+        for target_key in (_target_key(target_info) for target_info in target_infos or [])
+        if target_key
+    }
+
+
+def _operator_locked_target_infos(operator):
+    if operator is None:
+        return []
+    target_infos = []
+    locked_targets = getattr(operator, "locked_targets", None)
+    if isinstance(locked_targets, (list, tuple)):
+        target_infos.extend(locked_targets)
+    locked_target = getattr(operator, "locked_target", None)
+    if locked_target is not None:
+        target_infos.insert(0, locked_target)
+    return _dedupe_target_infos(target_infos)
+
+
+def _selected_lock_target_infos(context):
+    if context is None:
+        return []
+    target_infos = []
+    try:
+        selected_objects = list(getattr(context, "selected_objects", []) or [])
+    except Exception:
+        selected_objects = []
+    for selected_obj in selected_objects:
+        target_info = _target_info_from_lock_object(context, selected_obj)
+        if target_info is not None:
+            target_infos.append(target_info)
+    return _dedupe_target_infos(target_infos)
+
+
+def _preferred_lock_target_infos(context):
     context = context or bpy.context
+    selected_targets = _selected_lock_target_infos(context)
+    if len(selected_targets) > 1:
+        return selected_targets
+
     operator = _world_operator()
     if operator is not None:
-        target_info = (
-            getattr(operator, "locked_target", None)
-            if getattr(operator, "surface_lock", False) and getattr(operator, "locked_target", None)
-            else getattr(operator, "hover_target", None) or getattr(operator, "preview_target", None)
-        )
+        if getattr(operator, "surface_lock", False):
+            locked_targets = _operator_locked_target_infos(operator)
+            if locked_targets:
+                return locked_targets
+        target_info = getattr(operator, "hover_target", None) or getattr(operator, "preview_target", None)
         if target_info is not None:
-            return _copy_target_info(target_info)
+            return [_copy_target_info(target_info)]
+
+    if selected_targets:
+        return selected_targets
 
     active_obj = getattr(context, "active_object", None) or getattr(context, "object", None)
     target_info = _target_info_from_lock_object(context, active_obj)
     if target_info is not None:
-        return target_info
+        return [target_info]
 
-    return _scene_locked_terrain_target_info(context)
+    return _scene_locked_terrain_target_infos(context)
+
+
+def _context_lock_target_info(context):
+    target_infos = _preferred_lock_target_infos(context)
+    return target_infos[0] if target_infos else None
 
 
 def world_paint_surface_lock_enabled(context=None):
@@ -5257,24 +5496,24 @@ def world_paint_surface_lock_enabled(context=None):
     if operator is not None:
         return bool(getattr(operator, "surface_lock", False))
 
-    return _scene_locked_terrain_target_info(context or bpy.context) is not None
+    return bool(_scene_locked_terrain_target_infos(context or bpy.context))
 
 
 def world_paint_panel_target_object(context=None):
     context = context or bpy.context
     operator = _world_operator()
     if operator is not None:
-        target_info = (
-            getattr(operator, "locked_target", None)
-            if getattr(operator, "surface_lock", False) and getattr(operator, "locked_target", None)
-            else getattr(operator, "hover_target", None) or getattr(operator, "preview_target", None)
+        locked_targets = _operator_locked_target_infos(operator) if getattr(operator, "surface_lock", False) else []
+        target_info = locked_targets[0] if locked_targets else (
+            getattr(operator, "hover_target", None) or getattr(operator, "preview_target", None)
         )
         target_obj = _target_info_display_target_object(target_info)
         if target_obj is not None:
             return target_obj
 
     if world_paint_surface_lock_enabled(context):
-        target_obj = _target_info_display_target_object(_scene_locked_terrain_target_info(context))
+        locked_targets = _scene_locked_terrain_target_infos(context)
+        target_obj = _target_info_display_target_object(locked_targets[0] if locked_targets else None)
         if target_obj is not None:
             return target_obj
 
@@ -5283,23 +5522,57 @@ def world_paint_panel_target_object(context=None):
     return _target_info_display_target_object(target_info) or active_obj
 
 
+def world_paint_panel_lock_button_text(context=None):
+    context = context or bpy.context
+    selected_targets = _selected_lock_target_infos(context)
+    operator = _world_operator()
+    if operator is not None and getattr(operator, "surface_lock", False):
+        locked_targets = _operator_locked_target_infos(operator)
+    else:
+        locked_targets = _scene_locked_terrain_target_infos(context)
+
+    if locked_targets:
+        replacing_lock = (
+            len(selected_targets) > 1 and
+            _target_info_key_set(selected_targets) != _target_info_key_set(locked_targets)
+        )
+        action = "Lock" if replacing_lock else "Unlock"
+        target_count = len(selected_targets) if replacing_lock else len(locked_targets)
+    else:
+        action = "Lock"
+        target_count = len(_preferred_lock_target_infos(context))
+
+    return f"{action} {'Terrain' if target_count == 1 else 'Terrains'}"
+
+
 def _toggle_surface_lock_without_running_operator(context):
     context = context or bpy.context
     preferences = _addon_preferences(context)
     currently_locked = world_paint_surface_lock_enabled(context)
     if currently_locked:
+        selected_targets = _selected_lock_target_infos(context)
+        locked_targets = _scene_locked_terrain_target_infos(context)
+        if (
+            len(selected_targets) > 1 and
+            _target_info_key_set(selected_targets) != _target_info_key_set(locked_targets)
+        ):
+            if preferences is not None:
+                preferences.paint_only_current_surface = True
+            _store_scene_locked_terrains(context, selected_targets)
+            _tag_redraw_view3d_areas(context)
+            return {'FINISHED'}
         if preferences is not None:
             preferences.paint_only_current_surface = False
         _clear_scene_locked_terrain(context)
         _tag_redraw_view3d_areas(context)
         return {'FINISHED'}
 
-    target_info = _context_lock_target_info(context)
-    if target_info is None:
+    target_infos = _preferred_lock_target_infos(context)
+    if not target_infos:
         return {'CANCELLED'}
     if preferences is not None:
         preferences.paint_only_current_surface = True
-    _store_scene_locked_terrain(context, target_info)
+    _store_scene_locked_terrains(context, target_infos)
 
     _tag_redraw_view3d_areas(context)
     return {'FINISHED'}
@@ -5478,6 +5751,12 @@ def _raycast_locked_target(context, mouse_coord, locked_target, source_data=None
     ):
         return None
 
+    # Surface lock should test the locked terrain itself, so other Secret Paint
+    # systems or scene objects under the cursor do not block the stroke.
+    direct_target = _raycast_target_info_surface(context, mouse_coord, locked_target)
+    if direct_target is not None:
+        return _stabilize_target_info(context, direct_target)
+
     region = context.region
     region_data = context.region_data
     if region is None or region_data is None:
@@ -5563,6 +5842,55 @@ def _raycast_locked_target(context, mouse_coord, locked_target, source_data=None
 
         current_origin = location + direction * hit_epsilon
     return None
+
+
+def _raycast_locked_targets(context, mouse_coord, locked_targets, source_data=None, *, allow_wire_bounds_surfaces=False):
+    locked_targets = _dedupe_target_infos(locked_targets)
+    if not locked_targets:
+        return None
+    if len(locked_targets) == 1:
+        return _raycast_locked_target(
+            context,
+            mouse_coord,
+            locked_targets[0],
+            source_data=source_data,
+            allow_wire_bounds_surfaces=allow_wire_bounds_surfaces,
+        )
+
+    ray_origin = None
+    try:
+        if context.region is not None and context.region_data is not None:
+            ray_origin = view3d_utils.region_2d_to_origin_3d(
+                context.region,
+                context.region_data,
+                mouse_coord,
+            )
+    except Exception:
+        ray_origin = None
+
+    best_target = None
+    best_distance = float("inf")
+    for locked_target in locked_targets:
+        target_info = _raycast_locked_target(
+            context,
+            mouse_coord,
+            locked_target,
+            source_data=source_data,
+            allow_wire_bounds_surfaces=allow_wire_bounds_surfaces,
+        )
+        if target_info is None:
+            continue
+        if ray_origin is None:
+            return target_info
+        location = target_info.get("location")
+        try:
+            distance = (location - ray_origin).length if location is not None else float("inf")
+        except Exception:
+            distance = float("inf")
+        if distance < best_distance:
+            best_distance = distance
+            best_target = target_info
+    return best_target
 
 
 def _raycast_surface_object_from_mouse(context, mouse_coord, surface_obj):
@@ -6149,18 +6477,26 @@ def _stored_system_brush_radius(system_obj, fallback=None, *, context=None, dept
 
 def _store_system_brush_radius(system_obj, value):
     stored_value = max(0.05, float(value))
+    changed = False
     for candidate in _brush_radius_linked_systems(system_obj):
         curves_data = getattr(candidate, "data", None)
         if curves_data is None:
             continue
         try:
-            curves_data[WORLD_PAINT_BRUSH_RADIUS_PROP] = stored_value
-            if hasattr(curves_data, "id_properties_ui"):
+            prop_changed = _world_set_idprop_if_different(
+                curves_data,
+                WORLD_PAINT_BRUSH_RADIUS_PROP,
+                stored_value,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+            changed = prop_changed or changed
+            if prop_changed and hasattr(curves_data, "id_properties_ui"):
                 curves_data.id_properties_ui(WORLD_PAINT_BRUSH_RADIUS_PROP).update(
                     description="Last Secret Paint world-paint brush radius used by systems sharing this object brush",
                 )
         except Exception:
             continue
+    return changed
 
 
 def _stored_operator_brush_radius(operator, context, system_obj, fallback=None):
@@ -6222,15 +6558,22 @@ def _stored_system_density_spacing(system_obj, fallback=None):
 
 def _store_system_density_spacing(system_obj, value):
     if system_obj is None:
-        return
+        return False
     try:
         stored_value = _density_spacing_value(value)
     except Exception:
-        return
+        return False
 
+    changed = False
     try:
-        system_obj[WORLD_PAINT_DENSITY_SPACING_PROP] = stored_value
-        if hasattr(system_obj, "id_properties_ui"):
+        object_changed = _world_set_idprop_if_different(
+            system_obj,
+            WORLD_PAINT_DENSITY_SPACING_PROP,
+            stored_value,
+            epsilon=WORLD_DENSITY_SPACING_EPSILON,
+        )
+        changed = object_changed or changed
+        if object_changed and hasattr(system_obj, "id_properties_ui"):
             system_obj.id_properties_ui(WORLD_PAINT_DENSITY_SPACING_PROP).update(
                 description="Last Secret Paint world-paint density spacing used by this system",
             )
@@ -6240,8 +6583,14 @@ def _store_system_density_spacing(system_obj, value):
     curves_data = getattr(system_obj, "data", None)
     if curves_data is not None:
         try:
-            curves_data[WORLD_PAINT_DENSITY_SPACING_PROP] = stored_value
-            if hasattr(curves_data, "id_properties_ui"):
+            data_changed = _world_set_idprop_if_different(
+                curves_data,
+                WORLD_PAINT_DENSITY_SPACING_PROP,
+                stored_value,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+            changed = data_changed or changed
+            if data_changed and hasattr(curves_data, "id_properties_ui"):
                 curves_data.id_properties_ui(WORLD_PAINT_DENSITY_SPACING_PROP).update(
                     description="Last Secret Paint world-paint density spacing used by this system",
                 )
@@ -6251,9 +6600,15 @@ def _store_system_density_spacing(system_obj, value):
     modifier = _secret_modifier(system_obj)
     if modifier is not None:
         try:
-            modifier["Socket_11"] = stored_value
+            changed = _world_set_idprop_if_different(
+                modifier,
+                "Socket_11",
+                stored_value,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            ) or changed
         except Exception:
             pass
+    return changed
 
 
 def _store_operator_brush_radius(operator, context=None):
@@ -7394,7 +7749,10 @@ def _world_source_label_info(source_data):
 
 
 def _world_surface_label(operator):
-    target_info = operator.locked_target if operator.surface_lock and operator.locked_target else operator.hover_target
+    locked_targets = _operator_locked_target_infos(operator) if operator.surface_lock else []
+    if len(locked_targets) > 1:
+        return f"Surface: {len(locked_targets)} Terrains"
+    target_info = locked_targets[0] if locked_targets else operator.hover_target
     target_label = _target_label(target_info)
     if target_label == "No Surface":
         return "Surface: -"
@@ -7402,7 +7760,10 @@ def _world_surface_label(operator):
 
 
 def _world_surface_name(operator):
-    target_info = operator.locked_target if operator.surface_lock and operator.locked_target else operator.hover_target
+    locked_targets = _operator_locked_target_infos(operator) if operator.surface_lock else []
+    if len(locked_targets) > 1:
+        return f"{len(locked_targets)} Terrains"
+    target_info = locked_targets[0] if locked_targets else operator.hover_target
     if not target_info:
         return "-"
     owner = target_info.get("target_owner")
@@ -7445,8 +7806,10 @@ def _world_flag_is_enabled(operator, flag_id):
 
 
 def _preview_target_info(operator, *, live=False, context=None):
-    if getattr(operator, "surface_lock", False) and getattr(operator, "locked_target", None):
-        return operator.locked_target
+    if getattr(operator, "surface_lock", False):
+        locked_targets = _operator_locked_target_infos(operator)
+        if locked_targets:
+            return getattr(operator, "locked_target", None) or locked_targets[0]
     preview_target = getattr(operator, "preview_target", None)
     if preview_target is not None:
         return preview_target
@@ -8136,6 +8499,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self.preview_target = None
         self.hover_target = None
         self.locked_target = None
+        self.locked_targets = []
         self._surface_lock_retarget_pending = False
         self.active_system_name = ""
         self._touched_system_names = set()
@@ -8291,12 +8655,24 @@ class secret_world_paint_mode(bpy.types.Operator):
             if _target_info_contains_removed_references(getattr(self, attribute_name, None)):
                 setattr(self, attribute_name, None)
                 discarded_target = True
-                if attribute_name == "locked_target":
-                    _clear_scene_locked_terrain(bpy.context)
+        locked_targets = _operator_locked_target_infos(self)
+        valid_locked_targets = [
+            target_info
+            for target_info in locked_targets
+            if not _target_info_contains_removed_references(target_info)
+        ]
+        if len(valid_locked_targets) != len(locked_targets):
+            discarded_target = True
+            self.locked_targets = valid_locked_targets
+            self.locked_target = valid_locked_targets[0] if valid_locked_targets else None
+            if valid_locked_targets:
+                _store_scene_locked_terrains(bpy.context, valid_locked_targets)
+            else:
+                _clear_scene_locked_terrain(bpy.context)
         if discarded_target:
             self.last_hover_key = ""
             if self.surface_lock:
-                self._surface_lock_retarget_pending = True
+                self._surface_lock_retarget_pending = not bool(self._locked_target_infos())
         return True
 
     def current_target_surface_toggle(self):
@@ -8358,34 +8734,58 @@ class secret_world_paint_mode(bpy.types.Operator):
     def _use_native_tool_backend(self):
         return bool(self._native_brush_type())
 
+    def _locked_target_infos(self):
+        return _operator_locked_target_infos(self)
+
     def _surface_lock_waiting_for_target(self):
         return bool(
             self.surface_lock and
-            (self.locked_target is None or self._surface_lock_retarget_pending)
+            (not self._locked_target_infos() or self._surface_lock_retarget_pending)
         )
+
+    def _set_locked_targets(self, context, target_infos, *, activate=False, active_target=None):
+        locked_targets = _dedupe_target_infos(target_infos)
+        if not locked_targets:
+            return False
+
+        active_key = _target_key(active_target)
+        locked_target = None
+        if active_key:
+            for target_info in locked_targets:
+                if _target_key(target_info) == active_key:
+                    locked_target = _copy_target_info(target_info)
+                    break
+        if locked_target is None:
+            locked_target = _copy_target_info(locked_targets[0])
+
+        self.locked_targets = locked_targets
+        self.locked_target = locked_target
+        self._surface_lock_retarget_pending = False
+        _store_scene_locked_terrains(context, locked_targets)
+        if activate:
+            self._activate_hover_target(context, locked_target)
+        return True
 
     def _set_locked_target(self, context, target_info, *, activate=False):
         locked_target = _copy_target_info(target_info)
         if locked_target is None:
             return False
-        self.locked_target = locked_target
-        self._surface_lock_retarget_pending = False
-        _store_scene_locked_terrain(context, locked_target)
-        if activate:
-            self._activate_hover_target(context, locked_target)
-        return True
+        return self._set_locked_targets(
+            context,
+            [locked_target],
+            activate=activate,
+            active_target=locked_target,
+        )
 
     def _restore_scene_locked_target(self, context, *, activate=False):
-        locked_target = _scene_locked_terrain_target_info(context)
-        if locked_target is None:
+        locked_targets = _scene_locked_terrain_target_infos(context)
+        if not locked_targets:
             return False
-        return self._set_locked_target(context, locked_target, activate=activate)
+        return self._set_locked_targets(context, locked_targets, activate=activate)
 
     def _notify_locked_terrain_miss(self, context):
-        locked_target = getattr(self, "locked_target", None)
-        target_owner = locked_target.get("target_owner") if locked_target else None
-        target_name = _safe_rna_name(target_owner)
-        if not target_name:
+        locked_targets = self._locked_target_infos()
+        if not locked_targets:
             return False
 
         now = time.perf_counter()
@@ -8394,16 +8794,27 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._locked_terrain_feedback_time = now
         self._locked_terrain_feedback_token += 1
         feedback_token = self._locked_terrain_feedback_token
-        try:
-            was_selected = bool(target_owner.select_get())
-        except Exception:
-            was_selected = True
-        try:
-            target_owner.select_set(True)
-        except Exception:
-            pass
 
-        message = f"Secret Paint is locked to {target_name}. Move the brush onto that terrain to paint"
+        selection_restore = {}
+        for target_info in locked_targets:
+            target_owner = target_info.get("target_owner") if target_info else None
+            target_name = _safe_rna_name(target_owner)
+            if not target_name:
+                continue
+            try:
+                selection_restore[target_name] = bool(target_owner.select_get())
+            except Exception:
+                selection_restore[target_name] = True
+            try:
+                target_owner.select_set(True)
+            except Exception:
+                pass
+
+        if len(locked_targets) == 1:
+            target_name = _safe_rna_name(locked_targets[0].get("target_owner"))
+            message = f"Secret Paint is locked to {target_name}. Move the brush onto that terrain to paint"
+        else:
+            message = f"Secret Paint is locked to {len(locked_targets)} terrains. Move the brush onto one of them to paint"
         try:
             self.report({'INFO'}, message)
         except Exception:
@@ -8416,8 +8827,10 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         def _restore_locked_terrain_feedback():
             operator = _world_operator()
-            terrain_obj = bpy.data.objects.get(target_name)
-            if terrain_obj is not None and not was_selected:
+            for terrain_name, was_selected in selection_restore.items():
+                terrain_obj = bpy.data.objects.get(terrain_name)
+                if terrain_obj is None or was_selected:
+                    continue
                 try:
                     terrain_obj.select_set(False)
                 except Exception:
@@ -8440,9 +8853,10 @@ class secret_world_paint_mode(bpy.types.Operator):
         return True
 
     def _locked_terrain_hit_from_event(self, context, event):
+        locked_targets = self._locked_target_infos()
         if not (
             self.surface_lock and
-            self.locked_target and
+            locked_targets and
             not self._surface_lock_retarget_pending and
             hasattr(event, "mouse_region_x") and
             hasattr(event, "mouse_region_y")
@@ -8461,20 +8875,20 @@ class secret_world_paint_mode(bpy.types.Operator):
         if override is not None and override_mouse_coord is not None:
             try:
                 with context.temp_override(**override):
-                    target_info = _raycast_locked_target(
+                    target_info = _raycast_locked_targets(
                         bpy.context,
                         override_mouse_coord,
-                        self.locked_target,
+                        locked_targets,
                         source_data=self.source_data,
                         allow_wire_bounds_surfaces=self.allow_wire_bounds_surfaces,
                     )
             except Exception:
                 target_info = None
         else:
-            target_info = _raycast_locked_target(
+            target_info = _raycast_locked_targets(
                 raycast_context,
                 mouse_coord,
-                self.locked_target,
+                locked_targets,
                 source_data=self.source_data,
                 allow_wire_bounds_surfaces=self.allow_wire_bounds_surfaces,
             )
@@ -8723,6 +9137,14 @@ class secret_world_paint_mode(bpy.types.Operator):
             getattr(self, "_density_right_delete_button_down", False)
         )
 
+    def _multi_locked_density_add_active(self, event=None):
+        return (
+            self.tool_id == WORLD_TOOL_DENSITY and
+            self.surface_lock and
+            len(self._locked_target_infos()) > 1 and
+            not self._density_delete_input_active(event)
+        )
+
     def _is_density_erase_click_event(self, event):
         return (
             self.tool_id == WORLD_TOOL_DENSITY and
@@ -8933,9 +9355,11 @@ class secret_world_paint_mode(bpy.types.Operator):
             view_key,
         )
 
-    def _native_density_sync_due(self, sync_key, *, interval=WORLD_NATIVE_IDLE_SYNC_INTERVAL):
+    def _native_density_sync_due(self, sync_key, *, interval=None):
         if sync_key != getattr(self, "_native_density_last_sync_key", None):
             return True
+        if interval is None:
+            return False
         return (time.perf_counter() - float(getattr(self, "_native_density_last_sync_time", 0.0) or 0.0)) >= interval
 
     def _mark_native_density_synced(self, sync_key):
@@ -9142,9 +9566,8 @@ class secret_world_paint_mode(bpy.types.Operator):
             if not hasattr(curves_sculpt, prop_name):
                 continue
             try:
-                if getattr(curves_sculpt, prop_name) is not True:
-                    setattr(curves_sculpt, prop_name, True)
-                    changed = True
+                if not bool(getattr(curves_sculpt, prop_name)):
+                    changed = _world_set_attr_if_different(curves_sculpt, prop_name, True) or changed
             except Exception:
                 pass
         return changed
@@ -9307,7 +9730,8 @@ class secret_world_paint_mode(bpy.types.Operator):
             if shared.secret_paint_is_curves_brush_type(asset_brush, brush_type):
                 if brush_container is not None:
                     try:
-                        brush_container.brush = asset_brush
+                        if getattr(brush_container, "brush", None) != asset_brush:
+                            brush_container.brush = asset_brush
                     except Exception:
                         pass
                 return asset_brush
@@ -9316,7 +9740,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         brush = _ensure_curves_brush(fallback_name, brush_type)
         if brush_container is not None:
             try:
-                brush_container.brush = brush
+                if getattr(brush_container, "brush", None) != brush:
+                    brush_container.brush = brush
             except Exception:
                 pass
         return brush if shared.secret_paint_is_curves_brush_type(brush, brush_type) else None
@@ -9370,19 +9795,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         ):
             if not hasattr(settings, prop_name):
                 continue
-            try:
-                setattr(settings, prop_name, enabled)
-                changed = True
-            except Exception:
-                pass
+            changed = _world_set_attr_if_different(settings, prop_name, enabled) or changed
         for prop_name in ("use_point_count_interpolate", "interpolate_point_count"):
             if not hasattr(settings, prop_name):
                 continue
-            try:
-                setattr(settings, prop_name, False)
-                changed = True
-            except Exception:
-                pass
+            changed = _world_set_attr_if_different(settings, prop_name, False) or changed
         return changed
 
     def _apply_interpolate_to_native_brush(self, context, enabled=None):
@@ -9405,7 +9822,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             if not hasattr(source_brush, prop_name) or not hasattr(target_brush, prop_name):
                 continue
             try:
-                setattr(target_brush, prop_name, getattr(source_brush, prop_name))
+                source_value = getattr(source_brush, prop_name)
+                epsilon = 1.0e-6 if isinstance(source_value, float) else None
+                _world_set_attr_if_different(target_brush, prop_name, source_value, epsilon=epsilon)
             except Exception:
                 pass
 
@@ -9432,7 +9851,9 @@ class secret_world_paint_mode(bpy.types.Operator):
                 if not hasattr(source_settings, prop_name) or not hasattr(target_settings, prop_name):
                     continue
                 try:
-                    setattr(target_settings, prop_name, getattr(source_settings, prop_name))
+                    source_value = getattr(source_settings, prop_name)
+                    epsilon = WORLD_DENSITY_SPACING_EPSILON if isinstance(source_value, float) else None
+                    _world_set_attr_if_different(target_settings, prop_name, source_value, epsilon=epsilon)
                 except Exception:
                     pass
 
@@ -9448,11 +9869,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         ):
             if not hasattr(brush, prop_name):
                 continue
-            try:
-                setattr(brush, prop_name, prop_value)
-                changed = True
-            except Exception:
-                pass
+            epsilon = WORLD_DENSITY_SPACING_EPSILON if isinstance(prop_value, float) else None
+            changed = _world_set_attr_if_different(brush, prop_name, prop_value, epsilon=epsilon) or changed
         return changed
 
     def _persist_confirmed_native_brush_size(self, context):
@@ -9552,8 +9970,8 @@ class secret_world_paint_mode(bpy.types.Operator):
                 spacing=spacing,
                 density_mode='AUTO',
             ) or changed
-        if changed:
-            _store_system_density_spacing(active_system, spacing)
+        stored_changed = _store_system_density_spacing(active_system, spacing)
+        changed = stored_changed or changed
         return changed
 
     def _schedule_density_spacing_native_brush_sync(self, system_obj=None, *, first_interval=0.01, attempts=3):
@@ -9691,7 +10109,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         if preset_brush is not None and brush_container is not None:
             for _attempt in range(3):
                 try:
-                    brush_container.brush = preset_brush
+                    if getattr(brush_container, "brush", None) != preset_brush:
+                        brush_container.brush = preset_brush
                     active_after = brush_container.brush
                     assigned = (
                         active_after == preset_brush or
@@ -9819,7 +10238,8 @@ class secret_world_paint_mode(bpy.types.Operator):
             brush_container = _tool_settings_brush_container(context)
             if brush_container is not None:
                 try:
-                    brush_container.brush = activated_brush
+                    if getattr(brush_container, "brush", None) != activated_brush:
+                        brush_container.brush = activated_brush
                 except Exception:
                     pass
             runtime_brush = self._sync_active_native_runtime_brush(context, activated_brush, brush_type)
@@ -9877,7 +10297,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         brush_ok = False
         if brush_container is not None:
             try:
-                brush_container.brush = brush
+                if getattr(brush_container, "brush", None) != brush:
+                    brush_container.brush = brush
                 active_brush = brush_container.brush
                 brush_ok = (
                     active_brush == brush or
@@ -10007,15 +10428,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             }
 
         if hasattr(brush, "use_cursor_overlay"):
-            try:
-                brush.use_cursor_overlay = False
-            except Exception:
-                pass
+            _world_set_attr_if_different(brush, "use_cursor_overlay", False)
         if hasattr(brush, "use_cursor_overlay_override"):
-            try:
-                brush.use_cursor_overlay_override = True
-            except Exception:
-                pass
+            _world_set_attr_if_different(brush, "use_cursor_overlay_override", True)
 
     def _restore_native_density_brush_overlay(self):
         brush_name = getattr(self, "_native_density_brush_overlay_name", "")
@@ -10028,10 +10443,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             for prop_name, prop_value in saved_state.items():
                 if prop_value is None or not hasattr(brush, prop_name):
                     continue
-                try:
-                    setattr(brush, prop_name, prop_value)
-                except Exception:
-                    pass
+                _world_set_attr_if_different(brush, prop_name, prop_value)
 
         self._native_density_brush_overlay_name = ""
         self._native_density_brush_overlay_state = {}
@@ -10050,15 +10462,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             }
 
         if hasattr(curves_sculpt, "show_brush"):
-            try:
-                curves_sculpt.show_brush = False
-            except Exception:
-                pass
+            _world_set_attr_if_different(curves_sculpt, "show_brush", False)
         if hasattr(curves_sculpt, "show_brush_on_surface"):
-            try:
-                curves_sculpt.show_brush_on_surface = False
-            except Exception:
-                pass
+            _world_set_attr_if_different(curves_sculpt, "show_brush_on_surface", False)
 
     def _restore_native_density_brush_visibility(self, context):
         if not self._native_density_brush_visibility_state:
@@ -10069,10 +10475,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             for prop_name, prop_value in self._native_density_brush_visibility_state.items():
                 if prop_value is None or not hasattr(curves_sculpt, prop_name):
                     continue
-                try:
-                    setattr(curves_sculpt, prop_name, prop_value)
-                except Exception:
-                    pass
+                _world_set_attr_if_different(curves_sculpt, prop_name, prop_value)
 
         self._native_density_brush_visibility_state = {}
 
@@ -10192,29 +10595,27 @@ class secret_world_paint_mode(bpy.types.Operator):
         )
         self._stash_native_density_brush_overlay_state(brush)
         if not preserve_native_size_for_adjust and hasattr(brush, "use_locked_size"):
-            try:
-                brush.use_locked_size = lock_mode
-            except Exception:
-                pass
+            _world_set_attr_if_different(brush, "use_locked_size", lock_mode)
         if not preserve_native_size_for_adjust and hasattr(brush, "unprojected_size"):
-            try:
-                brush.unprojected_size = desired_unprojected_size
-            except Exception:
-                pass
-        brush.strength = 1.0
+            _world_set_attr_if_different(
+                brush,
+                "unprojected_size",
+                desired_unprojected_size,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+        _world_set_attr_if_different(brush, "strength", 1.0, epsilon=WORLD_DENSITY_SPACING_EPSILON)
         curves_paint_settings = _tool_settings_brush_container(context)
         unified_settings = getattr(curves_paint_settings, "unified_paint_settings", None) if curves_paint_settings is not None else None
         if unified_settings is not None and not preserve_native_size_for_adjust:
             if hasattr(unified_settings, "use_locked_size"):
-                try:
-                    unified_settings.use_locked_size = lock_mode
-                except Exception:
-                    pass
+                _world_set_attr_if_different(unified_settings, "use_locked_size", lock_mode)
             if hasattr(unified_settings, "unprojected_size"):
-                try:
-                    unified_settings.unprojected_size = desired_unprojected_size
-                except Exception:
-                    pass
+                _world_set_attr_if_different(
+                    unified_settings,
+                    "unprojected_size",
+                    desired_unprojected_size,
+                    epsilon=WORLD_DENSITY_SPACING_EPSILON,
+                )
         shared.secret_paint_brush_size_trace_log(
             "world.sync_native_brush.write.after",
             context,
@@ -10253,12 +10654,12 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._apply_interpolate_to_native_settings(settings)
 
         if brush_type == 'DENSITY':
-            brush.strength = 1.0
+            _world_set_attr_if_different(brush, "strength", 1.0, epsilon=WORLD_DENSITY_SPACING_EPSILON)
             if bpy.app.version_string >= "5.0.0":
                 if hasattr(brush, "curve_distance_falloff_preset"):
-                    brush.curve_distance_falloff_preset = 'SMOOTHER'
+                    _world_set_attr_if_different(brush, "curve_distance_falloff_preset", 'SMOOTHER')
             elif hasattr(brush, "curve_preset"):
-                brush.curve_preset = 'SMOOTHER'
+                _world_set_attr_if_different(brush, "curve_preset", 'SMOOTHER')
 
             minimum_distance = float(getattr(settings, "minimum_distance", self.density_spacing))
             if not (
@@ -10266,30 +10667,29 @@ class secret_world_paint_mode(bpy.types.Operator):
                 self._active_density_stroke_mode == "native"
             ):
                 minimum_distance = float(self.density_spacing)
-            settings.minimum_distance = minimum_distance
-            settings.curve_length = 0.32
-            settings.points_per_curve = 2
+            _world_set_attr_if_different(
+                settings,
+                "minimum_distance",
+                minimum_distance,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+            _world_set_attr_if_different(settings, "curve_length", 0.32, epsilon=WORLD_DENSITY_SPACING_EPSILON)
+            _world_set_attr_if_different(settings, "points_per_curve", 2)
             density_mode = getattr(settings, "density_mode", 'AUTO')
             if not (
                 self.stroke_active and
                 self._active_density_stroke_mode == "native"
             ):
                 density_mode = 'AUTO'
-            settings.density_mode = density_mode
+            _world_set_attr_if_different(settings, "density_mode", density_mode)
             if getattr(settings, "density_add_attempts", 0) <= 100:
-                settings.density_add_attempts = 3000
+                _world_set_attr_if_different(settings, "density_add_attempts", 3000)
 
             _store_system_density_spacing(system_obj, self.density_spacing)
         elif brush_type == 'ADD':
-            try:
-                settings.add_amount = 1
-            except Exception:
-                pass
-            try:
-                settings.curve_length = 0.32
-                settings.points_per_curve = 2
-            except Exception:
-                pass
+            _world_set_attr_if_different(settings, "add_amount", 1)
+            _world_set_attr_if_different(settings, "curve_length", 0.32, epsilon=WORLD_DENSITY_SPACING_EPSILON)
+            _world_set_attr_if_different(settings, "points_per_curve", 2)
 
         runtime_brush = self._sync_active_native_runtime_brush(context, brush, brush_type)
         if brush_type == 'DENSITY':
@@ -10380,16 +10780,18 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._sync_active_native_runtime_brush(context, brush, "DENSITY")
         settings = getattr(brush, "curves_sculpt_settings", None) if brush is not None else None
         if settings is not None:
-            try:
-                settings.density_mode = restore_mode
-            except Exception:
-                pass
+            _world_set_attr_if_different(settings, "density_mode", restore_mode)
             restore_minimum_distance = getattr(self, "_native_density_restore_minimum_distance", None)
             try:
-                settings.minimum_distance = float(
-                    restore_minimum_distance
-                    if restore_minimum_distance is not None
-                    else self.density_spacing
+                _world_set_attr_if_different(
+                    settings,
+                    "minimum_distance",
+                    float(
+                        restore_minimum_distance
+                        if restore_minimum_distance is not None
+                        else self.density_spacing
+                    ),
+                    epsilon=WORLD_DENSITY_SPACING_EPSILON,
                 )
             except Exception:
                 pass
@@ -10533,14 +10935,13 @@ class secret_world_paint_mode(bpy.types.Operator):
         if not self._native_density_restore_density_mode and density_settings is not None:
             self._native_density_restore_density_mode = getattr(density_settings, "density_mode", 'AUTO')
         if density_settings is not None:
-            try:
-                density_settings.minimum_distance = float(self.density_spacing)
-            except Exception:
-                pass
-            try:
-                density_settings.density_mode = 'AUTO'
-            except Exception:
-                pass
+            _world_set_attr_if_different(
+                density_settings,
+                "minimum_distance",
+                float(self.density_spacing),
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+            _world_set_attr_if_different(density_settings, "density_mode", 'AUTO')
         if erase:
             self._native_density_restore_minimum_distance = float(self.density_spacing)
             self._begin_native_tool_override("DELETE")
@@ -10559,14 +10960,13 @@ class secret_world_paint_mode(bpy.types.Operator):
                 prepared_type=shared.secret_paint_curves_brush_type(brush),
             )
         elif settings is not None:
-            try:
-                settings.minimum_distance = float(self.density_spacing)
-            except Exception:
-                pass
-            try:
-                settings.density_mode = 'AUTO'
-            except Exception:
-                pass
+            _world_set_attr_if_different(
+                settings,
+                "minimum_distance",
+                float(self.density_spacing),
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            )
+            _world_set_attr_if_different(settings, "density_mode", 'AUTO')
             self._apply_density_spacing_to_native_brush(context)
         _native_brush_debug_log(
             "prepare_native_stroke.exit",
@@ -10957,8 +11357,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._track_touched_system(system_obj)
             sync_key = self._native_density_sync_key(context, system_obj)
             if not self._native_density_sync_due(sync_key):
-                self._apply_density_spacing_to_native_brush(context)
-                self._schedule_density_spacing_native_brush_sync(system_obj)
                 return True
             _native_brush_debug_log("begin_native_session.reuse", context, self, force=True, system=system_obj.name)
             brush = self._sync_native_density_brush(context, system_obj=system_obj)
@@ -11718,6 +12116,29 @@ class secret_world_paint_mode(bpy.types.Operator):
         )
         return state
 
+    def _ensure_wire_bounds_surfaces_for_source_system(self, context, system_obj):
+        if (
+            not _is_secret_paint_system(system_obj) or
+            self.allow_wire_bounds_surfaces or
+            not _system_target_needs_wire_bounds_surfaces(system_obj)
+        ):
+            return False
+
+        toggled = False
+        try:
+            result = bpy.ops.secret.world_paint_toggle_wire_bounds_surfaces()
+            toggled = 'FINISHED' in result
+        except Exception:
+            toggled = False
+
+        if not self.allow_wire_bounds_surfaces:
+            self.allow_wire_bounds_surfaces = True
+            preferences = _addon_preferences(context)
+            if preferences is not None:
+                preferences.allow_world_paint_wire_bounds_surfaces = True
+            _tag_redraw_view3d_areas(context)
+        return toggled or self.allow_wire_bounds_surfaces
+
     def _switch_source_data(self, context, source_data, *, status_label="", reset_target_state=False):
         if not source_data:
             return False
@@ -11745,6 +12166,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         self.active_curve_draw_name = ""
         source_origin = source_data.get("origin_object")
         source_origin_is_system = self._source_data_is_system_source(source_data)
+        if source_origin_is_system:
+            self._ensure_wire_bounds_surfaces_for_source_system(context, source_origin)
         source_system_target = None
         if self.surface_lock:
             if source_origin_is_system:
@@ -11757,9 +12180,9 @@ class secret_world_paint_mode(bpy.types.Operator):
                 reset_target_state = source_system_target is None
                 self._surface_lock_retarget_pending = source_system_target is None
             else:
-                if self.locked_target is None:
+                if not self._locked_target_infos():
                     self._restore_scene_locked_target(context)
-                if self.locked_target is not None:
+                if self._locked_target_infos():
                     reset_target_state = False
                     self._surface_lock_retarget_pending = False
                 else:
@@ -11783,16 +12206,30 @@ class secret_world_paint_mode(bpy.types.Operator):
             self.preview_target = None
             self.hover_target = None
             self.locked_target = None
+            if reset_target_state:
+                self.locked_targets = []
             self.last_hover_key = ""
             self._sync_effective_brush_radius(context)
             self._configure_tool(context)
         elif source_system_target is not None:
-            self._set_locked_target(context, source_system_target, activate=True)
+            locked_targets = self._locked_target_infos() if self.surface_lock else []
+            source_key = _target_key(source_system_target)
+            matching_locked_target = next(
+                (target_info for target_info in locked_targets if _target_key(target_info) == source_key),
+                None,
+            )
+            if matching_locked_target is not None:
+                self.locked_target = _copy_target_info(matching_locked_target)
+                self._surface_lock_retarget_pending = False
+                self._activate_hover_target(context, self.locked_target)
+            else:
+                self._set_locked_target(context, source_system_target, activate=True)
         else:
             self.last_hover_key = ""
             if self.hover_target is not None:
                 self._activate_hover_target(context, self.hover_target)
-            elif self.surface_lock and self.locked_target is not None:
+            elif self.surface_lock and self._locked_target_infos():
+                self.locked_target = self.locked_target or self._locked_target_infos()[0]
                 self._activate_hover_target(context, self.locked_target)
             else:
                 self._sync_effective_brush_radius(context)
@@ -11830,6 +12267,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         if not self._source_data_is_system_source(source_data):
             return False
         system_obj = source_data.get("origin_object")
+        self._ensure_wire_bounds_surfaces_for_source_system(context, system_obj)
         self._defer_native_idle_session = not WORLD_KEEP_NATIVE_SESSION_WHILE_IDLE
         target_info = _target_info_from_system(
             context,
@@ -11840,7 +12278,17 @@ class secret_world_paint_mode(bpy.types.Operator):
         if target_info is not None:
             self._activate_hover_target(context, target_info)
             if self.surface_lock:
-                self._set_locked_target(context, target_info)
+                locked_targets = self._locked_target_infos()
+                target_key = _target_key(target_info)
+                matching_locked_target = next(
+                    (locked_target for locked_target in locked_targets if _target_key(locked_target) == target_key),
+                    None,
+                )
+                if matching_locked_target is not None:
+                    self.locked_target = _copy_target_info(matching_locked_target)
+                    self._surface_lock_retarget_pending = False
+                else:
+                    self._set_locked_target(context, target_info)
         if _is_secret_paint_system(system_obj):
             self._set_active_system(context, system_obj)
         if (
@@ -11973,9 +12421,10 @@ class secret_world_paint_mode(bpy.types.Operator):
             if source_is_system_source:
                 self._activate_picked_source_system(context, source_data)
             elif source_data.get("origin_kind") == "OBJECT" and self.surface_lock:
-                if self.locked_target is None:
+                if not self._locked_target_infos():
                     self._restore_scene_locked_target(context)
-                if self.locked_target is not None:
+                if self._locked_target_infos():
+                    self.locked_target = self.locked_target or self._locked_target_infos()[0]
                     self._surface_lock_retarget_pending = False
                     self._activate_hover_target(context, self.locked_target)
                 else:
@@ -11984,6 +12433,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                     self.preview_target = None
                     self.hover_target = None
                     self.locked_target = None
+                    self.locked_targets = []
                     self.last_hover_key = ""
                     self.active_system_name = ""
                     self._surface_lock_retarget_pending = True
@@ -12328,18 +12778,55 @@ class secret_world_paint_mode(bpy.types.Operator):
 
     def _toggle_flag(self, context, flag_id):
         if flag_id == "LOCK_SURFACE":
-            self.surface_lock = not self.surface_lock
             preferences = _addon_preferences(context)
+            if self.surface_lock:
+                selected_targets = _selected_lock_target_infos(context)
+                if (
+                    len(selected_targets) > 1 and
+                    _target_info_key_set(selected_targets) != _target_info_key_set(self._locked_target_infos())
+                ):
+                    if preferences is not None:
+                        preferences.paint_only_current_surface = True
+                    self._set_locked_targets(
+                        context,
+                        selected_targets,
+                        activate=True,
+                        active_target=self.hover_target or self.preview_target or self.locked_target,
+                    )
+                    self._configure_tool(context)
+                    self._sync_effective_brush_radius(context)
+                    self._sync_brush_controls(context)
+                    _tag_redraw_view3d_areas(context)
+                    return
+
+            self.surface_lock = not self.surface_lock
             if preferences is not None:
                 preferences.paint_only_current_surface = self.surface_lock
             if not self.surface_lock:
                 self.locked_target = None
+                self.locked_targets = []
                 self._surface_lock_retarget_pending = False
                 self.last_hover_key = ""
                 _clear_scene_locked_terrain(context)
             else:
+                target_infos = _preferred_lock_target_infos(context)
                 source_system, source_target = self._source_system_lock_target(context)
-                if source_target is not None:
+                if target_infos:
+                    self._set_locked_targets(
+                        context,
+                        target_infos,
+                        activate=True,
+                        active_target=source_target,
+                    )
+                    if source_target is not None:
+                        source_key = _target_key(source_target)
+                        for target_info in self._locked_target_infos():
+                            if _target_key(target_info) == source_key:
+                                self.locked_target = _copy_target_info(target_info)
+                                break
+                    if _is_secret_paint_system(source_system):
+                        self._set_active_system_lightweight(context, source_system)
+                elif source_target is not None:
                     self._set_locked_target(context, source_target, activate=True)
                     if _is_secret_paint_system(source_system):
                         self._set_active_system_lightweight(context, source_system)
@@ -12347,6 +12834,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                     pass
                 else:
                     self.locked_target = None
+                    self.locked_targets = []
                     self._surface_lock_retarget_pending = True
                     self.last_hover_key = ""
         elif flag_id == "TARGET_SURFACE":
@@ -12361,8 +12849,20 @@ class secret_world_paint_mode(bpy.types.Operator):
             if preferences is not None:
                 preferences.allow_world_paint_wire_bounds_surfaces = self.allow_wire_bounds_surfaces
             if not self.allow_wire_bounds_surfaces:
+                locked_targets = [
+                    target_info
+                    for target_info in self._locked_target_infos()
+                    if not _target_info_display_type_blocked(target_info)
+                ]
+                self.locked_targets = locked_targets
                 if _target_info_display_type_blocked(self.locked_target):
-                    self.locked_target = None
+                    self.locked_target = locked_targets[0] if locked_targets else None
+                if locked_targets:
+                    _store_scene_locked_terrains(context, locked_targets)
+                else:
+                    _clear_scene_locked_terrain(context)
+                    if self.surface_lock:
+                        self._surface_lock_retarget_pending = True
                 if _target_info_display_type_blocked(self.preview_target):
                     self.preview_target = None
                 if _target_info_display_type_blocked(self.hover_target):
@@ -13476,6 +13976,12 @@ class secret_world_paint_mode(bpy.types.Operator):
     def _activate_hover_target(self, context, target_info):
         if not target_info:
             return
+        if getattr(self, "surface_lock", False):
+            target_key = _target_key(target_info)
+            for locked_target in self._locked_target_infos():
+                if target_key and _target_key(locked_target) == target_key:
+                    self.locked_target = _copy_target_info(locked_target)
+                    break
         if self.tool_id == WORLD_TOOL_BEZIER:
             self.preview_target = target_info
             self.hover_target = target_info
@@ -13496,7 +14002,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._configure_tool(context)
 
     def _density_target_handoff_active(self):
-        return False
+        return bool(
+            self.surface_lock and
+            len(self._locked_target_infos()) > 1 and
+            not self._surface_lock_retarget_pending
+        )
 
     def _allow_idle_target_preview_switch(self, target_info):
         return True
@@ -13670,10 +14180,16 @@ class secret_world_paint_mode(bpy.types.Operator):
                 ):
                     self._update_hover_target(context, event, commit=False)
                 self._mark_idle_native_hover_raycast(event)
+            if self._density_target_handoff_active():
+                preview_key = _target_key(self.preview_target)
+                hover_key = _target_key(self.hover_target)
+                if self.preview_target is not None and preview_key and preview_key != hover_key:
+                    self._activate_hover_target(context, self.preview_target)
         elif self.hover_mouse_region is not None:
             if self.hover_target is None:
                 self._refresh_hover_target_from_stored_mouse(context, commit=False)
-        elif self.surface_lock and self.locked_target is not None:
+        elif self.surface_lock and self._locked_target_infos():
+            self.locked_target = self.locked_target or self._locked_target_infos()[0]
             self._activate_hover_target(context, self.locked_target)
 
         if self.hover_target is None:
@@ -13742,6 +14258,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
     def _update_hover_target_from_coords(self, context, mouse_region_x, mouse_region_y, *, commit=False):
         self.hover_mouse_region = (mouse_region_x, mouse_region_y)
+        locked_targets = self._locked_target_infos()
         density_handoff_active = self._density_target_handoff_active()
         preserve_preview = (
             not commit and
@@ -13755,18 +14272,18 @@ class secret_world_paint_mode(bpy.types.Operator):
             commit=commit,
             surface_lock=bool(
                 self.surface_lock and
-                self.locked_target and
+                locked_targets and
                 not self._surface_lock_retarget_pending
             ),
             tool=self.tool_id,
             native_session=self._native_density_session_active,
             stroke=self.stroke_active,
         ):
-            if self.surface_lock and self.locked_target and not self._surface_lock_retarget_pending:
-                target_info = _raycast_locked_target(
+            if self.surface_lock and locked_targets and not self._surface_lock_retarget_pending:
+                target_info = _raycast_locked_targets(
                     context,
                     (mouse_region_x, mouse_region_y),
-                    self.locked_target,
+                    locked_targets,
                     source_data=self.source_data,
                     allow_wire_bounds_surfaces=self.allow_wire_bounds_surfaces,
                 )
@@ -13791,7 +14308,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._sync_effective_brush_radius(context, mouse_coord=self.hover_mouse_region)
             return
         if commit and self.surface_lock and (
-            self.locked_target is None or self._surface_lock_retarget_pending
+            not self._locked_target_infos() or self._surface_lock_retarget_pending
         ):
             self._set_locked_target(context, target_info)
             target_info = self.locked_target
@@ -13861,8 +14378,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             seen.add(target_key)
             candidates.append(target_info)
 
-        if self.surface_lock and self.locked_target and not self._surface_lock_retarget_pending:
-            add_target(self.locked_target)
+        if self.surface_lock and not self._surface_lock_retarget_pending:
+            for locked_target in self._locked_target_infos():
+                add_target(locked_target)
         add_target(self.hover_target)
         add_target(self.preview_target)
 
@@ -13880,7 +14398,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                 )
             )
 
-        if not (self.surface_lock and self.locked_target and not self._surface_lock_retarget_pending):
+        if not (self.surface_lock and self._locked_target_infos() and not self._surface_lock_retarget_pending):
             brush_object = self.source_data.get("brush_object")
             brush_collection = self.source_data.get("brush_collection")
             for system_obj in sorted(list(_world_system_match_candidates(self.source_data)), key=_world_system_panel_sort_key):
@@ -13943,7 +14461,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         if best_target is None:
             return False
         if commit and self.surface_lock and (
-            self.locked_target is None or self._surface_lock_retarget_pending
+            not self._locked_target_infos() or self._surface_lock_retarget_pending
         ):
             self._set_locked_target(context, best_target)
             best_target = self.locked_target
@@ -14705,7 +15223,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             if right_delete_stroke:
                 self._density_right_delete_button_down = False
                 self._density_right_delete_restore_pending = False
-            if self.surface_lock and self.locked_target:
+            if self.surface_lock and self._locked_target_infos():
                 self._notify_locked_terrain_miss(context)
             return False
         if right_delete_stroke and self.tool_id == WORLD_TOOL_DENSITY:
@@ -17144,8 +17662,9 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             guard_system_names = set()
         try:
-            if self.surface_lock and self.locked_target and not self._surface_lock_retarget_pending:
-                _store_scene_locked_terrain(context, self.locked_target)
+            locked_targets = self._locked_target_infos()
+            if self.surface_lock and locked_targets and not self._surface_lock_retarget_pending:
+                _store_scene_locked_terrains(context, locked_targets)
         except Exception:
             pass
         self._running = False
@@ -17231,7 +17750,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         )
         self._remember_paint_shortcut_release_chord(context, event)
         preferences = _addon_preferences(context)
-        self.surface_lock = bool(_scene_locked_terrain_target_info(context))
+        scene_locked_targets = _scene_locked_terrain_target_infos(context)
+        self.surface_lock = bool(scene_locked_targets)
         self._surface_lock_retarget_pending = bool(self.surface_lock)
         self.allow_wire_bounds_surfaces = bool(
             getattr(preferences, "allow_world_paint_wire_bounds_surfaces", True)
@@ -17278,7 +17798,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             pass
 
-        if self.source_data.get("origin_kind") == "SYSTEM" and self.tool_id != WORLD_TOOL_BEZIER:
+        if self._source_data_is_system_source(self.source_data) and self.tool_id != WORLD_TOOL_BEZIER:
             origin_system = self.source_data.get("origin_object")
             origin_target = _target_info_from_system(
                 context,
@@ -17288,8 +17808,31 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
             if origin_target is not None:
                 if self.surface_lock:
-                    self._set_locked_target(context, origin_target)
-                    origin_target = self.locked_target or origin_target
+                    origin_key = _target_key(origin_target)
+                    if (
+                        scene_locked_targets and
+                        origin_key and
+                        origin_key not in _target_info_key_set(scene_locked_targets)
+                    ):
+                        self._set_locked_target(context, origin_target)
+                        scene_locked_targets = [self.locked_target] if self.locked_target is not None else []
+                    elif scene_locked_targets:
+                        self._set_locked_targets(context, scene_locked_targets, active_target=origin_target)
+                    matching_locked_target = next(
+                        (
+                            target_info
+                            for target_info in self._locked_target_infos()
+                            if _target_key(target_info) == origin_key
+                        ),
+                        None,
+                    )
+                    if matching_locked_target is not None:
+                        self.locked_target = _copy_target_info(matching_locked_target)
+                    origin_target = self.locked_target or (
+                        self._locked_target_infos()[0] if self._locked_target_infos() else origin_target
+                    )
+                else:
+                    self._surface_lock_retarget_pending = False
                 self.preview_target = origin_target
                 self.hover_target = origin_target
                 self.last_hover_key = _target_key(origin_target)
@@ -17308,6 +17851,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                 self.preview_target = None
                 self.hover_target = None
                 self.locked_target = None
+                self.locked_targets = []
                 self.last_hover_key = ""
             self.active_system_name = ""
 
@@ -17366,6 +17910,15 @@ class secret_world_paint_mode(bpy.types.Operator):
                     return {'CANCELLED'}
             return {'CANCELLED', 'PASS_THROUGH'}
         event_type = getattr(event, "type", "")
+        # Passive idle mouse events can return early below. Blender often reports
+        # a native brush release through type_prev/value_prev on that follow-up
+        # event, so update this state before any pass-through return.
+        primary_down_before_event = bool(getattr(self, "_primary_paint_button_down", False))
+        self._sync_primary_paint_button_state(event)
+        primary_released_by_event_history = (
+            primary_down_before_event and
+            not bool(getattr(self, "_primary_paint_button_down", False))
+        )
         if self.tool_id != WORLD_TOOL_BEZIER and self._handle_priority_shortcut_event(context, event):
             return {'RUNNING_MODAL'}
         if (
@@ -17597,6 +18150,12 @@ class secret_world_paint_mode(bpy.types.Operator):
         if (
             idle_native_passthrough and
             _is_primary_paint_active_event(event) and
+            self._multi_locked_density_add_active(event)
+        ):
+            idle_native_passthrough = False
+        if (
+            idle_native_passthrough and
+            _is_primary_paint_active_event(event) and
             not self.surface_lock and
             hasattr(event, "mouse_region_x") and
             hasattr(event, "mouse_region_y")
@@ -17639,6 +18198,15 @@ class secret_world_paint_mode(bpy.types.Operator):
                         active_system,
                         force_refresh=True,
                     )
+            elif primary_released_by_event_history:
+                active_system = self._current_system()
+                if active_system is not None:
+                    _mark_system_curve_cache_dirty(active_system)
+                    self._schedule_native_stroke_stable_id_sync(
+                        context,
+                        active_system,
+                        force_refresh=True,
+                    )
             return {'PASS_THROUGH'}
 
         if (
@@ -17651,7 +18219,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             return {'PASS_THROUGH'}
 
         shift_state_changed = self._sync_modifier_key_state(event)
-        self._sync_primary_paint_button_state(event)
         density_right_delete_active = self._is_density_right_delete_active_event(event)
         density_right_delete_end = self._is_density_right_delete_end_event(event)
         density_right_delete_click = self._is_density_right_delete_click_event(event)
@@ -17846,6 +18413,16 @@ class secret_world_paint_mode(bpy.types.Operator):
             if not self._sync_workspace_tool(context):
                 self.finish_world_paint(context)
                 return {'CANCELLED'}
+        native_multi_locked_density_route = (
+            self._multi_locked_density_add_active(event) and
+            (
+                _is_primary_paint_active_event(event) or
+                self.stroke_active or
+                self._primary_paint_button_down
+            )
+        )
+        if self._native_curves_brush_passthrough_active() and native_multi_locked_density_route:
+            self._leave_native_curves_brush_passthrough(context)
         if self._native_curves_brush_passthrough_active():
             if not in_window_region:
                 return {'PASS_THROUGH'}

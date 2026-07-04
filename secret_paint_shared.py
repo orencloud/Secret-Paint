@@ -131,6 +131,7 @@ SECRET_PAINT_PANEL_RENDER_PROP = "secret_paint_panel_render_hidden"
 SECRET_PAINT_PANEL_BOUNDS_PROP = "secret_paint_panel_display_bounds"
 SECRET_PAINT_PANEL_MASK_PROP = "secret_paint_panel_viewport_mask"
 SECRET_PAINT_WORLD_DENSITY_SPACING_PROP = "secret_paint_density_spacing"
+SECRET_PAINT_DENSITY_SPACING_EPSILON = 1.0e-6
 SECRET_PAINT_PANEL_CHAIN_PROPS = (
     SECRET_PAINT_PANEL_SELECT_PROP,
     SECRET_PAINT_PANEL_APPLY_PROP,
@@ -142,6 +143,35 @@ SECRET_PAINT_PANEL_CHAIN_PROPS = (
 )
 SECRET_PAINT_BRUSH_SIZE_TRACE_PATH = None
 SECRET_PAINT_BRUSH_SIZE_TRACE_ENABLED = False
+
+
+def _secret_paint_float_equal(value, target, epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON):
+    try:
+        return abs(float(value) - float(target)) <= epsilon
+    except Exception:
+        return False
+
+
+def _secret_paint_set_attr_if_different(owner, prop_name, value, *, epsilon=None):
+    if owner is None or not hasattr(owner, prop_name):
+        return False
+    try:
+        current = getattr(owner, prop_name)
+    except Exception:
+        current = None
+    try:
+        if epsilon is not None:
+            if _secret_paint_float_equal(current, value, epsilon):
+                return False
+        elif current == value:
+            return False
+    except Exception:
+        pass
+    try:
+        setattr(owner, prop_name, value)
+        return True
+    except Exception:
+        return False
 
 
 def _secret_paint_trace_value(value):
@@ -356,13 +386,18 @@ def secret_paint_set_curves_brush_type(brush, brush_type):
         return False
     try:
         if secret_paint_blender_version_at_least(5, 0, 0) and hasattr(brush, "curves_sculpt_brush_type"):
-            brush.curves_sculpt_brush_type = brush_type
+            prop_name = "curves_sculpt_brush_type"
         elif hasattr(brush, "curves_sculpt_tool"):
-            brush.curves_sculpt_tool = brush_type
+            prop_name = "curves_sculpt_tool"
         else:
             return False
+        if getattr(brush, prop_name) != brush_type:
+            if not _secret_paint_set_attr_if_different(brush, prop_name, brush_type):
+                return False
         if hasattr(brush, "use_paint_sculpt_curves"):
-            brush.use_paint_sculpt_curves = True
+            if not bool(getattr(brush, "use_paint_sculpt_curves", False)):
+                if not _secret_paint_set_attr_if_different(brush, "use_paint_sculpt_curves", True):
+                    return False
         return True
     except Exception:
         return False
@@ -416,11 +451,16 @@ def secret_paint_ensure_default_curves_brush_falloff(brush, *, force=False):
         initialized = False
     if force or not initialized:
         try:
-            brush.falloff_shape = SECRET_PAINT_CURVES_BRUSH_DEFAULT_FALLOFF_SHAPE
+            _secret_paint_set_attr_if_different(
+                brush,
+                "falloff_shape",
+                SECRET_PAINT_CURVES_BRUSH_DEFAULT_FALLOFF_SHAPE,
+            )
         except Exception:
             pass
     try:
-        brush[SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP] = True
+        if not bool(brush.get(SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP, False)):
+            brush[SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP] = True
     except Exception:
         pass
     return brush
@@ -432,8 +472,11 @@ def secret_paint_set_curves_brush_falloff_shape(brush, falloff_shape):
     if falloff_shape not in {'SPHERE', 'PROJECTED'}:
         return False
     try:
-        brush.falloff_shape = falloff_shape
-        brush[SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP] = True
+        if getattr(brush, "falloff_shape", None) != falloff_shape:
+            if not _secret_paint_set_attr_if_different(brush, "falloff_shape", falloff_shape):
+                return False
+        if not bool(brush.get(SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP, False)):
+            brush[SECRET_PAINT_CURVES_BRUSH_FALLOFF_INITIALIZED_PROP] = True
         return True
     except Exception:
         return False
@@ -495,17 +538,14 @@ def secret_paint_apply_density_minimum_distance_to_brush(
         return False
 
     changed = False
-    try:
-        settings.minimum_distance = minimum_distance
-        changed = True
-    except Exception:
-        pass
+    changed = _secret_paint_set_attr_if_different(
+        settings,
+        "minimum_distance",
+        minimum_distance,
+        epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+    ) or changed
     if density_mode is not None:
-        try:
-            settings.density_mode = density_mode
-            changed = True
-        except Exception:
-            pass
+        changed = _secret_paint_set_attr_if_different(settings, "density_mode", density_mode) or changed
     return changed
 
 
@@ -537,11 +577,22 @@ def secret_paint_store_active_density_brush_spacing(context=None, activeobj=None
         return False
 
     try:
-        modifier["Socket_11"] = minimum_distance
+        previous_value = modifier.get("Socket_11", None)
     except Exception:
+        previous_value = None
+    if previous_value is None:
+        try:
+            previous_value = modifier["Socket_11"]
+        except Exception:
+            previous_value = None
+    if _secret_paint_float_equal(previous_value, minimum_distance):
         return False
 
-    return True
+    try:
+        modifier["Socket_11"] = minimum_distance
+        return True
+    except Exception:
+        return False
 
 
 def _secret_paint_set_curves_interpolation_settings(settings, enabled=True, point_count=False):
@@ -549,13 +600,13 @@ def _secret_paint_set_curves_interpolation_settings(settings, enabled=True, poin
         return
     try:
         if secret_paint_blender_version_at_least(4, 2, 0):
-            settings.use_length_interpolate = enabled
-            settings.use_shape_interpolate = enabled
-            settings.use_point_count_interpolate = point_count
+            _secret_paint_set_attr_if_different(settings, "use_length_interpolate", enabled)
+            _secret_paint_set_attr_if_different(settings, "use_shape_interpolate", enabled)
+            _secret_paint_set_attr_if_different(settings, "use_point_count_interpolate", point_count)
         else:
-            settings.interpolate_length = enabled
-            settings.interpolate_shape = enabled
-            settings.interpolate_point_count = point_count
+            _secret_paint_set_attr_if_different(settings, "interpolate_length", enabled)
+            _secret_paint_set_attr_if_different(settings, "interpolate_shape", enabled)
+            _secret_paint_set_attr_if_different(settings, "interpolate_point_count", point_count)
     except Exception:
         pass
 
@@ -576,10 +627,7 @@ def secret_paint_configure_density_brush(brush, context=None, activeobj=None, *,
             activeobj=activeobj,
             override_settings=override_settings,
         )
-        try:
-            brush.size = int(size)
-        except Exception:
-            pass
+        _secret_paint_set_attr_if_different(brush, "size", int(size))
         secret_paint_brush_size_trace_log(
             "shared.configure_density_brush.size_write.after",
             context,
@@ -598,30 +646,26 @@ def secret_paint_configure_density_brush(brush, context=None, activeobj=None, *,
         density_mode=None,
     )
     _secret_paint_set_curves_interpolation_settings(settings, enabled=True, point_count=False)
-    try:
-        settings.curve_length = 0.32
-        settings.points_per_curve = 2
-    except Exception:
-        pass
+    _secret_paint_set_attr_if_different(
+        settings,
+        "curve_length",
+        0.32,
+        epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+    )
+    _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
     if override_settings:
-        try:
-            settings.density_mode = 'AUTO'
-        except Exception:
-            pass
-        try:
-            brush.strength = 1
-        except Exception:
-            pass
+        _secret_paint_set_attr_if_different(settings, "density_mode", 'AUTO')
+        _secret_paint_set_attr_if_different(brush, "strength", 1.0)
         try:
             if secret_paint_blender_version_at_least(5, 0, 0) and hasattr(brush, "curve_distance_falloff_preset"):
-                brush.curve_distance_falloff_preset = 'SMOOTHER'
+                _secret_paint_set_attr_if_different(brush, "curve_distance_falloff_preset", 'SMOOTHER')
             elif hasattr(brush, "curve_preset"):
-                brush.curve_preset = 'SMOOTHER'
+                _secret_paint_set_attr_if_different(brush, "curve_preset", 'SMOOTHER')
         except Exception:
             pass
         try:
             if settings.density_add_attempts <= 100:
-                settings.density_add_attempts = 3000
+                _secret_paint_set_attr_if_different(settings, "density_add_attempts", 3000)
         except Exception:
             pass
     return brush
@@ -668,40 +712,30 @@ def secret_paint_configure_curves_brush_asset(brush, brush_type, context=None, a
 
     settings = getattr(brush, "curves_sculpt_settings", None)
     if brush_type == 'ADD' and settings is not None:
-        try:
-            settings.add_amount = 1
-        except Exception:
-            pass
+        _secret_paint_set_attr_if_different(settings, "add_amount", 1)
         _secret_paint_set_curves_interpolation_settings(settings, enabled=True, point_count=False)
-        try:
-            settings.curve_length = 0.32
-            settings.points_per_curve = 2
-        except Exception:
-            pass
-        try:
-            brush.use_frontface = True
-        except Exception:
-            pass
+        _secret_paint_set_attr_if_different(
+            settings,
+            "curve_length",
+            0.32,
+            epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+        )
+        _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
+        _secret_paint_set_attr_if_different(brush, "use_frontface", True)
     elif brush_type == 'GROW_SHRINK' and settings is not None:
         try:
             if secret_paint_blender_version_at_least(4, 2, 0):
-                settings.use_uniform_scale = True
+                _secret_paint_set_attr_if_different(settings, "use_uniform_scale", True)
             else:
-                settings.scale_uniform = True
+                _secret_paint_set_attr_if_different(settings, "scale_uniform", True)
         except Exception:
             pass
 
     if override_settings:
         if brush_type == 'GROW_SHRINK':
-            try:
-                brush.strength = 0.03
-            except Exception:
-                pass
+            _secret_paint_set_attr_if_different(brush, "strength", 0.03)
         elif brush_type == 'COMB':
-            try:
-                brush.strength = 0.1
-            except Exception:
-                pass
+            _secret_paint_set_attr_if_different(brush, "strength", 0.1)
     return brush
 
 
@@ -1012,13 +1046,11 @@ def _secret_paint_assign_curves_sculpt_brush(context, brush, activeobj=None):
 
     for prop_name in ("show_brush", "show_brush_on_surface"):
         if hasattr(curves_sculpt, prop_name):
-            try:
-                setattr(curves_sculpt, prop_name, True)
-            except Exception:
-                pass
+            _secret_paint_set_attr_if_different(curves_sculpt, prop_name, True)
 
     try:
-        curves_sculpt.brush = brush
+        if getattr(curves_sculpt, "brush", None) != brush:
+            curves_sculpt.brush = brush
     except Exception:
         return False
     try:
@@ -2059,6 +2091,15 @@ def _secret_paint_panel_surface_lock_enabled(context):
     return bool(preferences and getattr(preferences, "paint_only_current_surface", False))
 
 
+def _secret_paint_panel_surface_lock_button_text(context):
+    try:
+        world_paint_module = _secret_paint_world_paint_module()
+        return world_paint_module.world_paint_panel_lock_button_text(context)
+    except Exception:
+        pass
+    return "Unlock Terrain" if _secret_paint_panel_surface_lock_enabled(context) else "Lock Terrain"
+
+
 @persistent
 def _side_panel_count_cache_on_load_post(_dummy):
     _clear_side_panel_count_cache(reason="load_post")
@@ -2092,7 +2133,6 @@ def _secret_paint_node_tree_needs_update():
             version_needs_update
             or not _secret_paint_generator_has_stable_id_nodes(generator_tree)
             or not _secret_paint_generator_uses_stable_id(generator_tree)
-            or not _secret_paint_node_tree_uses_manual_stable_id_fallback(node_tree)
         )
     except Exception:
         return True
@@ -2190,29 +2230,6 @@ def _secret_paint_generator_uses_stable_id(generator_tree):
     return False
 
 
-def _secret_paint_node_tree_uses_manual_stable_id_fallback(node_tree):
-    try:
-        legacy_switch = node_tree.nodes.get("Legacy Manual or Procedural ID")
-        fallback_switch = node_tree.nodes.get("Manual Stable ID Fallback")
-        stable_compare = node_tree.nodes.get("Stable Strand ID Is Set")
-        stable_attr = node_tree.nodes.get("Stable Strand ID Attribute")
-        stable_hash = node_tree.nodes.get("Stable Hash Z")
-        if not all((legacy_switch, fallback_switch, stable_compare, stable_attr, stable_hash)):
-            return False
-
-        legacy_false = _secret_paint_find_node_socket(legacy_switch.inputs, "False")
-        fallback_output = _secret_paint_find_node_socket(fallback_switch.outputs, "Output")
-        if legacy_false is None or fallback_output is None:
-            return False
-
-        for link in getattr(legacy_false, "links", ()):
-            if getattr(link, "from_node", None) == fallback_switch and getattr(link, "from_socket", None) == fallback_output:
-                return True
-    except Exception:
-        pass
-    return False
-
-
 def _secret_paint_generator_uses_legacy_random_id(generator_tree):
     try:
         set_id_node = generator_tree.nodes.get("Set ID")
@@ -2302,7 +2319,7 @@ SECRET_PAINT_BAKED_PROCEDURAL_TRANSFORMS_SOCKET = "Baked Procedural Transforms"
 SECRET_PAINT_ENABLE_APPLY_IDS_MODIFIER = False
 SECRET_PAINT_WORLD_STABLE_IDS_READY_PROP = "secret_paint_stable_ids_ready"
 SECRET_PAINT_WORLD_NEXT_STABLE_ID_PROP = "secret_paint_next_stable_curve_id"
-SECRET_PAINT_NODE_VERSION = 44
+SECRET_PAINT_NODE_VERSION = 43
 SECRET_PAINT_SKIP_AUTO_ASSEMBLY_ON_Q_PROP = ".secret_paint_skip_auto_assembly_on_q"
 
 
@@ -4705,11 +4722,10 @@ class subpanelutils(bpy.types.Panel):
             row.scale_y = 1.35
             lock_enabled = _secret_paint_panel_surface_lock_enabled(context)
             row.alert = lock_enabled
-            target_name = _side_panel_rna_name(target_object, "Terrain")
             row.operator(
                 "secret.world_paint_toggle_lock_surface",
                 icon='VIEW_LOCKED' if lock_enabled else 'VIEW_UNLOCKED',
-                text=f"Lock Terrain: {target_name}",
+                text=_secret_paint_panel_surface_lock_button_text(context),
             )
 
         row = button_group.row(align=True)
@@ -9148,17 +9164,30 @@ def context3sculptbrush(context,**kwargs):
         density_minimum_distance = secret_paint_density_minimum_distance(context, activeobj)
         for bb in brush_density:
             # if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: bb.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     #(0.314 / ((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) * bpy.context.object.modifiers[0]["Input_100"] ** 0.5))     ## brush_density.curves_sculpt_settings.minimum_distance = 0.5/(bpy.context.object.modifiers["GeometryNodes"]["Input_68"]*bpy.context.object.modifiers["GeometryNodes"]["Input_100"])        # if bpy.context.object.modifiers[0]: brush_density.curves_sculpt_settings.minimum_distance =  bpy.context.object.modifiers[0]["Socket_11"]
-            bb.curves_sculpt_settings.minimum_distance = density_minimum_distance
+            settings = getattr(bb, "curves_sculpt_settings", None)
+            if settings is None:
+                continue
+            _secret_paint_set_attr_if_different(
+                settings,
+                "minimum_distance",
+                density_minimum_distance,
+                epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+            )
             if bpy.app.version_string >= "4.2.0":
-                bb.curves_sculpt_settings.use_length_interpolate = True
-                bb.curves_sculpt_settings.use_shape_interpolate = True
-                bb.curves_sculpt_settings.use_point_count_interpolate = False
+                _secret_paint_set_attr_if_different(settings, "use_length_interpolate", True)
+                _secret_paint_set_attr_if_different(settings, "use_shape_interpolate", True)
+                _secret_paint_set_attr_if_different(settings, "use_point_count_interpolate", False)
             elif bpy.app.version_string < "4.2.0":
-                bb.curves_sculpt_settings.interpolate_length = True
-                bb.curves_sculpt_settings.interpolate_shape = True
-                bb.curves_sculpt_settings.interpolate_point_count = False
-            bb.curves_sculpt_settings.curve_length = 0.32  #was 0.3
-            bb.curves_sculpt_settings.points_per_curve = 2
+                _secret_paint_set_attr_if_different(settings, "interpolate_length", True)
+                _secret_paint_set_attr_if_different(settings, "interpolate_shape", True)
+                _secret_paint_set_attr_if_different(settings, "interpolate_point_count", False)
+            _secret_paint_set_attr_if_different(
+                settings,
+                "curve_length",
+                0.32,  # was 0.3
+                epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+            )
+            _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
         if pickup_trace:
             pickup_trace.action("context3sculptbrush.sync_density_brush", sync_density_start, detail=f"density_brushes={len(brush_density)}")
 
@@ -9168,37 +9197,64 @@ def context3sculptbrush(context,**kwargs):
 
             #DENSITY BRUSH
             for bb in brush_density:
-                bb.curves_sculpt_settings.density_mode = 'AUTO'
-                bb.strength = 1
+                settings = getattr(bb, "curves_sculpt_settings", None)
+                if settings is None:
+                    continue
+                _secret_paint_set_attr_if_different(settings, "density_mode", 'AUTO')
+                _secret_paint_set_attr_if_different(
+                    bb,
+                    "strength",
+                    1.0,
+                    epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+                )
                 # bb.falloff_shape = 'SPHERE'
-                if bpy.app.version_string >= "5.0.0": bb.curve_distance_falloff_preset = 'SMOOTHER'
-                elif bpy.app.version_string < "5.0.0": bb.curve_preset = 'SMOOTHER'
-                if bb.curves_sculpt_settings.density_add_attempts <= 100: bb.curves_sculpt_settings.density_add_attempts = 3000
+                if bpy.app.version_string >= "5.0.0":
+                    _secret_paint_set_attr_if_different(bb, "curve_distance_falloff_preset", 'SMOOTHER')
+                elif bpy.app.version_string < "5.0.0":
+                    _secret_paint_set_attr_if_different(bb, "curve_preset", 'SMOOTHER')
+                if settings.density_add_attempts <= 100:
+                    _secret_paint_set_attr_if_different(settings, "density_add_attempts", 3000)
 
             #growshrink brush
             for bb in brush_grow:
-                bb.strength = 0.03
+                settings = getattr(bb, "curves_sculpt_settings", None)
+                _secret_paint_set_attr_if_different(
+                    bb,
+                    "strength",
+                    0.03,
+                    epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+                )
+                if settings is None:
+                    continue
                 if bpy.app.version_string >= "4.2.0":
-                    bb.curves_sculpt_settings.use_uniform_scale = True
+                    _secret_paint_set_attr_if_different(settings, "use_uniform_scale", True)
                 elif bpy.app.version_string < "4.2.0":
-                    bb.curves_sculpt_settings.scale_uniform = True
+                    _secret_paint_set_attr_if_different(settings, "scale_uniform", True)
 
             #add brush
             for bb in brush_add:
-                bb.curves_sculpt_settings.add_amount = 1
+                settings = getattr(bb, "curves_sculpt_settings", None)
+                if settings is None:
+                    continue
+                _secret_paint_set_attr_if_different(settings, "add_amount", 1)
                 # bb.falloff_shape = 'SPHERE'
-                bb.use_frontface = True
+                _secret_paint_set_attr_if_different(bb, "use_frontface", True)
                 if bpy.app.version_string >= "4.2.0":
-                    bb.curves_sculpt_settings.use_length_interpolate = True
-                    bb.curves_sculpt_settings.use_shape_interpolate = True
-                    bb.curves_sculpt_settings.use_point_count_interpolate = False
+                    _secret_paint_set_attr_if_different(settings, "use_length_interpolate", True)
+                    _secret_paint_set_attr_if_different(settings, "use_shape_interpolate", True)
+                    _secret_paint_set_attr_if_different(settings, "use_point_count_interpolate", False)
                 elif bpy.app.version_string < "4.2.0":
-                    bb.curves_sculpt_settings.interpolate_length = True
-                    bb.curves_sculpt_settings.interpolate_shape = True
-                    bb.curves_sculpt_settings.interpolate_point_count = False
-                bb.curves_sculpt_settings.curve_length = 0.32  #was 0.3
+                    _secret_paint_set_attr_if_different(settings, "interpolate_length", True)
+                    _secret_paint_set_attr_if_different(settings, "interpolate_shape", True)
+                    _secret_paint_set_attr_if_different(settings, "interpolate_point_count", False)
+                _secret_paint_set_attr_if_different(
+                    settings,
+                    "curve_length",
+                    0.32,  # was 0.3
+                    epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+                )
                 # brush_add.curves_sculpt_settings.curve_length = 1.32  #was 0.3
-                bb.curves_sculpt_settings.points_per_curve = 2
+                _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
 
             # #delete brush
             # for bb in brush_delete:
@@ -9206,12 +9262,17 @@ def context3sculptbrush(context,**kwargs):
 
             #puff brush
             for bb in brush_puff:
-                bb.strength = 10
+                _secret_paint_set_attr_if_different(bb, "strength", 10)
                 # bb.falloff_shape = 'PROJECTED'
 
             #comb brush
             for bb in brush_comb:
-                bb.strength = 0.1
+                _secret_paint_set_attr_if_different(
+                    bb,
+                    "strength",
+                    0.1,
+                    epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
+                )
                 # bb.falloff_shape = 'PROJECTED'
             if pickup_trace:
                 pickup_trace.action(
@@ -9776,6 +9837,37 @@ def secretpaint_cleanup_empty_systems(self,context):
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and (sum(len(spline.points) for spline in obj.data.curves)) == 0 and obj.modifiers[0]["Input_99"] == False and obj.modifiers[0]["Input_69"] == False:
                     bpy.data.objects.remove(obj, do_unlink=True)
                 #CLEANUP VGROUPS AS WELL??
+
+
+def _secret_paint_collection_from_candidate(collection_candidate):
+    if collection_candidate is None:
+        return None
+    collection = getattr(collection_candidate, "collection", collection_candidate)
+    objects = getattr(collection, "objects", None)
+    return collection if objects is not None and hasattr(objects, "link") else None
+
+
+def _secret_paint_collection_directly_contains_object(collection, obj):
+    if collection is None or obj is None:
+        return False
+    try:
+        return obj in collection.objects[:]
+    except Exception:
+        return False
+
+
+def _secret_paint_collection_for_target_surface(target_surface, fallback_collection=None):
+    fallback_collection = _secret_paint_collection_from_candidate(fallback_collection)
+    if _secret_paint_collection_directly_contains_object(fallback_collection, target_surface):
+        return fallback_collection
+
+    for collection in getattr(target_surface, "users_collection", ()) or ():
+        if _secret_paint_collection_from_candidate(collection) is not None:
+            return collection
+
+    return fallback_collection or _secret_paint_collection_from_candidate(bpy.context.collection) or bpy.context.scene.collection
+
+
 def secretpaint_create_curve(self,context,**kwargs):
     if "targetOBJ" in kwargs:targetOBJ = kwargs.get("targetOBJ")
     else:targetOBJ = bpy.context.active_object
@@ -9790,7 +9882,10 @@ def secretpaint_create_curve(self,context,**kwargs):
     hair_to_copyModifs_from = targetOBJ if targetOBJ.type == "CURVES" else brushOBJ[0]
 
 
-    targetCollection = kwargs.get("targetCollection") if "targetCollection" in kwargs else bpy.context.collection
+    targetCollection = _secret_paint_collection_for_target_surface(
+        targetOBJsurface,
+        kwargs.get("targetCollection") if "targetCollection" in kwargs else bpy.context.collection,
+    )
     transfer_modifier = kwargs.get("transfer_modifier") if "transfer_modifier" in kwargs else False
     # if "append_orenpaint" in kwargs:append_orenpaint = kwargs.get("append_orenpaint")
     # else:append_orenpaint = False
@@ -9799,8 +9894,7 @@ def secretpaint_create_curve(self,context,**kwargs):
 
     #CREATE NEW CURVE
     hairCurves = bpy.data.objects.new("Secret Paint", bpy.data.hair_curves.new("Secret Paint"))
-    if targetCollection.name =="Scene Collection": bpy.context.scene.collection.objects.link(hairCurves) #LINK TO MAIN SCENE COLLECTION (the command for a common collection needs to be different for some reason)
-    else: bpy.data.collections[targetCollection.name].objects.link(hairCurves) #LINK TO COLLECTION
+    targetCollection.objects.link(hairCurves) #LINK TO TARGET TERRAIN COLLECTION
     if transfer_modifier:
         # print("UPDAAAAAAAAAAAT secretpaint_create_curve")
         secretpaint_update_modifier_f(context,upadte_provenance="def secretpaint_create_curve(self,context,**kwargs)") #no need to append the node tree, just update and copy the existing modifier
@@ -12105,44 +12199,57 @@ class orenscatter(bpy.types.Operator):
                 and any(_secret_paint_system_modifier(obj) is not None for obj in selected_objects)
                 and any(obj.type == "MESH" for obj in selected_objects)
             ):
-                source_systems = [
-                    obj for obj in selected_objects
-                    if _secret_paint_system_modifier(obj) is not None
-                ]
-                single_manual_source = (
-                    len(source_systems) == 1
-                    and not _secret_paint_system_is_procedural(source_systems[0])
-                )
-                existing_system_names = {
-                    obj.name for obj in bpy.data.objects
-                    if _secret_paint_system_modifier(obj) is not None
-                }
-                transfer_meshes = [obj for obj in selected_objects if obj.type == "MESH"]
-                if transfer_meshes and context.active_object not in transfer_meshes:
-                    try:
-                        context.view_layer.objects.active = transfer_meshes[0]
-                    except Exception:
-                        pass
-                result = secretpaint_function(
-                    self,
-                    context,
-                    event,
-                    defer_enter_paint_mode=True,
-                )
-                created_systems = [
-                    obj for obj in bpy.data.objects
-                    if (
-                        obj.name not in existing_system_names
-                        and _secret_paint_system_modifier(obj) is not None
+                selected_pair_uses_non_active_source = False
+                try:
+                    selected_pair_uses_non_active_source = bool(
+                        secret_paint_world_paint_module.selected_pair_should_use_non_active_source(context)
                     )
-                ]
-                if (
-                    single_manual_source
-                    and len(created_systems) == 1
-                    and not _secret_paint_system_is_procedural(created_systems[0])
-                ):
-                    return _secret_paint_start_world_paint_for_object(context, created_systems[0])
-                return result if result is not None else {'FINISHED'}
+                except Exception:
+                    selected_pair_uses_non_active_source = False
+                if selected_pair_uses_non_active_source:
+                    _secret_paint_q_debug_log(
+                        "secret.paint.invoke.skip_legacy_transfer_for_selected_source_pair",
+                        context,
+                    )
+                else:
+                    source_systems = [
+                        obj for obj in selected_objects
+                        if _secret_paint_system_modifier(obj) is not None
+                    ]
+                    single_manual_source = (
+                        len(source_systems) == 1
+                        and not _secret_paint_system_is_procedural(source_systems[0])
+                    )
+                    existing_system_names = {
+                        obj.name for obj in bpy.data.objects
+                        if _secret_paint_system_modifier(obj) is not None
+                    }
+                    transfer_meshes = [obj for obj in selected_objects if obj.type == "MESH"]
+                    if transfer_meshes and context.active_object not in transfer_meshes:
+                        try:
+                            context.view_layer.objects.active = transfer_meshes[0]
+                        except Exception:
+                            pass
+                    result = secretpaint_function(
+                        self,
+                        context,
+                        event,
+                        defer_enter_paint_mode=True,
+                    )
+                    created_systems = [
+                        obj for obj in bpy.data.objects
+                        if (
+                            obj.name not in existing_system_names
+                            and _secret_paint_system_modifier(obj) is not None
+                        )
+                    ]
+                    if (
+                        single_manual_source
+                        and len(created_systems) == 1
+                        and not _secret_paint_system_is_procedural(created_systems[0])
+                    ):
+                        return _secret_paint_start_world_paint_for_object(context, created_systems[0])
+                    return result if result is not None else {'FINISHED'}
 
             if len(selected_objects) == 1 and _secret_paint_system_is_procedural(selected_objects[0]):
                 _secret_paint_q_debug_log("secret.paint.invoke.apply_procedural", context)

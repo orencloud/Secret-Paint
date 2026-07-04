@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (1, 9, 13),
+    "version": (2, 0, 0),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -86,6 +86,33 @@ import subprocess
 import bmesh
 import re
 blender_version = bpy.app.version_string
+
+
+def _secret_paint_bl_info():
+    metadata = globals().get("bl_info")
+    if isinstance(metadata, dict):
+        return metadata
+
+    version = (0, 0, 0)
+    try:
+        manifest_text = (Path(__file__).resolve().parent / "blender_manifest.toml").read_text(encoding="utf-8")
+        version_match = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', manifest_text)
+        if version_match:
+            version = tuple(int(part) for part in version_match.group(1).split("."))
+    except Exception:
+        pass
+
+    return {
+        "name": "Secret Paint",
+        "author": "orencloud",
+        "version": version,
+        "blender": (4, 2, 0),
+        "location": "Object + Target + Q",
+        "description": "Paint the selected object on top of the active one",
+        "warning": "",
+        "doc_url": "https://orencloud.art/secretpaint",
+        "category": "Paint",
+    }
 
 
 
@@ -156,6 +183,19 @@ _SECRET_PAINT_WORLD_DENSITY_RADIAL_PROPS = (
 )
 
 
+def _secret_paint_keymap_item_has_property(property_name):
+    try:
+        return any(
+            getattr(prop, "identifier", "") == property_name
+            for prop in bpy.types.KeyMapItem.bl_rna.properties
+        )
+    except Exception:
+        return False
+
+
+SECRET_PAINT_KEYMAP_SUPPORTS_HYPER = _secret_paint_keymap_item_has_property("hyper")
+
+
 def _configure_secret_paint_world_density_radial_keymap(kmi):
     properties = getattr(kmi, "properties", None)
     if properties is None:
@@ -213,7 +253,7 @@ SECRET_PAINT_KEYMAP_EVENT_ATTRS = (
     "ctrl",
     "alt",
     "oskey",
-    "hyper",
+    *(("hyper",) if SECRET_PAINT_KEYMAP_SUPPORTS_HYPER else ()),
     "key_modifier",
     "direction",
     "repeat",
@@ -273,6 +313,16 @@ SECRET_PAINT_DERIVED_SHORTCUT_LINKS = {
             "mode": "when_target_matched_previous",
         },
     ),
+}
+SECRET_PAINT_PRIORITY_KEYMAP_OPERATOR_IDS = {
+    "secret.assembly",
+    "secret.group",
+    "secret.toggle_viewport_tab_bookmark",
+}
+SECRET_PAINT_REQUIRED_USER_KEYMAP_OPERATORS = {
+    "secret.assembly",
+    "secret.group",
+    "secret.toggle_viewport_tab_bookmark",
 }
 SECRET_PAINTING_MODE_SHORTCUT_OPERATOR_IDS = {
     "secret.world_paint_set_tool",
@@ -427,7 +477,7 @@ def _kmi_event_identity(kmi):
         kmi.ctrl,
         kmi.alt,
         kmi.oskey,
-        kmi.hyper,
+        getattr(kmi, "hyper", False),
         kmi.key_modifier,
         kmi.direction,
         kmi.repeat,
@@ -657,37 +707,74 @@ def _keymap_item_matches_default(km, kmi, default_snapshot):
     return _addon_keymap_item_default_identity(km, kmi) == _default_snapshot_identity(default_snapshot)
 
 
+def _keymap_item_should_register_at_head(km, operator_id):
+    return (
+        operator_id in SECRET_PAINT_PRIORITY_KEYMAP_OPERATOR_IDS
+        and getattr(km, "name", "") in {"Object Mode", "3D View"}
+    )
+
+
+def _find_keymap_item_matching_default_snapshot(km, default_snapshot):
+    expected_identity = _default_snapshot_identity(default_snapshot)
+    for kmi in list(km.keymap_items):
+        try:
+            if _addon_keymap_item_default_identity(km, kmi) == expected_identity:
+                return kmi
+        except Exception:
+            pass
+    return None
+
+
+def _keymap_new_event_kwargs(event, *, include_head=False, head=False):
+    kwargs = {
+        "any": event.get("any", False),
+        "shift": event.get("shift", False),
+        "ctrl": event.get("ctrl", False),
+        "alt": event.get("alt", False),
+        "oskey": event.get("oskey", False),
+        "key_modifier": event.get("key_modifier", 'NONE'),
+        "direction": event.get("direction", 'ANY'),
+        "repeat": event.get("repeat", False),
+    }
+    if SECRET_PAINT_KEYMAP_SUPPORTS_HYPER:
+        kwargs["hyper"] = event.get("hyper", False)
+    if include_head:
+        kwargs["head"] = head
+    return kwargs
+
+
+def _new_keymap_item_compat(km, operator_id, event, *, modal=False, head=False):
+    kwargs = _keymap_new_event_kwargs(event, include_head=not modal, head=head)
+    try:
+        if modal:
+            return km.keymap_items.new_modal(operator_id, event["type"], event["value"], **kwargs)
+        return km.keymap_items.new(operator_id, event["type"], event["value"], **kwargs)
+    except TypeError:
+        if "hyper" not in kwargs:
+            raise
+        kwargs.pop("hyper", None)
+        if modal:
+            return km.keymap_items.new_modal(operator_id, event["type"], event["value"], **kwargs)
+        return km.keymap_items.new(operator_id, event["type"], event["value"], **kwargs)
+
+
 def _new_keymap_item_from_default_snapshot(km, default_snapshot):
     event = default_snapshot["event"]
+    operator_id = default_snapshot["operator"]
+    register_at_head = _keymap_item_should_register_at_head(km, operator_id)
     if km.is_modal:
-        kmi = km.keymap_items.new_modal(
-            default_snapshot["operator"],
-            event["type"],
-            event["value"],
-            any=event.get("any", False),
-            shift=event.get("shift", False),
-            ctrl=event.get("ctrl", False),
-            alt=event.get("alt", False),
-            oskey=event.get("oskey", False),
-            hyper=event.get("hyper", False),
-            key_modifier=event.get("key_modifier", 'NONE'),
-            direction=event.get("direction", 'ANY'),
-            repeat=event.get("repeat", False),
+        kmi = _new_keymap_item_compat(
+            km,
+            operator_id,
+            event,
+            modal=True,
         )
     else:
-        kmi = km.keymap_items.new(
-            default_snapshot["operator"],
-            event["type"],
-            event["value"],
-            any=event.get("any", False),
-            shift=event.get("shift", False),
-            ctrl=event.get("ctrl", False),
-            alt=event.get("alt", False),
-            oskey=event.get("oskey", False),
-            hyper=event.get("hyper", False),
-            key_modifier=event.get("key_modifier", 'NONE'),
-            direction=event.get("direction", 'ANY'),
-            repeat=event.get("repeat", False),
+        kmi = _new_keymap_item_compat(
+            km,
+            operator_id,
+            event,
+            head=register_at_head,
         )
         _apply_operator_properties_signature(kmi.properties, default_snapshot["properties"])
         _apply_keymap_item_control_properties_snapshot(
@@ -701,39 +788,72 @@ def _new_keymap_item_from_default_snapshot(km, default_snapshot):
 
 def _new_user_keymap_item_from_addon_item(km_user, km_add, kmi_add):
     event = _keymap_item_event_snapshot(kmi_add)
+    operator_id = _kmi_operator_id_without_properties(km_add, kmi_add)
+    register_at_head = _keymap_item_should_register_at_head(km_user, operator_id)
     if km_user.is_modal:
-        kmi_user = km_user.keymap_items.new_modal(
+        kmi_user = _new_keymap_item_compat(
+            km_user,
             kmi_add.propvalue if km_add.is_modal else getattr(kmi_add, "propvalue", ""),
-            event["type"],
-            event["value"],
-            any=event.get("any", False),
-            shift=event.get("shift", False),
-            ctrl=event.get("ctrl", False),
-            alt=event.get("alt", False),
-            oskey=event.get("oskey", False),
-            hyper=event.get("hyper", False),
-            key_modifier=event.get("key_modifier", 'NONE'),
-            direction=event.get("direction", 'ANY'),
-            repeat=event.get("repeat", False),
+            event,
+            modal=True,
         )
     else:
-        kmi_user = km_user.keymap_items.new(
+        kmi_user = _new_keymap_item_compat(
+            km_user,
             kmi_add.idname,
-            event["type"],
-            event["value"],
-            any=event.get("any", False),
-            shift=event.get("shift", False),
-            ctrl=event.get("ctrl", False),
-            alt=event.get("alt", False),
-            oskey=event.get("oskey", False),
-            hyper=event.get("hyper", False),
-            key_modifier=event.get("key_modifier", 'NONE'),
-            direction=event.get("direction", 'ANY'),
-            repeat=event.get("repeat", False),
+            event,
+            head=register_at_head,
         )
+        _apply_operator_properties_signature(
+            kmi_user.properties,
+            _operator_properties_signature(getattr(kmi_add, "properties", None)),
+        )
+        _sync_keymap_item_control_properties(kmi_add, kmi_user)
 
     _apply_keymap_item_event_snapshot(kmi_user, event)
     return kmi_user
+
+
+def _keymap_item_rebuild_snapshot(km, kmi, event_snapshot):
+    return {
+        "keymap": _keymap_identity(km),
+        "operator": kmi.propvalue if km.is_modal else kmi.idname,
+        "properties": () if km.is_modal else _operator_properties_signature(getattr(kmi, "properties", None)),
+        "event": dict(event_snapshot),
+        "control_properties": _keymap_item_control_properties_snapshot(kmi),
+    }
+
+
+def _replace_addon_keymap_item_event(addon_keymap_index, event_snapshot):
+    if addon_keymap_index < 0 or addon_keymap_index >= len(addon_keymaps):
+        return False
+
+    km_add, kmi_add = addon_keymaps[addon_keymap_index]
+    if not _secret_paint_owns_keymap_item(kmi_add):
+        _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
+        return True
+
+    rebuild_snapshot = _keymap_item_rebuild_snapshot(km_add, kmi_add, event_snapshot)
+    try:
+        kmi_new = _new_keymap_item_from_default_snapshot(km_add, rebuild_snapshot)
+    except TypeError:
+        try:
+            kmi_new = None
+            _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
+
+    addon_keymaps[addon_keymap_index] = (km_add, kmi_new)
+    if not _same_keymap_item_reference(kmi_add, kmi_new):
+        try:
+            if _keymap_item_is_alive(km_add, kmi_add):
+                km_add.keymap_items.remove(kmi_add)
+        except Exception:
+            pass
+    return True
 
 
 def _same_keymap_item_reference(kmi_a, kmi_b):
@@ -746,10 +866,10 @@ def _same_keymap_item_reference(kmi_a, kmi_b):
 
 
 def _refresh_blender_keyconfigs(context):
-    try:
-        context.window_manager.keyconfigs.update()
-    except Exception:
-        pass
+    # Avoid Blender's global keyconfig reconciliation here. In saved user
+    # preferences it can drop unrelated custom shortcuts for operators that are
+    # unavailable in the current session.
+    return None
 
 
 def _remove_user_keymap_items_for_addon_item(context, km_add, kmi_add):
@@ -810,28 +930,55 @@ def _restore_user_keymap_items_for_addon_indexes(context, addon_keymap_indexes):
     return restored
 
 
-def _ensure_user_keymap_item_for_existing_keymap(context, km_add, kmi_add):
+def _secret_paint_should_create_user_keymap_item(km_add, kmi_add):
+    operator_id = _kmi_operator_id_without_properties(km_add, kmi_add)
+    return (
+        _secret_paint_owns_keymap_item(kmi_add)
+        and operator_id in SECRET_PAINT_REQUIRED_USER_KEYMAP_OPERATORS
+        and getattr(km_add, "name", "") in {"Object Mode", "Outliner"}
+    )
+
+
+def _ensure_user_keymap_item_for_existing_keymap(context, km_add, kmi_add, *, create_missing=False):
     wm = getattr(context, "window_manager", None)
     keyconfigs = getattr(wm, "keyconfigs", None)
     user_kc = getattr(keyconfigs, "user", None)
     if user_kc is None or not _secret_paint_owns_keymap_item(kmi_add):
         return 0
 
-    km_user = _find_matching_keymap(user_kc, km_add, create=False)
+    can_create = create_missing and _secret_paint_should_create_user_keymap_item(km_add, kmi_add)
+    km_user = _find_matching_keymap(user_kc, km_add, create=can_create)
     if km_user is None:
         return 0
 
     changed = 0
     matching_items = list(_matching_user_items_without_properties(km_user, km_add, kmi_add))
     if not matching_items:
-        return 0
+        if not can_create:
+            return 0
+        matching_items = [_new_user_keymap_item_from_addon_item(km_user, km_add, kmi_add)]
+        changed += 1
 
     event_snapshot = _keymap_item_event_snapshot(kmi_add)
-    for kmi_user in matching_items:
-        current_event = _keymap_item_event_snapshot(kmi_user)
-        if any(current_event.get(attr) != event_snapshot.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-            _apply_keymap_item_event_snapshot(kmi_user, event_snapshot)
+    primary_item = matching_items[0]
+    for kmi_user in list(matching_items[1:]):
+        try:
+            km_user.keymap_items.remove(kmi_user)
             changed += 1
+        except Exception:
+            pass
+
+    current_event = _keymap_item_event_snapshot(primary_item)
+    if any(current_event.get(attr) != event_snapshot.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
+        _apply_keymap_item_event_snapshot(primary_item, event_snapshot)
+        changed += 1
+
+    if bool(getattr(primary_item, "active", True)) != bool(getattr(kmi_add, "active", True)):
+        try:
+            primary_item.active = bool(getattr(kmi_add, "active", True))
+            changed += 1
+        except Exception:
+            pass
     return changed
 
 
@@ -862,11 +1009,26 @@ def _remove_stale_secret_paint_user_defined_keymap_items_for_addon_item(context,
     return removed
 
 
-def _sync_user_keymap_override_from_addon_item(context, km_add, kmi_add, default_snapshot=None):
-    return _ensure_user_keymap_item_for_existing_keymap(context, km_add, kmi_add)
+def _sync_user_keymap_override_from_addon_item(context, km_add, kmi_add, default_snapshot=None, *, create_missing=False):
+    return _ensure_user_keymap_item_for_existing_keymap(
+        context,
+        km_add,
+        kmi_add,
+        create_missing=create_missing,
+    )
 
 
-def _sync_user_keymap_overrides_from_addon_indexes(context, addon_keymap_indexes, *, only_customized=False):
+def _sync_user_keymap_overrides_from_addon_indexes(
+    context,
+    addon_keymap_indexes,
+    *,
+    only_customized=False,
+    sync_existing_user_overrides=False,
+    create_missing=False,
+):
+    if not sync_existing_user_overrides:
+        return 0
+
     valid_indexes = [
         addon_keymap_index
         for addon_keymap_index in addon_keymap_indexes
@@ -893,6 +1055,7 @@ def _sync_user_keymap_overrides_from_addon_indexes(context, addon_keymap_indexes
             km_add,
             kmi_add,
             default_snapshot,
+            create_missing=create_missing,
         )
 
     if changed:
@@ -903,7 +1066,7 @@ def _sync_user_keymap_overrides_from_addon_indexes(context, addon_keymap_indexes
     return changed
 
 
-def _remove_user_keymap_overrides_for_addon_indexes(context, addon_keymap_indexes):
+def _remove_user_keymap_overrides_for_addon_indexes(context, addon_keymap_indexes, *, create_missing=False):
     restored = _restore_user_keymap_items_for_addon_indexes(context, addon_keymap_indexes)
     ensured = 0
     for addon_keymap_index in addon_keymap_indexes:
@@ -914,6 +1077,7 @@ def _remove_user_keymap_overrides_for_addon_indexes(context, addon_keymap_indexe
             context,
             km_add,
             kmi_add,
+            create_missing=create_missing,
         )
     if ensured:
         context.preferences.is_dirty = True
@@ -921,6 +1085,24 @@ def _remove_user_keymap_overrides_for_addon_indexes(context, addon_keymap_indexe
         _refresh_blender_keyconfigs(context)
         _clear_secret_paint_world_keymap_caches()
     return restored + ensured
+
+
+def _ensure_required_user_keymap_shortcuts(context):
+    required_indexes = [
+        addon_keymap_index
+        for addon_keymap_index, (km_add, kmi_add) in enumerate(addon_keymaps)
+        if _secret_paint_should_create_user_keymap_item(km_add, kmi_add)
+    ]
+    if not required_indexes:
+        return 0
+
+    return _sync_user_keymap_overrides_from_addon_indexes(
+        context,
+        required_indexes,
+        only_customized=False,
+        sync_existing_user_overrides=True,
+        create_missing=True,
+    )
 
 
 def _reset_addon_keymap_events_to_defaults():
@@ -934,8 +1116,9 @@ def _reset_addon_keymap_events_to_defaults():
             continue
         current_event = _keymap_item_event_snapshot(kmi_add)
         if any(current_event.get(attr) != default_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-            _apply_keymap_item_event_snapshot(kmi_add, default_event)
-            reset += 1
+            if _replace_addon_keymap_item_event(addon_keymap_index, default_event):
+                _km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                reset += 1
         if _apply_keymap_item_control_properties_snapshot(
             kmi_add,
             default_snapshot.get("control_properties", {}),
@@ -964,8 +1147,9 @@ def _reset_addon_keymap_item_to_default(addon_keymap_index):
     if default_event:
         current_event = _keymap_item_event_snapshot(kmi_add)
         if any(current_event.get(attr) != default_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-            _apply_keymap_item_event_snapshot(kmi_add, default_event)
-            changed = True
+            if _replace_addon_keymap_item_event(addon_keymap_index, default_event):
+                _km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                changed = True
     if _apply_keymap_item_control_properties_snapshot(
         kmi_add,
         default_snapshot.get("control_properties", {}),
@@ -1018,7 +1202,12 @@ def _store_and_dirty_keymap_customization(context, addon_keymap_indexes, *, forc
             changed += _store_keymap_item_control_customization(context, km_add, kmi_add, default_snapshot)
 
     changed += _persist_user_keymaps_from_addon_shortcut_customizations(context)
-    changed += _sync_user_keymap_overrides_from_addon_indexes(context, valid_indexes)
+    changed += _sync_user_keymap_overrides_from_addon_indexes(
+        context,
+        valid_indexes,
+        sync_existing_user_overrides=True,
+        create_missing=True,
+    )
     if force_control:
         for addon_keymap_index in valid_indexes:
             km_add, kmi_add = addon_keymaps[addon_keymap_index]
@@ -1056,8 +1245,8 @@ def _apply_keymap_event_customization_to_indexes(context, addon_keymap_indexes, 
         _km_add, kmi_add = addon_keymaps[addon_keymap_index]
         current_event = _keymap_item_event_snapshot(kmi_add)
         if any(current_event.get(attr) != event_snapshot.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-            _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
-            changed += 1
+            if _replace_addon_keymap_item_event(addon_keymap_index, event_snapshot):
+                changed += 1
 
     derived_changed, derived_indexes = _apply_derived_shortcut_links_for_source_families(
         context,
@@ -1120,7 +1309,11 @@ def _reset_shortcut_indexes_to_defaults(context, addon_keymap_indexes):
     reset_indexes = valid_indexes.union(derived_indexes)
     changed += _clear_stored_keymap_event_customizations(context, reset_indexes)
     changed += _clear_stored_keymap_control_customizations(context, reset_indexes)
-    changed += _remove_user_keymap_overrides_for_addon_indexes(context, reset_indexes)
+    changed += _remove_user_keymap_overrides_for_addon_indexes(
+        context,
+        reset_indexes,
+        create_missing=True,
+    )
 
     if changed:
         context.preferences.is_dirty = True
@@ -1256,8 +1449,9 @@ def _apply_user_shortcut_to_addon_and_user_targets(context, target_indexes, sour
 
         current_event = _keymap_item_event_snapshot(kmi_add)
         if any(current_event.get(attr) != source_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-            _apply_keymap_item_event_snapshot(kmi_add, source_event)
-            updated += 1
+            if _replace_addon_keymap_item_event(addon_keymap_index, source_event):
+                km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                updated += 1
         updated += _store_keymap_item_event_customization(context, km_add, kmi_add)
 
     if updated:
@@ -1475,12 +1669,38 @@ def _apply_stored_keymap_event_customizations(context):
 
         current_event = _keymap_item_event_snapshot(kmi_add)
         if _event_snapshot_differs_from_default(current_event, event_snapshot):
-            _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
-            applied += 1
+            if _replace_addon_keymap_item_event(addon_keymap_index, event_snapshot):
+                applied += 1
 
     if applied:
         _clear_secret_paint_world_keymap_caches()
     return applied
+
+
+def _stored_keymap_event_override_indexes(context):
+    addon_preferences = _addon_preferences_storage(context)
+    if addon_preferences is None:
+        return set()
+
+    override_data = _keymap_event_override_data(addon_preferences)
+    if not override_data:
+        return set()
+
+    override_indexes = set()
+    for addon_keymap_index, (km_add, kmi_add) in enumerate(addon_keymaps):
+        default_snapshot = _find_default_snapshot_for_addon_item(addon_keymap_index, km_add, kmi_add)
+        default_event = default_snapshot.get("event") if default_snapshot else None
+        if not default_event:
+            continue
+
+        storage_key = _keymap_event_override_storage_key(km_add, kmi_add)
+        if not storage_key:
+            continue
+
+        event_snapshot = override_data.get(storage_key)
+        if isinstance(event_snapshot, dict) and _event_snapshot_differs_from_default(event_snapshot, default_event):
+            override_indexes.add(addon_keymap_index)
+    return override_indexes
 
 
 def _clear_stored_keymap_event_customizations(context, addon_keymap_indexes):
@@ -1729,51 +1949,25 @@ def _repair_addon_keymap_defaults(context=None):
 
     repaired = 0
     for addon_keymap_index, (km_add, kmi_add) in enumerate(list(addon_keymaps)):
-        default_snapshot = _find_default_snapshot_for_addon_item(addon_keymap_index, km_add, kmi_add)
+        if addon_keymap_index < len(addon_keymap_defaults):
+            default_snapshot = addon_keymap_defaults[addon_keymap_index]
+        else:
+            default_snapshot = _find_default_snapshot_for_addon_item(addon_keymap_index, km_add, kmi_add)
         if default_snapshot is None:
             continue
         km_add, kmi_add = addon_keymaps[addon_keymap_index]
-        is_alive = _keymap_item_is_alive(km_add, kmi_add)
-        matches_default_operator = is_alive and _keymap_item_matches_default(km_add, kmi_add, default_snapshot)
-
-        if matches_default_operator:
+        matching_item = _find_keymap_item_matching_default_snapshot(km_add, default_snapshot)
+        if matching_item is not None:
+            if not _same_keymap_item_reference(kmi_add, matching_item):
+                addon_keymaps[addon_keymap_index] = (km_add, matching_item)
+                repaired += 1
             continue
-
-        if is_alive:
-            continue
-
-        if addon_keymap_index < len(addon_keymap_defaults):
-            default_snapshot = addon_keymap_defaults[addon_keymap_index]
 
         kmi_new = _new_keymap_item_from_default_snapshot(km_add, default_snapshot)
         addon_keymaps[addon_keymap_index] = (km_add, kmi_new)
         repaired += 1
 
     return repaired
-
-
-def _sync_addon_keymap_item_from_user_item(kmi_add, kmi_user, *, sync_control_properties=True):
-    changed = False
-    user_event = _keymap_item_event_snapshot(kmi_user)
-    current_event = _keymap_item_event_snapshot(kmi_add)
-    if any(current_event.get(attr) != user_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-        _apply_keymap_item_event_snapshot(kmi_add, user_event)
-        changed = True
-    if sync_control_properties and _sync_keymap_item_control_properties(kmi_user, kmi_add):
-        changed = True
-    return changed
-
-
-def _sync_addon_keymap_item_from_addon_item(kmi_target, kmi_source):
-    changed = False
-    source_event = _keymap_item_event_snapshot(kmi_source)
-    current_event = _keymap_item_event_snapshot(kmi_target)
-    if any(current_event.get(attr) != source_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-        _apply_keymap_item_event_snapshot(kmi_target, source_event)
-        changed = True
-    if _sync_keymap_item_control_properties(kmi_source, kmi_target):
-        changed = True
-    return changed
 
 
 def _secret_paint_owns_keymap_item(kmi):
@@ -1837,16 +2031,34 @@ def _sync_linked_addon_shortcut_groups_from_masters(context=None):
         _master_index, _km_master_add, kmi_master_add = _main_shortcut_master_entry(family_id)
         if kmi_master_add is None:
             continue
-        for _addon_keymap_index, _km_add, kmi_add, _family_id in _main_shortcut_family_entries(family_id):
+        for addon_keymap_index, _km_add, kmi_add, _family_id in _main_shortcut_family_entries(family_id):
             if kmi_add is kmi_master_add:
                 continue
-            if _sync_addon_keymap_item_from_addon_item(kmi_add, kmi_master_add):
+            changed = False
+            source_event = _keymap_item_event_snapshot(kmi_master_add)
+            current_event = _keymap_item_event_snapshot(kmi_add)
+            if any(current_event.get(attr) != source_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
+                if _replace_addon_keymap_item_event(addon_keymap_index, source_event):
+                    _km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                    changed = True
+            if _sync_keymap_item_control_properties(kmi_master_add, kmi_add):
+                changed = True
+            if changed:
                 synced += 1
 
     for group in _shared_painting_mode_shortcut_groups():
         _master_index, _km_master_add, kmi_master_add = group[0]
-        for _addon_keymap_index, _km_add, kmi_add in group[1:]:
-            if _sync_addon_keymap_item_from_addon_item(kmi_add, kmi_master_add):
+        for addon_keymap_index, _km_add, kmi_add in group[1:]:
+            changed = False
+            source_event = _keymap_item_event_snapshot(kmi_master_add)
+            current_event = _keymap_item_event_snapshot(kmi_add)
+            if any(current_event.get(attr) != source_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
+                if _replace_addon_keymap_item_event(addon_keymap_index, source_event):
+                    _km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                    changed = True
+            if _sync_keymap_item_control_properties(kmi_master_add, kmi_add):
+                changed = True
+            if changed:
                 synced += 1
 
     derived_synced, _derived_indexes = _apply_derived_shortcut_links_for_source_families(
@@ -1877,11 +2089,14 @@ def _sync_addon_keymaps_from_user_overrides(context, *, include_main_families=Fa
     main_family_indexes = _main_shortcut_family_indexes()
     addon_preferences = _addon_preferences_storage(context)
     control_override_data = _keymap_control_override_data(addon_preferences) if addon_preferences else {}
+    stored_event_override_indexes = _stored_keymap_event_override_indexes(context)
 
     if include_main_families:
         for family_id in SECRET_PAINT_MAIN_SHORTCUT_FAMILIES:
             family_source = None
             family_entries = _main_shortcut_family_entries(family_id)
+            if any(addon_keymap_index in stored_event_override_indexes for addon_keymap_index, _km_add, _kmi_add, _family_id in family_entries):
+                continue
             for _addon_keymap_index, km_add, kmi_add, _family_id in family_entries:
                 kmi_user = _find_best_user_item_in_keyconfig(user_kc, km_add, kmi_add)
                 if kmi_user is not None and _user_item_differs_from_addon_default(km_add, kmi_add, kmi_user):
@@ -1895,6 +2110,8 @@ def _sync_addon_keymaps_from_user_overrides(context, *, include_main_families=Fa
                 override_sources[addon_keymap_index] = family_source
 
     for group in _shared_painting_mode_shortcut_groups():
+        if any(addon_keymap_index in stored_event_override_indexes for addon_keymap_index, _km_add, _kmi_add in group):
+            continue
         _master_index, km_master_add, kmi_master_add = group[0]
         group_source = _find_best_user_item_in_keyconfig(user_kc, km_master_add, kmi_master_add)
         if group_source is None:
@@ -1913,6 +2130,8 @@ def _sync_addon_keymaps_from_user_overrides(context, *, include_main_families=Fa
     for addon_keymap_index, (km_add, kmi_add) in enumerate(addon_keymaps):
         if addon_keymap_index in override_sources:
             continue
+        if addon_keymap_index in stored_event_override_indexes:
+            continue
         if not _secret_paint_owns_keymap_item(kmi_add):
             continue
         if not include_main_families and addon_keymap_index in main_family_indexes:
@@ -1929,7 +2148,12 @@ def _sync_addon_keymaps_from_user_overrides(context, *, include_main_families=Fa
         if not _secret_paint_owns_keymap_item(kmi_add):
             continue
         default_snapshot = _find_default_snapshot_for_addon_item(addon_keymap_index, _km_add, kmi_add)
-        if _sync_addon_keymap_item_from_user_item(kmi_add, kmi_user, sync_control_properties=False):
+        user_event = _keymap_item_event_snapshot(kmi_user)
+        current_event = _keymap_item_event_snapshot(kmi_add)
+        if any(current_event.get(attr) != user_event.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
+            if not _replace_addon_keymap_item_event(addon_keymap_index, user_event):
+                continue
+            _km_add, kmi_add = addon_keymaps[addon_keymap_index]
             synced += 1
             synced += _store_keymap_item_event_customization(context, _km_add, kmi_add, default_snapshot)
 
@@ -2006,18 +2230,28 @@ def _secret_paint_deferred_keymap_sync_timer():
         return None
     _secret_paint_deferred_keymap_sync_attempts += 1
     try:
+        if not _secret_paint_keymap_maintenance_safe_context(bpy.context):
+            if _secret_paint_deferred_keymap_sync_attempts < _SECRET_PAINT_DEFERRED_KEYMAP_SYNC_MAX_ATTEMPTS:
+                return 0.25
+            return None
         _sync_addon_shortcuts_from_saved_user_overrides(bpy.context)
+        _sync_addon_keymaps_from_user_overrides(bpy.context, include_main_families=True)
+        _ensure_required_user_keymap_shortcuts(bpy.context)
     except Exception:
         pass
-    if _secret_paint_deferred_keymap_sync_attempts < _SECRET_PAINT_DEFERRED_KEYMAP_SYNC_MAX_ATTEMPTS:
-        return 0.25
     return None
 
 
 def _register_secret_paint_keymap_maintenance_timer():
-    # Shortcut sync now runs on add-on enable and when the preferences UI draws.
-    # Keeping a persistent timer alive here causes object-mode slowdown.
-    return _unregister_secret_paint_keymap_maintenance_timer()
+    global _secret_paint_keymap_maintenance_enabled, _secret_paint_deferred_keymap_sync_attempts
+    _unregister_secret_paint_keymap_maintenance_timer()
+    _secret_paint_keymap_maintenance_enabled = True
+    _secret_paint_deferred_keymap_sync_attempts = 0
+    try:
+        bpy.app.timers.register(_secret_paint_deferred_keymap_sync_timer, first_interval=0.5)
+    except Exception:
+        pass
+    return None
 
 
 def _unregister_secret_paint_keymap_maintenance_timer():
@@ -2083,7 +2317,10 @@ def _addon_keymap_default_event_snapshot(km_add, kmi_add):
 
 
 def _find_best_user_item(km_user, km_add, kmi_add):
-    candidates = _matching_user_items(km_user, km_add, kmi_add)
+    candidates = [
+        kmi for kmi in _matching_user_items(km_user, km_add, kmi_add)
+        if bool(getattr(kmi, "active", True))
+    ]
     if not candidates:
         return None
 
@@ -2111,29 +2348,36 @@ def _find_best_user_item_in_keyconfig(user_kc, km_add, kmi_add):
         return None
 
     km_user = _find_matching_keymap(user_kc, km_add, create=False)
-    kmi_user = _find_best_user_item(km_user, km_add, kmi_add) if km_user is not None else None
-    if kmi_user is not None:
-        return kmi_user
+    same_keymap_candidates = [
+        kmi for kmi in (_matching_user_items(km_user, km_add, kmi_add) if km_user is not None else [])
+        if bool(getattr(kmi, "active", True))
+    ]
 
     operator_id = _kmi_operator_id_without_properties(km_add, kmi_add)
     if not operator_id:
-        return None
+        return same_keymap_candidates[0] if same_keymap_candidates else None
 
-    candidates = []
+    other_keymap_candidates = []
     for candidate_km in user_kc.keymaps:
         if km_user is not None and _keymap_identity(candidate_km) == _keymap_identity(km_user):
             continue
         for candidate_kmi in candidate_km.keymap_items:
+            if not bool(getattr(candidate_kmi, "active", True)):
+                continue
             if _kmi_operator_id_without_properties(candidate_km, candidate_kmi) == operator_id:
-                candidates.append(candidate_kmi)
+                other_keymap_candidates.append(candidate_kmi)
 
-    if not candidates:
-        return None
-
+    candidates = list(same_keymap_candidates) + other_keymap_candidates
     for candidate_kmi in candidates:
         if _user_item_differs_from_addon_default(km_add, kmi_add, candidate_kmi):
             return candidate_kmi
-    return candidates[0]
+
+    addon_event_identity = _kmi_event_identity(kmi_add)
+    for candidate_kmi in candidates:
+        if _kmi_event_identity(candidate_kmi) == addon_event_identity:
+            return candidate_kmi
+
+    return candidates[0] if candidates else None
 
 
 def _painting_mode_shortcut_indexes(*, exclude_indexes=None):
@@ -2208,12 +2452,13 @@ def _sync_shared_painting_mode_shortcut_groups(context, groups=None, *, create_m
         _master_index, _km_master_add, kmi_master_add = group[0]
         event_snapshot = _keymap_item_event_snapshot(kmi_master_add)
         active = bool(getattr(kmi_master_add, "active", True))
-        for _addon_keymap_index, _km_add, kmi_add in group[1:]:
+        for addon_keymap_index, _km_add, kmi_add in group[1:]:
             changed = False
             current_snapshot = _keymap_item_event_snapshot(kmi_add)
             if any(current_snapshot.get(attr) != event_snapshot.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-                _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
-                changed = True
+                if _replace_addon_keymap_item_event(addon_keymap_index, event_snapshot):
+                    _km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                    changed = True
             if bool(getattr(kmi_add, "active", True)) != active:
                 kmi_add.active = active
                 changed = True
@@ -2289,13 +2534,6 @@ def _keymap_item_event_matches_snapshot(kmi, event_snapshot):
     )
 
 
-def _apply_keymap_item_event_snapshot_if_changed(kmi, event_snapshot):
-    if _keymap_item_event_matches_snapshot(kmi, event_snapshot):
-        return False
-    _apply_keymap_item_event_snapshot(kmi, event_snapshot)
-    return True
-
-
 def _source_family_ids_for_indexes(addon_keymap_indexes):
     valid_indexes = set(addon_keymap_indexes or ())
     family_ids = set()
@@ -2349,8 +2587,9 @@ def _apply_derived_shortcut_links_for_source_families(
                     continue
 
                 target_indexes.add(addon_keymap_index)
-                if _apply_keymap_item_event_snapshot_if_changed(kmi_add, target_event):
-                    changed += 1
+                if not _keymap_item_event_matches_snapshot(kmi_add, target_event):
+                    if _replace_addon_keymap_item_event(addon_keymap_index, target_event):
+                        changed += 1
 
     if store:
         for addon_keymap_index in target_indexes:
@@ -2393,13 +2632,14 @@ def _apply_main_shortcut_family(context, family_id, *, event_snapshot=None, acti
         return 0
 
     updated = 0
-    for _addon_keymap_index, km_add, kmi_add, _family_id in family_entries:
+    for addon_keymap_index, km_add, kmi_add, _family_id in family_entries:
         changed = False
         if event_snapshot is not None:
             current_snapshot = _keymap_item_event_snapshot(kmi_add)
             if any(current_snapshot.get(attr) != event_snapshot.get(attr) for attr in SECRET_PAINT_KEYMAP_EVENT_ATTRS):
-                _apply_keymap_item_event_snapshot(kmi_add, event_snapshot)
-                changed = True
+                if _replace_addon_keymap_item_event(addon_keymap_index, event_snapshot):
+                    km_add, kmi_add = addon_keymaps[addon_keymap_index]
+                    changed = True
         if bool(getattr(kmi_add, "active", True)) != bool(active):
             kmi_add.active = bool(active)
             changed = True
@@ -3166,6 +3406,7 @@ class secret_keymap_reset_all(bpy.types.Operator):
         changed += _remove_user_keymap_overrides_for_addon_indexes(
             context,
             range(len(addon_keymaps)),
+            create_missing=True,
         )
         if changed:
             context.preferences.is_dirty = True
@@ -3362,6 +3603,7 @@ def register():
     
     
     
+    bl_info = _secret_paint_bl_info()
     if addon_updater_ops is not None: addon_updater_ops.register(bl_info)
 
     
@@ -3398,162 +3640,113 @@ def register():
 
     register_secret_paint_panel_drag_keymap(addon_keymaps, kc)
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
-    kmi = km.keymap_items.new("secret.toggle_viewport_tab_bookmark", "W", "PRESS", shift=True)
+    km = addon_keymap("Object Mode")
+    kmi = km.keymap_items.new("secret.toggle_viewport_tab_bookmark", "W", "PRESS", shift=True, head=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Object Mode")
-    if not km: km = kc.new("Object Mode")
+    km = addon_keymap("Object Mode")
     kmi = km.keymap_items.new("secret.paint", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Sculpt Curves")
-    if not km:
-        km = kc.new("Sculpt Curves")
+    km = addon_keymap("Sculpt Curves")
     kmi = km.keymap_items.new("secret.paint", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Weight Paint")
-    if not km:
-        km = kc.new("Weight Paint")
+    km = addon_keymap("Weight Paint")
     kmi = km.keymap_items.new("secret.paint", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Curve")
-    if not km:
-        km = kc.new("Curve")
+    km = addon_keymap("Curve")
     kmi = km.keymap_items.new("secret.paint", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_density", "D", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_delete", "X", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_single", "K", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_slide", "G", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_select", "H", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_rotation", "R", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_scale", "S", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_tool_bezier", "B", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_toggle_lock_surface", "ONE", "PRESS")
     addon_keymaps.append((km, kmi))
 
     if SECRET_PAINT_WORLD_TARGET_SURFACE_ENABLED:
-        km = kc.get("3D View")
-        if not km:
-            km = kc.new("3D View", space_type='VIEW_3D')
+        km = addon_keymap("3D View", space_type='VIEW_3D')
         kmi = km.keymap_items.new("secret.world_paint_toggle_target_surface", "I", "PRESS")
         addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_toggle_wire_bounds_surfaces", "TWO", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_toggle_interpolate", "THREE", "PRESS")
     addon_keymaps.append((km, kmi))
 
     if SECRET_PAINT_WORLD_RANDOM_Z_ENABLED:
-        km = kc.get("3D View")
-        if not km:
-            km = kc.new("3D View", space_type='VIEW_3D')
+        km = addon_keymap("3D View", space_type='VIEW_3D')
         kmi = km.keymap_items.new("secret.world_paint_toggle_random_z", "T", "PRESS")
         addon_keymaps.append((km, kmi))
 
     if SECRET_PAINT_WORLD_ALIGN_TO_NORMAL_ENABLED:
-        km = kc.get("3D View")
-        if not km:
-            km = kc.new("3D View", space_type='VIEW_3D')
+        km = addon_keymap("3D View", space_type='VIEW_3D')
         kmi = km.keymap_items.new("secret.world_paint_toggle_align_to_normal", "N", "PRESS")
         addon_keymaps.append((km, kmi))
 
     if SECRET_PAINT_WORLD_SIZE_ADJUST_ENABLED:
-        km = kc.get("3D View")
-        if not km:
-            km = kc.new("3D View", space_type='VIEW_3D')
+        km = addon_keymap("3D View", space_type='VIEW_3D')
         kmi = km.keymap_items.new("secret.world_paint_adjust_size", "F", "PRESS")
         kmi.properties.confirm_on_release = False
         addon_keymaps.append((km, kmi))
 
     if SECRET_PAINT_WORLD_SIZE_ADJUST_ENABLED:
-        km = kc.get("Sculpt Curves")
-        if not km:
-            km = kc.new("Sculpt Curves")
+        km = addon_keymap("Sculpt Curves")
         kmi = km.keymap_items.new("secret.world_paint_adjust_size", "F", "PRESS")
         kmi.properties.confirm_on_release = False
         addon_keymaps.append((km, kmi))
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_adjust_strength", "F", "PRESS", alt=True)
     kmi.properties.confirm_on_release = False
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Sculpt Curves")
-    if not km:
-        km = kc.new("Sculpt Curves")
+    km = addon_keymap("Sculpt Curves")
     kmi = km.keymap_items.new("secret.world_paint_adjust_strength", "F", "PRESS", alt=True)
     kmi.properties.confirm_on_release = False
     addon_keymaps.append((km, kmi))
     _disable_stale_secret_paint_world_density_adjust_keymaps(bpy.context)
 
-    km = kc.get("3D View")
-    if not km:
-        km = kc.new("3D View", space_type='VIEW_3D')
+    km = addon_keymap("3D View", space_type='VIEW_3D')
     kmi = km.keymap_items.new("secret.world_paint_pick_source", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Sculpt Curves")
-    if not km:
-        km = kc.new("Sculpt Curves")
+    km = addon_keymap("Sculpt Curves")
     kmi = km.keymap_items.new("secret.world_paint_pick_source", "Q", "PRESS")
     addon_keymaps.append((km, kmi))
 
@@ -3577,27 +3770,19 @@ def register():
 
 
 
-    km = kc.get("Object Mode")
-    if not km:
-        km = kc.new("Object Mode")
+    km = addon_keymap("Object Mode")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Sculpt Curves")
-    if not km:
-        km = kc.new("Sculpt Curves")
+    km = addon_keymap("Sculpt Curves")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Weight Paint")
-    if not km:
-        km = kc.new("Weight Paint")
+    km = addon_keymap("Weight Paint")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Curve")
-    if not km:
-        km = kc.new("Curve")
+    km = addon_keymap("Curve")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
 
@@ -3606,27 +3791,22 @@ def register():
 
 
 
-    km = kc.get("Object Mode")
-    if not km:
-        km = kc.new("Object Mode")
-    kmi = km.keymap_items.new("secret.assembly", "D", "PRESS", ctrl=True)
+    km = addon_keymap("Object Mode")
+    kmi = km.keymap_items.new("secret.assembly", "D", "PRESS", ctrl=True, head=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Object Mode")
-    if not km:
-        km = kc.new("Object Mode")
-    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True)
+    km = addon_keymap("Object Mode")
+    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True, head=True)
     addon_keymaps.append((km, kmi))
 
-    km = kc.get("Outliner")
-    if not km:
-        km = kc.new("Outliner", space_type="OUTLINER")
-    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True)
+    km = addon_keymap("Outliner", space_type="OUTLINER")
+    kmi = km.keymap_items.new("secret.group", "M", "PRESS", alt=True, head=True)
     addon_keymaps.append((km, kmi))
 
     _capture_addon_keymap_defaults()
     try:
         _sync_addon_shortcuts_from_saved_user_overrides(bpy.context)
+        _sync_addon_keymaps_from_user_overrides(bpy.context, include_main_families=True)
     except Exception:
         pass
     _register_secret_paint_keymap_maintenance_timer()
