@@ -1,77 +1,44 @@
-# Shared Secret Paint runtime used by the private add-on and the packaged public add-on.
-
-# import bpy
-import random   #orenbake procedural image names s
-from bpy.types import Menu     # was necessary for orenbake, don't know what specifically
-from bpy.app.handlers import persistent
-from mathutils import Vector    # for creating texture in mouse position
-from bpy.props import FloatVectorProperty       # for creating texture in mouse position
-
-from bpy.utils import resource_path   # import nodegroup
-from pathlib import Path  #paint_from_library(bpy.types.Operator)
-import os        # import nodegroup and export point cache orenloop #export_and_relink_obj    >#orenscatterinstancesmodifiers    >ALSO: secret_menu  +
-
-import addon_utils  #activate addon cell fracture AND #to find the path to the addon
-
-from collections import  defaultdict #linked scene duplicate collections  orenSceneLinkFunction
-
-import math #square root of temp empty p      ALSO   round temp resolution quick rendering ALSO math.sqrt(surface_area / (4 * math.pi))
-
-# from os.path import dirname, join, normpath   # for framerate presets in performance capture
-# from bpy.app import binary_path_python        # for framerate presets in performance capture
-
-from mathutils import Matrix   #apply transformations at low level
-
-#asset browser export asset, find library name
-from bpy.types import Header, Panel, Menu, UIList #necessary for pie menu
-from bpy_extras import (asset_utils,)
-
-import bpy, os  #import images from folder  import_images_from_folder
-
-
-import bpy_extras  #compositor_obj_tracker
-import mathutils
-import blf
-import gpu
-
-import datetime  #orenquickrender(bpy.types.Operator)
-import time
-
-
-from bpy_extras import view3d_utils  #class orenscatter_modal_operator(bpy.types.Operator):
-from bpy.types import Operator
-from gpu_extras.batch import batch_for_shader
-
-
-
-import bpy.types  #SelectObjectOperator(bpy.types.Operator)   orenpaint siblings
-from bpy.props import StringProperty
-
-import subprocess   #marvelousexport(bpy.types.Operator)
-import threading #avoid freezing blender when launching marvelous
-# import os #necessary, but already imported
 import ctypes
-import platform
-import shutil  #duplicate a file to new directory
-# import clipboard #copy path to clipboard
-
-import bmesh  #orenbakeimport_objs_from_scanfolder(bpy.types.Operator)
-import re
+import datetime
 import json
-import numpy     #parent to closest bone
+import math
+import os
+import platform
+import random
+import re
+import shutil
+import subprocess
+import time
+import traceback
+from collections import defaultdict
 from importlib import import_module
+from pathlib import Path
+
+import addon_utils
+import blf
+import bmesh
+import bpy
+import bpy.types
+import bpy_extras
+import gpu
+import mathutils
+import numpy
+from bpy.app.handlers import persistent
+from bpy.props import FloatVectorProperty, StringProperty
+from bpy.types import Header, Menu, Operator, Panel, UIList
+from bpy.utils import resource_path
+from bpy_extras import asset_utils, view3d_utils
+from gpu_extras.batch import batch_for_shader
+from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
 blender_version = bpy.app.version_string
 
 auto_updater_status = True
-addon_path=[]
+addon_path = []
 for mod in addon_utils.modules():
     if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  # if mod.bl_info.get("name") == "Secret Paint":
         addon_path = os.path.dirname(mod.__file__)
-        # if "extensions" not in addon_path:
-        #     # from . import addon_updater_ops
-        #     auto_updater_status = False
         break
 
 
@@ -102,7 +69,6 @@ def _secret_paint_source_blend_path():
 
 
 _SIDE_PANEL_COUNT_CACHE = {}
-_SIDE_PANEL_COUNT_CACHE_LOCK = threading.Lock()
 _SIDE_PANEL_COUNT_CACHE_VERSION = 0
 _SIDE_PANEL_LAYOUT_CACHE = {}
 _SIDE_PANEL_LAYOUT_CACHE_VERSION = 0
@@ -1212,11 +1178,10 @@ def _secret_paint_activate_density_brush_cursor(context, brush, activeobj=None, 
 def _clear_side_panel_count_cache(reason="manual"):
     global _SIDE_PANEL_COUNT_CACHE_VERSION, _SIDE_PANEL_LAYOUT_CACHE_VERSION
     try:
-        with _SIDE_PANEL_COUNT_CACHE_LOCK:
-            _SIDE_PANEL_COUNT_CACHE.clear()
-            _SIDE_PANEL_LAYOUT_CACHE.clear()
-            _SIDE_PANEL_COUNT_CACHE_VERSION += 1
-            _SIDE_PANEL_LAYOUT_CACHE_VERSION += 1
+        _SIDE_PANEL_COUNT_CACHE.clear()
+        _SIDE_PANEL_LAYOUT_CACHE.clear()
+        _SIDE_PANEL_COUNT_CACHE_VERSION += 1
+        _SIDE_PANEL_LAYOUT_CACHE_VERSION += 1
     except Exception:
         pass
 
@@ -1651,8 +1616,7 @@ def _get_side_panel_instance_count_cached(sibling):
 
     if cache_key is not None and signature is not None:
         try:
-            with _SIDE_PANEL_COUNT_CACHE_LOCK:
-                cached = _SIDE_PANEL_COUNT_CACHE.get(cache_key)
+            cached = _SIDE_PANEL_COUNT_CACHE.get(cache_key)
             if cached and cached["signature"] == signature:
                 return cached["count"], cached["label"]
         except Exception:
@@ -1662,12 +1626,11 @@ def _get_side_panel_instance_count_cached(sibling):
 
     if cache_key is not None and signature is not None:
         try:
-            with _SIDE_PANEL_COUNT_CACHE_LOCK:
-                _SIDE_PANEL_COUNT_CACHE[cache_key] = {
-                    "signature": signature,
-                    "count": n_of_instances,
-                    "label": n_of_instances_label,
-                }
+            _SIDE_PANEL_COUNT_CACHE[cache_key] = {
+                "signature": signature,
+                "count": n_of_instances,
+                "label": n_of_instances_label,
+            }
         except Exception:
             pass
 
@@ -2047,8 +2010,7 @@ def _get_side_panel_layout_model_cached(context, obj):
 
     if cache_key is not None:
         try:
-            with _SIDE_PANEL_COUNT_CACHE_LOCK:
-                cached = _SIDE_PANEL_LAYOUT_CACHE.get(cache_key)
+            cached = _SIDE_PANEL_LAYOUT_CACHE.get(cache_key)
             if cached:
                 return cached["model"]
         except Exception:
@@ -2058,8 +2020,7 @@ def _get_side_panel_layout_model_cached(context, obj):
 
     if cache_key is not None:
         try:
-            with _SIDE_PANEL_COUNT_CACHE_LOCK:
-                _SIDE_PANEL_LAYOUT_CACHE[cache_key] = {"model": model}
+            _SIDE_PANEL_LAYOUT_CACHE[cache_key] = {"model": model}
         except Exception:
             pass
 
@@ -2249,8 +2210,6 @@ def _secret_paint_generator_uses_legacy_random_id(generator_tree):
 
 
 def _secret_paint_patch_runtime_node_groups():
-    # Secret Paint node groups are versioned bundled assets. If a node tree is
-    # stale, reimport it instead of mutating sockets, links, or version metadata.
     return False
 
 
@@ -4188,112 +4147,6 @@ def _secret_paint_fast_reproject_surface_uvs(surface):
         _secret_paint_store_auto_uv_cache(mesh)
     finally:
         bm.free()
-# file_path = Path(resource_path('USER')) / "scripts/addons" / "Secret Paint" / "Secret Paint.blend"       #C:\Users\loren\AppData\Roaming\Blender Foundation\Blender\4.0\scripts\addons\orenpaint\orenpaint.blend
-# for mod in addon_utils.modules():
-#     if mod.bl_info.get("name") == "Secret Paint":
-#         file_path = os.path.dirname(mod.__file__) + "\Secret Paint.blend"
-#         break
-
-# auto_updater_status = True
-# if blender_version >= "4.2.0" and bpy.app.online_access == False: auto_updater_status = False
-# if auto_updater_status == True: from . import addon_updater_ops
-# import bpy.utils.previews  # CUSTOM ICONS VIEW_MT_PIE_orencloudpie
-
-
-
-
-# # #IMPORT SIDECAR .PY (metdhod 2, registers classes but can't reload addon while developing)
-# # from . import paint
-# # modul = (paint,)
-# # IMPORT SIDECAR .PY (method1: allows reloading, but doesn't register the classes)
-# # from . import paint
-# import importlib
-# addon_folder = 'orencloud private'
-# modules = ("paint",)  #('.paint',)
-# def import_modules():
-#     for mod in modules:
-#         importlib.import_module("."+mod, addon_folder)
-# def reimport_modules(): # Reimporting modules during addon development
-#     for mod in modules:
-#         # want_reload_module = importlib.import_module(mod, addon_folder)
-#         want_reload_module = importlib.import_module("."+mod, addon_folder)
-#         importlib.reload(want_reload_module)
-# import_modules()
-# reimport_modules() #only for developing addon, reloading addon re imports all classes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class orencurvepanel(bpy.types.Panel):
     bl_label = "Secret Paint"
     bl_idname = "OREN_PT_OrencurvePanel"
@@ -4311,10 +4164,6 @@ class orencurvepanel(bpy.types.Panel):
                 active_weight_group_name = active_object.vertex_groups.active.name
         except Exception:
             active_weight_group_name = ""
-
-        # row = layout.row()
-        # row.label(text= "Draw curve from object", icon= 'OBJECT_ORIGIN')
-
         paint_mode_active = _secret_paint_panel_is_paint_mode(context)
         paint_button = layout.column(align=True)
         paint_button.scale_y = 2.2  # Adjust the height of the button
@@ -4328,16 +4177,7 @@ class orencurvepanel(bpy.types.Panel):
         ) #GP_MULTIFRAME_EDITING
         paint_op.exit_paint_mode = paint_mode_active
         paint_op.use_selected_source = paint_mode_active
-        # if bl_info["name"] == "orencloud private":
-        #     row.scale_y = 1.3  # Adjust the height of the button
-        #     row.operator("oren.shared_material", icon= 'MATERIAL')
-        #     row.scale_x = 0.3  # Adjust the height of the button
-        #     row.prop(context.scene.mypropertieslist, "shared_material_index", expand=True, text="")
         layout.separator()
-
-
-
-        # CREATE ROWS IN PANEL  #0.4 milliseconds in total
         def configure_side_panel_row(outer_row, *, scale_y):
             outer_row.scale_y = scale_y
             label_row = outer_row.row(align=True)
@@ -4378,11 +4218,6 @@ class orencurvepanel(bpy.types.Panel):
             sibling_name = row_entry.get("name") or _side_panel_rna_name(sibling)
             if not sibling_name or not _side_panel_object_alive(sibling):
                 return
-            # if sibling.name in bpy.context.view_layer.objects and sibling.type == 'CURVES' and sibling.modifiers:
-            #     for modifier in sibling.modifiers:
-            #         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("orenpaint"): #modifier.node_group.name == "orenpaint":
-
-
             row, label_row, action_row = split_side_panel_row(parent_layout, scale_y=0.92)
 
             dragging_this_row = _SIDE_PANEL_DRAG_OBJECT_NAME == sibling_name
@@ -4400,7 +4235,6 @@ class orencurvepanel(bpy.types.Panel):
                         row_active or \
                         context.object.mode == "WEIGHT_PAINT" and row_entry["vertex_attribute_name"] == active_weight_group_name or \
                         dragging_this_row:
-                    # icon = "RESTRICT_SELECT_ON"
                     row.alert = True
                 else: row.alert = False
             else:
@@ -4417,13 +4251,6 @@ class orencurvepanel(bpy.types.Panel):
                 icon=icon,
             )
             select_button.object_name = sibling_name
-
-            # # Toggle hair button ALT CLICK TO SWITCH
-            # if not sibling.modifiers["GeometryNodes"]["Input_69"]: row.alert = True
-            # else: row.alert = False
-            # hair_button = row.operator("oren.applypaint", text="", icon='CURVES_DATA' if row.alert else 'SHADERFX')  #BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
-            # hair_button.object_name = sibling.name
-
             if not row_entry["procedural_enabled"]: row.alert = True
             else: row.alert = False
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_APPLY_PROP, icon='CURVES_DATA')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
@@ -4434,7 +4261,6 @@ class orencurvepanel(bpy.types.Panel):
 
             if row_entry["vertex_attribute_name"] and row_entry["procedural_enabled"]: row.alert = True
             else: row.alert = False
-            # Toggle vertex button
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_VERTEX_PROP, icon='MOD_VERTEX_WEIGHT' if row_entry["vertex_use_attribute"] else 'GROUP_VERTEX')
 
             row.alert = row_entry["render_alert"]
@@ -4445,209 +4271,38 @@ class orencurvepanel(bpy.types.Panel):
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_BOUNDS_PROP, icon=row_entry["bounds_icon"])
 
             row.alert = row_entry["mask_alert"]
-            # Toggle mask button
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_MASK_PROP, icon='CLIPUV_HLT' if row.alert else "CLIPUV_DEHLT")
-
-
-            # #DENSITY SLIDER
-            # # row.scale_x = 1.2  # Adjust the height of the button
-            # row.prop(context.scene.mypropertieslist, "seltoactiveextrusion")
-
-            # PANEL WITH SEPARATION
-            # import bpy
-            #
-            # class OBJECT_PT_CollapsibleListPanel(bpy.types.Panel):
-            #     bl_label = "Collapsible List Panel"
-            #     bl_idname = "OBJECT_PT_collapsible_list_panel"
-            #     bl_space_type = "VIEW_3D"
-            #     bl_region_type = "UI"
-            #     bl_category = "Custom Panel"
-            #
-            #     def draw(self, context):
-            #         layout = self.layout
-            #         scene = context.scene
-            #
-            #         # Create a collapsible list with selected objects
-            #         box = layout.box()
-            #         box.prop(scene, "is_collapsed", text="Selected Objects", icon="TRIA_DOWN" if scene.is_collapsed else "TRIA_RIGHT")
-            #
-            #         if scene.is_collapsed:
-            #             for obj in bpy.context.selected_objects:
-            #                 box.label(text=obj.name)
-            #
-            #
-            # def update_collapsed_list(self, context):
-            #     # Empty function to be used as a callback for the property update
-            #     pass
-            #
-            # def register():
-            #     bpy.types.Scene.is_collapsed = bpy.props.BoolProperty(default=False, update=update_collapsed_list)
-            #     bpy.utils.register_class(OBJECT_PT_CollapsibleListPanel)
-            #
-            # def unregister():
-            #     bpy.utils.unregister_class(OBJECT_PT_CollapsibleListPanel)
-            #     del bpy.types.Scene.is_collapsed
-            #
-            # if __name__ == "__main__":
-            #     register()
-
         def list_biomes(biome_entry,row):
             bgroup = biome_entry["bgroup"]
             hair_in_bgroup = biome_entry["rows"]
-            # if bgroup.name in bpy.context.view_layer.objects and bgroup.type == 'CURVES' and bgroup.modifiers:
-            #     for modifier in bgroup.modifiers:
-            #         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("orenpaint"): #modifier.node_group.name == "orenpaint":
-
-            # row = layout.row(align=True) #PASSED FROM ARGUMENT
-            # row.scale_y = 1.4  # Adjust the height of the button
             row, label_row, action_row = configure_side_panel_row(row, scale_y=1.15)
             row.scale_x = 0.99  # Adjust the height of the button
-
-
-            # ## Display bgroup's name as a label and make it selectable
-            # # if bgroup == bpy.context.active_object: namerow = "(ACTIVE) " + bgroup.name
-            # # else:namerow = bgroup.name
-            # if bgroup.modifiers[0]["Input_2"]:
-            #     namerow = bgroup.modifiers[0]["Input_2"].name
-            #     if bgroup.modifiers[0]["Input_2"].type == "EMPTY":
-            #         icon = "EMPTY_AXIS"
-            #     else:
-            #         icon = "OBJECT_DATA"
-            # elif bgroup.modifiers[0]["Input_9"]:
-            #     namerow = bgroup.modifiers[0]["Input_9"].name
-            #     icon = "OUTLINER_COLLECTION"
-            # else:
-            #     namerow = "(empty)"
-            #     icon = "OBJECT_DATA"
-            #     # continue #if no brush obj, don't list
-            # if bgroup in bpy.context.selected_objects or bgroup == bpy.context.active_object or \
-            #         bpy.context.object.mode == "WEIGHT_PAINT" and bgroup.modifiers[0]["Input_83_attribute_name"] == bpy.context.active_object.vertex_groups.active.name:
-            #     # icon = "RESTRICT_SELECT_ON"
-            #     row.alert = True
-            # else:
-            #     row.alert = False
-            # select_button = row.operator("object.select_object", text=str(namerow.name), icon=icon)
-
-            #"TRY" BECAUSE WHEN OPENING AN OLD BLEND FILE, THE CODE WON'T FIND THE SOCKET FOR THE CUSTOM BIOME NAME UNTIL REIMPORTING THE NEW NODE TREE
             rename_active = bool(biome_entry.get("rename_active", False))
             row.alert = False
             label_row.alert = rename_active
             select_button = label_row.operator("secret.select_biome", text=biome_entry["label"])
             select_button.object_biome = str(bgroup)
-            # select_button.object_biome = hair_in_bgroup
-
             delete_button = action_button(row, action_row, "secret.biome_delete", icon='TRASH')
             delete_button.object_biome = str(bgroup)
             action_spacer(row, action_row)
-
-            # # Toggle hair button ALT CLICK TO SWITCH
-            # if not bgroup.modifiers["GeometryNodes"]["Input_69"]: row.alert = True
-            # else: row.alert = False
-            # hair_button = row.operator("oren.applypaint", text="", icon='CURVES_DATA' if row.alert else 'SHADERFX')  #BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
-            # hair_button.object_name = bgroup.name
-
-            # # if not bgroup.modifiers[0]["Input_69"]: row.alert = True
-            # # else: row.alert = False
-            # hair_button = row.operator("oren.applypaint", text="", icon='CURVES_DATA')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
-            # # hair_button.object_name = bgroup.name
-
-            # # if not bgroup.modifiers[0]["Input_69"]: row.alert = True
-            # # else: row.alert = False
-            # hair_button = row.operator("oren.applypaint", text="", icon='DUPLICATE')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
-            # # hair_button.object_name = bgroup.name
-
-            # if not bgroup.modifiers[0]["Input_69"]: row.alert = False
-            # else: row.alert = True
-            # procedural_button = row.operator("oren.toggle_procedural", text="", icon='SHADERFX')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
-            # procedural_button.object_name = bgroup.name
-
-
-            #VERTEX BUTTON
-            # if bgroup.modifiers[0]["Input_83_attribute_name"] and bgroup.modifiers[0]["Input_69"]: row.alert = True
-            # else: row.alert = False
-            # vertex_button = row.operator("oren.vertexgrouppaint", text="", icon='MOD_VERTEX_WEIGHT' if bgroup.modifiers[0]["Input_83_use_attribute"] else 'GROUP_VERTEX')
             vertex_button = action_button(row, action_row, "secret.vertexgrouppaint_biome", icon='GROUP_VERTEX')
             vertex_button.object_biome = str(bgroup)
-
-
-            #RENDER BUTTON
             render_icon = biome_entry["render_icon"]
             row.alert = biome_entry["render_alert"]
 
             hide_buttonre = action_button(row, action_row, "secret.toggle_visibilityrender_biome", icon=render_icon)
             hide_buttonre.object_biome = str(bgroup)
-
-
-
-
-            #BOUNDS BUTTON
-            # row.alert = False
-            # bounds_button = row.operator("secret.toggle_display_bounds_biome", text="", icon='SHADING_SOLID')
             row.alert = biome_entry["bounds_alert"]
             bounds_button = action_button(row, action_row, "secret.toggle_display_bounds_biome", icon='SHADING_BBOX' if row.alert else 'SHADING_SOLID')
             bounds_button.object_biome = str(bgroup)
-
-
-            #MASK BUTTON
             row.alert = biome_entry["mask_alert"]
             mask_button = action_button(row, action_row, "object.secretpaint_viewport_mask_biome", icon='CLIPUV_HLT' if row.alert else "CLIPUV_DEHLT")
             mask_button.object_biome = str(bgroup)
 
 
         obj = context.object
-        # global obj_parent
-        # if obj and obj.type=="CURVES" and obj.parent: obj_parent = obj.parent
-        # if bpy.context.active_object == None: obj = obj_parent
-
         if obj:
             layout_model = _get_side_panel_layout_model_cached(context, obj)
-
-
-
-            # VISUALLY SEPARATE BIOMES BY VERTEX GROUP
-            # all_vgroups=[]
-            # hair_with_vgroups=[]
-            # for hayr in hair[:]:
-            #     if hayr[0].modifiers[0]["Input_83_attribute_name"]:
-            #         if hayr[0].modifiers[0]["Input_83_attribute_name"] not in all_vgroups: all_vgroups.append(hayr[0].modifiers[0]["Input_83_attribute_name"])
-            #         hair_with_vgroups.append(hayr)
-            # for vgroup in all_vgroups:
-            #     hair_with_this_vgroup = 0
-            #     for hayr in hair_with_vgroups:
-            #         if hayr[0].modifiers[0]["Input_83_attribute_name"]==vgroup: hair_with_this_vgroup += 1
-            #     if hair_with_this_vgroup >= 2:
-            #         for hayr in hair_with_vgroups:
-            #             if hayr[0].modifiers[0]["Input_83_attribute_name"] == vgroup:
-            #                 hair.remove(hayr)  # so that it doesn't get listed twice (afterwards with regular siblings)
-            #                 list_hair(hayr[0])
-            #         row = layout.row()
-            #         row = layout.row()
-            #         row = layout.row()
-            #
-            # #REGULAR SIBLINGS
-            # for sibling in hair:
-            #     list_hair(sibling[0])
-
-
-            # # VISUALLY SEPARATE BIOMES BY BIOME GROUP
-            # # all_bgroups=[hayr[0].modifiers[0]["Socket_0"] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups]
-            # all_bgroups=[]
-            # hair_in_bgroup = []
-            # for hayr in hair[:]:        #hayr[0] because I'm using a tuple while listing object name and its brush paint system
-            #     if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups:
-            #         all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
-            # all_bgroups.sort()
-            # for Bgroup in all_bgroups:
-            #     list_biomes(Bgroup,hair_in_bgroup) #create biome commands row
-            #     for hayr in hair[:]:
-            #         if hayr[0].modifiers[0]["Socket_0"] == Bgroup: list_hair(hayr[0])
-            #     row = layout.row()
-            #     row = layout.row()
-            #     row = layout.row()
-            #     row = layout.row()
-            # VISUALLY SEPARATE BIOMES BY BIOME GROUP
-            # all_bgroups=[hayr[0].modifiers[0]["Socket_0"] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups]
-
             biome_models = layout_model["biomes"]
             for biome_model in biome_models:     #CREATE BGROUPS AND INDIVIDUAL ROWS INSIDE
                 Bgroup = biome_model["bgroup"]
@@ -4663,45 +4318,11 @@ class orencurvepanel(bpy.types.Panel):
                         _side_panel_biome_panel_id(layout_model, Bgroup),
                         default_closed=False,
                     )
-                    # panel.scale_y = 2  # Adjust the height of the button
                     list_biomes(biome_model,header) #create biome commands row           #if len(hair_in_bgroup) >=2:
                     if panel:
                         biome_rows = panel.column(align=True)
                         for row_entry in hair_in_bgroup: list_hair(row_entry,Bgroup,biome_rows)  #create individual hair rows
-
-
-
-                # box = layout.box()
-                # box.prop(context.scene.mypropertieslist, "dropdownpanel", text="BIOME 1", icon="TRIA_DOWN" if context.scene.mypropertieslist.dropdownpanel else "TRIA_RIGHT")
-                # # box.label.scale_y = 3  # Adjust the height of the button # ['__call__', '__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__']
-                # if context.scene.mypropertieslist.dropdownpanel:
-                #     for hayr in hair_in_bgroup:
-                #         box.label(text=hayr[0].name)
-                #         # biomegroupreorder = box.operator("secret.biomegroupreorder", text="", icon='TRIA_UP')  # REORDER ROW UPWARDS by triggering the function "secret.biomegroupreorder"
-                #         # biomegroupreorder2 = box.operator("secret.biomegroupreorder2", text="", icon='TRIA_DOWN')
-
-                # layout = self.layout
-                # layout.label("Fourth row", icon='ACTION')
-                # row = layout.row()
-                # box = row.box()
-                # box.operator("my.button", text="11", emboss=False).loc = "4 11"
-                # box.operator("my.button", text="12", emboss=False).loc = "4 12"
-                # col = row.column()
-                # subrow = col.row()
-                # subrow.operator("my.button", text="13").loc = "4 13"
-                # subrow.operator("my.button", text="14").loc = "4 14"
-                # subrow = col.row(align=True)
-                # subrow.operator("my.button", text="15").loc = "4 15"
-                # subrow.operator("my.button", text="16").loc = "4 16"
-                # box = row.box()
-                # box.operator("my.button", text="17").number = 17
-                # box.separator()
-                # box.operator("my.button", text="18")
-                # box.operator("my.button", text="19")
                 layout.separator()
-
-            # hayr[0].modifiers[0]["Socket_2"]
-
 class subpanelutils(bpy.types.Panel):
     bl_label = "Extra"
     bl_idname = "OREN_PT_subpanelutils"
@@ -4742,15 +4363,9 @@ class subpanelutils(bpy.types.Panel):
         row.operator("secret.fixdyntopo", icon="GROUP_UVS", text="Reproject")
         layout.separator()
         layout.separator()
-
-        # if bl_info["name"] != "orencloud private": addon_updater_ops.check_for_update_background()
-        # row = layout.row()
-        # row = layout.row()
-        # row.prop(context.scene.mypropertieslist, "paint_default", expand=True)
         utility_group = layout.column(align=True)
         row = utility_group.row(align=True)
         row.scale_y = 1.0
-        # if bl_info["name"] == "orenpaint":
         row.operator("secret.circular_array", icon="CURVE_BEZCIRCLE")
         row.operator("secret.straight_array", icon="CURVE_PATH")
         row = utility_group.row(align=True)
@@ -4761,19 +4376,6 @@ class subpanelutils(bpy.types.Panel):
         row = utility_group.row(align=True)
         row.scale_y = 1  # Adjust the height of the button
         row.operator("secret.group", icon= 'COLLECTION_NEW')
-        # Temporarily disabled; keep operator code below for future re-enable.
-        # row.operator("secret.export_unreal", icon= 'EXPORT')
-        # row.operator("secret.secretpaint_update_modifier", icon="GEOMETRY_NODES")
-        # row.operator("oren.orengrouprecentercollectionobj", icon="ORIENTATION_CURSOR", text= "Recenter Collection Instance")
-        # row.operator("oren.orenscatterduplicatehair")
-        # row.operator("oren.orenpaintswitchtoweightzero", icon='OUTLINER_OB_GROUP_INSTANCE')
-        # row.operator("oren.orencurveselectobj", icon= 'RESTRICT_SELECT_OFF')
-        # row.operator("oren.select_biome", icon= 'RESTRICT_SELECT_OFF')
-        # row.operator("oren.select_biome_all", icon= 'RESTRICT_SELECT_OFF')
-        # row.operator("oren.orenpaint_viewport_mask")
-        # layout.prop(context.scene.mypropertieslist, "checkboxTransferMaterialWithBiome")
-
-
 class subpanelexportbiome(bpy.types.Panel):
     bl_label = "Export Biome To Asset Library"
     bl_idname = "OREN_PT_subpanelexportbiome"
@@ -4801,8 +4403,6 @@ class subpanelexportbiome(bpy.types.Panel):
         biome_name = preferences.biomename
         if not biome_name.endswith(".blend"): biome_name = biome_name + ".blend"  # optionally have the folder path with .blend
         blend_file_name= os.path.basename(biome_name)  #Secret Biome
-        # file_path2 = bpy.context.preferences.filepaths.asset_libraries[-1].path + biome_name + ".blend"    #C:\Users\loren\Assets\3D\objects/Biomes/Secret Biome.blend
-        # print(file_path2)
         file_path = preferences.biome_library + "/"+ biome_name    #bpy.context.preferences.filepaths.asset_libraries[-1].path          C:\Users\loren\Assets\3D\objects/Biomes/Secret Biome.blend
         blend_found=False
         if os.path.exists(file_path):
@@ -4813,14 +4413,10 @@ class subpanelexportbiome(bpy.types.Panel):
             row = layout.row()
         row.operator("secret.export_obj_to_asset_library", text=f"Export into {blend_file_name}" if blend_found else "Export Biome to Asset Library")
         row.operator("secret.open_folder", icon="FILE_FOLDER", text="")
-        # row.operator("oren.export_obj_to_asset_library")
-
-
 class open_folder(bpy.types.Operator):
     """Open Destination Folder with file explorer"""
     bl_idname = "secret.open_folder"
     bl_label = "Open Destination Folder"
-    # bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         preferences = _secret_paint_addon_preferences(context)
         if preferences is None or preferences.biome_library == "(No Library Found, create one first)":
@@ -4832,15 +4428,7 @@ class open_folder(bpy.types.Operator):
         try: os.startfile(path)
         except:self.report({'ERROR'}, "The folder doesn't exist. It will be created automatically once you export your Biome. You can also specify a pre-existing folder")
         return {'FINISHED'}
-
-
-
-## UNIVERSAL
 def reupdate_hair_material(context,**kwargs):
-    # if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
-    # else:activeobj = bpy.context.active_object
-    # if activeobj == None: activeobj = bpy.context.active_object
-
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
@@ -4851,8 +4439,6 @@ def reupdate_hair_material(context,**kwargs):
 
 
     material_cache = {}
-
-    # if len(objselection)>=1:  #might be empty if called from   "export_to_asset_library_function"
     for hair in objselection:
         if hair != None:
             if hair.type not in {"CURVES", "CURVE"} or not hair.modifiers:
@@ -4892,46 +4478,19 @@ def reupdate_hair_material(context,**kwargs):
 def contextorencurveappend(context,**kwargs):  #paint. conversion
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
-
-    # print("UPDAAAAAAAAAAAT contextorencurveappend")
     secretpaint_update_modifier_f(context,upadte_provenance="def contextorencurveappend(context,**kwargs):") #cleanup .002, then update only executes if version number is different
 
     modifier = activeobj.modifiers.new(name="Secret Paint", type='NODES')
     modifier.node_group = bpy.data.node_groups.get("Secret Paint")
     return {"FINISHED"}
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
-# def orenpaint_update_modifier_f(context,**kwargs):
-
     pickup_trace = _get_pickup_trace()
     update_trace_start = time.perf_counter()
     upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
 
     print("######################### secretpaint_update_modifier_f ######################### Update Triggered By: ", upadte_provenance)
-    #appending objects with operator ruins selection, so restore it later
     activeobj = bpy.context.active_object
     objselection = bpy.context.selected_objects
-
-
-    # Forced_Update = kwargs.get("Forced_Update") if "Forced_Update" in kwargs else False
-
-
-    # if Forced_Update: reupdate_hair_material(context, objselection= [ob for ob in bpy.data.objects]) #RELINK MATERIALS FOR ALL ORENPAINT HAIR IN BLEND FILE
-
-    # if "check_for_dupli_nodes" in kwargs:
-    #     if kwargs.get("check_for_dupli_nodes") == True:
-    #         for node_tree in bpy.data.node_groups:
-    #             if node_tree.name.startswith("Secret Paint") and not node_tree.name.endswith("Secret Paint") or node_tree.name.startswith("orenpaint") or node_tree.name.startswith("Secret Paint").library:
-    #                 Forced_Update = True  #update_because_dupli_nodes_found
-    #                 print("update_because_dupli_nodes_found")
-    #                 break
-    ######################################################################
-
-    # print("11111111111111",bpy.data.node_groups.get("Secret Paint") == None)
-    # print("4444444444",bpy.data.node_groups.get("Secret Generator") == None)
-    # print("Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹Ã¹",["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and node_tree.library])
-    # print("222222222222222",["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"])
-    # print("222222222222222",["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library])
-    #CHECK IF REAPPEND NODE IS NEEDED        check if node or generator is present, if there's a linked library node, if there are secret paint.002 duplicates, finally if the bundled node asset is stale
     carry_through = False
     try:  #if fails, means it's an old node group before I even introduced the update number
         linked_secret_paint_nodes = [
@@ -4961,8 +4520,6 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     except:
         print("FAILED, UPDATING")
         carry_through=True
-
-    # print("BEFORE CARRYING THROUGH")
     legacy_upgrade_objects = []
     if carry_through:
         legacy_upgrade_objects = _secret_paint_prepare_legacy_node_upgrade(context)
@@ -4978,16 +4535,13 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
             pickup_trace.action("update_modifier.reupdate_hair_material", reupdate_hair_material_start, detail=f"objects={len(bpy.data.objects)}")
 
 
-
         nodes_to_switch = []
         cleanup_generator = []
         collect_nodes_start = time.perf_counter()
         for node_tree in bpy.data.node_groups:
-            # if not node_tree.library and node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
             if node_tree.name == "Secret Paint" or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999":  # if node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
                 if not node_tree.library: node_tree.name = "Secret Paint.001"  # new_name = node_tree.name.replace('orenpaint', 'orenpaint OLD')
                 if node_tree not in nodes_to_switch: nodes_to_switch.append(node_tree)
-            # if not node_tree.library and node_tree.name.startswith("Secret Generator"):
             if node_tree.name == "Secret Generator" or node_tree.name.startswith("Secret Generator") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999": #if node_tree.name.startswith("Secret Generator"):
                 if not node_tree.library: node_tree.name = "Secret Generator.001"  # new_name = node_tree.name.replace('orenpaint', 'orenpaint OLD')
                 if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
@@ -4997,16 +4551,10 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                 collect_nodes_start,
                 detail=f"nodes_to_switch={len(nodes_to_switch)}; generators={len(cleanup_generator)}",
             )
-
-
-
-        #REAPPEND ORENPAINT NODE
         all_previous_nodes = set(bpy.data.node_groups)
         file_path = _secret_paint_source_blend_path()
         inner_path = "NodeTree"
         object_name = "Secret Paint"
-        # bpy.ops.wm.append( filepath=os.path.join(file_path, inner_path, object_name), directory=os.path.join(file_path, inner_path), filename=object_name)
-        # FOR SOME REASON IT FAILS (critical corruption?????? but it works anyway) #Error: Critical blend-file corruption: Conflicts and/or otherwise invalid data-blocks names
         append_node_start = time.perf_counter()
         try: bpy.ops.wm.append(filepath=os.path.join(file_path, inner_path, object_name),directory=os.path.join(file_path, inner_path),filename=object_name)
         except:print("[[[[[[[[[[[[ SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
@@ -5015,167 +4563,34 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
 
         cleanup_libraries_start = time.perf_counter()
         for lib in bpy.data.libraries: #for some reason, appending anything creates an empty library link, which is error prone
-            # if lib.name == "Secret Paint.blend": bpy.data.libraries.remove(lib, do_unlink=True)
             if lib.name in ["Secret Paint.blend","Secret Paint 4.0 and older.blend","Secret Paint 4.1.blend","Secret Paint 4.2.0.blend"]: bpy.data.libraries.remove(lib, do_unlink=True)
         if pickup_trace:
             pickup_trace.action("update_modifier.cleanup_libraries", cleanup_libraries_start)
-
-        # FIND orenpaint NODE THAT'S LOCAL AND NOT THE LINKED ONE (for some reason, when linking a biome with orenpaint node, they share the same node.name so you can't reference it with bpy.data.node_groups.get(
-        # orenpaintNode = [nod for nod in bpy.data.node_groups if nod not in all_previous_nodes and nod.name.startswith("Secret Paint")]
         for nod in bpy.data.node_groups:
             if nod not in all_previous_nodes and nod.name.startswith("Secret Paint"):
                 orenpaintNode= nod
                 break
 
         _secret_paint_patch_runtime_node_groups()
-
-
-
-
-        #SWITCH ALL MODIFIERS
         switch_modifiers_start = time.perf_counter()
         for obj in bpy.data.objects:
-            # if obj.type in ["CURVES","CURVE"] and obj.modifiers and not obj.library:  #can't edit modifiers of linked objects
             if obj.type in ["CURVES","CURVE"]:
                 for modif in obj.modifiers:
-                    # if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")): modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-                    # if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint": modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-                    # if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
                     if modif.type == 'NODES' and modif.node_group:
-                        # print(modif.node_group.name)
                         if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
         if pickup_trace:
             pickup_trace.action("update_modifier.switch_all_modifiers", switch_modifiers_start, detail=f"objects={len(bpy.data.objects)}")
 
         _secret_paint_apply_legacy_procedural_flags(legacy_upgrade_objects)
         _secret_paint_disable_obsolete_manual_baked_transforms()
-
-        # print("################################## SECRET PAINT INFO ##################################")
-        # print("INIT PATH: ", os.path.abspath(__file__))
-        # print("ADDON PATH: ", addon_path)
-        # print("BLENDER VERSION: ", blender_version)
-        # print("FILE PATH B VERS: ", file_path)
-        # print("Does File exists: ",os.path.isfile(file_path))
-        # print("LIST OF FILES",os.listdir(addon_path))
-        # print("--------")
-        # # print("FULL LIST OF FILES",[os.path.join(addon_path, f) for f in os.listdir(addon_path)])
-        # # print("DID IT FAIL IMPORTING",status)
-        # print("################################## SECRET PAINT INFO ##################################")
-
-        # # DELETE OLD NODES (cleanup orenpaint.002 when appending biomes)
-        # for node_tree in bpy.data.node_groups:
-        #     if node_tree.name.startswith('orenpaint') and not node_tree.name.endswith('orenpaint'): nodes_to_switch.append(node_tree)
-        #     if node_tree.name.startswith('orengenerator') and not node_tree.name.endswith('orengenerator'): cleanup_orengenerator.append(node_tree)
-        # for node in bpy.data.node_groups.get("orenpaint").nodes:
-        #     if node.type == 'GROUP' and node.node_tree and node.node_tree.name.startswith("orengenerator"): node.node_tree = bpy.data.node_groups.get("orengenerator")
-        # if nodes_to_switch[:]:
-            # for obj in bpy.data.objects:
-            #     if obj.type == "CURVES" or obj.type == "CURVE" and obj.modifiers:
-            #         for modif in obj.modifiers:
-            #             if modif.type == 'NODES' and modif.node_group and modif.node_group in nodes_to_switch:
-            #                 modif.node_group = orenpaintNode #bpy.data.node_groups.get("orenpaint")
-
-
-
-        # DELETE OLD NODES
-        # if nodes_to_switch[:]:
         for nod in nodes_to_switch[:]:
-            # if nod:
             bpy.data.node_groups.remove(nod, do_unlink=True)
-        # if cleanup_generator[:]:
         for nod in cleanup_generator[:]:
-            # if nod:
             bpy.data.node_groups.remove(nod, do_unlink=True)
 
     _secret_paint_disable_obsolete_manual_baked_transforms()
-
-    #RESELECT ORIGINAL OBJS (appending objects with operator ruins selection)
     for x in objselection: x.select_set(True)
     if activeobj: bpy.context.view_layer.objects.active = activeobj
-
-
-#     toggleAdvancedModifier() #UPDATE SOCKETS VISIBILITY
-#     # return {'FINISHED'}
-# def toggleAdvancedModifier():    #UPDATE SOCKETS VISIBILITY
-#     if bpy.data.node_groups.get("Secret Paint"):
-#
-#         #    or input.name == "SIMULATION MODE" \
-#         #    or input.name == "Spawn Per Frame" \
-#         #    or input.name == "Particles Speed" \
-#         #    or input.name == "Spawn Radius" \
-#         #    or input.name == "Spawn Radius Z" \
-#         #    or input.name == "Non Sim Continuity" \
-#         #    or input.name == "Non Sim Offset" \
-#         if bpy.app.version_string >= "4.0.0": x = bpy.data.node_groups["Secret Paint"].interface.items_tree
-#         elif bpy.app.version_string < "4.0.0": x= bpy.data.node_groups["Secret Paint"].inputs
-#
-#         #DISABLED:  or input.name=="Faster Viewport Mask"\
-#
-#
-#         for input in x:          #['__bool__', '__contains__', '__delattr__', '__delitem__', '__doc__', '__getattribute__', '__getitem__', '__iter__', '__len__', '__setattr__', '__setitem__', 'find', 'foreach_get', 'foreach_set', 'get', 'items', 'keys', 'values']
-#
-#             if bpy.app.version_string >= "4.0.0" and not hasattr(input, 'default_closed'): #if it's a panel skip it because error: doesn't have .socket_type
-#                 if input.name=="Scale"\
-#                 or input.name=="Edge Blur"\
-#                 or input.name=="Noise W"\
-#                 or input.name=="MASK Weight"\
-#                 or input.name=="MASK Object"\
-#                 or input.name=="MASK Viewport"\
-#                 or input.name=="MASK Obj in Viewport"\
-#                 or input.name=="MASK Texture"\
-#                 or input.name=="UV for Texture" \
-#                 or input.name=="Scale of Surface" \
-#                 or input.name=="Move origin"\
-#                 or input.name=="Strenght"\
-#                 or input.name=="Wind Scale"\
-#                 or input.name=="Speed"\
-#                 or input.name=="Viewport Density"\
-#                 or input.socket_type == "NodeSocketString" and input.default_value == "LOCATION"\
-#                 or input.socket_type == "NodeSocketString" and input.default_value == "Wind"\
-#                 or input.name=="Clump Radius"\
-#                 or input.name=="Clump Density"\
-#                 or input.name=="Proxy Convex Hull"\
-#                 or input.name=="Proxy Bounding Box"\
-#                 or input.name=="Material Custom"\
-#                 or input.name=="Material Original /Custom"\
-#                 or input.name=="Surface"\
-#                 or input.name=="Real Instances"\
-#                 or input.name=="Distribution Seed"\
-#                 or input.name=="TURN OFF SYSTEM":
-#                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-#                     elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
-#
-#             elif bpy.app.version_string < "4.0.0" and not hasattr(input, 'default_closed'): #if it's a panel skip it because error: doesn't have .socket_type
-#                 if input.name=="Scale"\
-#                 or input.name=="Edge Blur"\
-#                 or input.name=="Noise W"\
-#                 or input.name=="MASK Weight"\
-#                 or input.name=="MASK Object"\
-#                 or input.name=="MASK Viewport"\
-#                 or input.name=="MASK Obj in Viewport"\
-#                 or input.name=="MASK Texture"\
-#                 or input.name=="UV for Texture" \
-#                 or input.name=="Scale of Surface" \
-#                 or input.name=="Move origin"\
-#                 or input.name=="Strenght"\
-#                 or input.name=="Wind Scale"\
-#                 or input.name=="Speed"\
-#                 or input.name=="Viewport Density"\
-#                 or input.type == "STRING" and input.default_value == "LOCATION"\
-#                 or input.type == "STRING" and input.default_value == "Wind"\
-#                 or input.name=="Clump Radius"\
-#                 or input.name=="Clump Density"\
-#                 or input.name=="Proxy Convex Hull"\
-#                 or input.name=="Proxy Bounding Box"\
-#                 or input.name=="Material Custom"\
-#                 or input.name=="Material Original /Custom"\
-#                 or input.name=="Surface"\
-#                 or input.name=="Real Instances"\
-#                 or input.name=="Distribution Seed"\
-#                 or input.name=="TURN OFF SYSTEM":
-#                     if bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and input.hide_in_modifier: input.hide_in_modifier = False
-#                     elif not bpy.context.preferences.addons[__package__].preferences.checkboxAdvancedModifier and not input.hide_in_modifier: input.hide_in_modifier = True
-#     # toggleAdvancedModifier() #execute on Blender Startup
 class secretpaint_update_modifier(bpy.types.Operator):
     """Reimport the Secret Paint node tree: Useful when opening older blend files. Blender developers often change how the Geometry Node tree calculates attributes. So when opening an old scene with a new blender version, reimport the latest Node Tree which will account for those changes"""
     bl_idname = "secret.secretpaint_update_modifier"
@@ -5192,7 +4607,6 @@ def all_variables_are_equal(variables):
     return all(value == first_value for value in variables)
 def apply_paint(self,context, **kwargs):
     print("AAAAAAAAAAAPPPPPPPPPPPPPPLYYYYYYYYY")
-    # print("apply_paint")
     pickup_trace = _get_pickup_trace()
     apply_paint_start = time.perf_counter()
     converted_from_procedural = []
@@ -5217,16 +4631,7 @@ def apply_paint(self,context, **kwargs):
     else:applyIDs = False
 
     keep_active_brush = kwargs.get("keep_active_brush") if "keep_active_brush" in kwargs else False
-
-    #when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
     if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
-
-
-    # orig_hair_selection = bpy.context.selected_objects
-    # coll_original = bpy.context.view_layer.active_layer_collection
-
-    # activeobj = bpy.context.active_object
-    # objselection = bpy.context.selected_objects
     N_Of_Selected = len(objselection)
     randomselectedobj = []
     randomselected_non_hair = []
@@ -5243,14 +4648,8 @@ def apply_paint(self,context, **kwargs):
             if obj != activeobj:
                 randomselectedobj = obj
                 selected_without_active.append(obj)
-
-            # if "orenpaint" not in obj.modifiers.node_tree: randomselected_non_hair = obj
             if obj.type != "CURVES" and obj.type != "CURVE": randomselected_non_hair = obj
-            # if obj.type != "CURVES": randomselected_non_hair = obj
-
             if obj.type != "CURVES": all_objs_are_hair = False
-
-            # if obj.type == "CURVES" or obj.type == "CURVE": all_selected_hair.append(obj)
             if obj.type == "CURVES":
                 all_selected_hair.append(obj)
                 if obj.modifiers:
@@ -5263,9 +4662,6 @@ def apply_paint(self,context, **kwargs):
                         else: all_objs_are_orencurves = False
                 else: all_objs_are_orencurves = False
             else: all_objs_are_orencurves = False
-
-
-            # if obj.type != "CURVES" or obj.type != "CURVE": all_selected_non_hair.append(obj)
             if obj.type != "CURVES": all_selected_non_hair.append(obj)
         if pickup_trace:
             pickup_trace.action(
@@ -5273,28 +4669,6 @@ def apply_paint(self,context, **kwargs):
                 classify_selection_start,
                 detail=f"selected={N_Of_Selected}; hair={len(all_selected_hair)}; non_hair={len(all_selected_non_hair)}; apply_ids={applyIDs}",
             )
-
-    # # for obj in orig_hair_selection:
-    # for obj in objselection:
-    #     applied_instances = []
-    #     obj_as_pivot = []
-    #     applied_instances = []  # resets for next loop
-    #     CollInstance_used_as_brush =[]
-    #     try:
-    #         CollInstance_used_as_brush = obj.modifiers["GeometryNodes"]["Input_2"]  # resets for next loop
-    #         coll_of_collinstance = CollInstance_used_as_brush.instance_collection #bpy.data.collections["Cube"]
-    #         coll_of_collinstance_origin = coll_of_collinstance.instance_offset
-    #         for objecc in coll_of_collinstance.all_objects:
-    #             if objecc.location == coll_of_collinstance_origin: obj_as_pivot = objecc   #find object closest to collection origin
-    #     except: pass
-
-    # saveMode= bpy.context.object.mode
-    # bpy.ops.object.mode_set(mode="OBJECT")
-
-    ###############################################   v    ###############################################################################
-
-    # Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=objselection)  # SLOW FOR HIGHPOLY OBJECTS
-
     for obj in all_selected_hair:
         object_total_start = time.perf_counter()
         prepare_modifier_start = time.perf_counter()
@@ -5321,39 +4695,6 @@ def apply_paint(self,context, **kwargs):
                     obj,
                     "id",
                 )
-        # #COLL INSTANCE EMPTY scattered as brush
-        # if CollInstance_used_as_brush and CollInstance_used_as_brush.type == "EMPTY":
-        #     # print("111111111111111111111111")
-        #     # operate inside collection of activeobj in this loop
-        #     for i in obj.users_collection:
-        #         layer_collection = bpy.context.view_layer.layer_collection
-        #         collection_of_activeobj = recurLayerCollection(layer_collection, i.name)
-        #     bpy.context.view_layer.active_layer_collection = collection_of_activeobj
-        #
-        #
-        #     bpy.ops.object.select_all(action='DESELECT') #select only hair obj
-        #     bpy.data.objects[obj.name].select_set(True)
-        #     bpy.context.view_layer.objects.active = bpy.data.objects[obj.name]  # make active
-        #     bpy.ops.object.duplicates_make_real()
-        #     bpy.data.objects.remove(obj, do_unlink=True) #delete hair obj
-        #     applied_instances = bpy.context.selected_objects
-        #
-        #     for ob in applied_instances:
-        #         if ob.type == "EMPTY" and ob.name.startswith(os.path.splitext(CollInstance_used_as_brush.name)[0]):
-        #             ob.instance_type = 'COLLECTION'
-        #             ob.instance_collection = coll_of_collinstance  #bpy.data.collections[coll_of_collinstance.name]
-        #         else: bpy.data.objects.remove(ob, do_unlink=True)  # delete hair obj
-        #
-        #     bpy.context.view_layer.active_layer_collection = coll_original
-
-        ##IF PROCEDURAL SCATTER: APPLY HAIR GENERATOR
-        ## elif all_objs_are_orencurves and obj.modifiers["GeometryNodes"]["Input_69"] == True:
-        ## elif obj.modifiers["GeometryNodes"]["Input_69"] == True and (sum(len(spline.points) for spline in obj.data.curves)) >= 1:
-        ## if obj.modifiers["GeometryNodes"]["Input_69"] == True and (sum(len(spline.points) for spline in obj.data.curves)) >= 1:  #CAN'T APPLY IF there are no curve hair in edit mode so delete modif.
-
-
-        # if obj.modifiers[0]["Input_69"] == True:  #ONLY TRY TO APPLY MODIFIER IF PROCEDURAL MODE IS TURNED ON (there are no curve hair in edit mode so delete modif.)
-        #APPLY ID MODIFIER ELSE GENERATOR MODIFIER
         node_to_use = None
         if applyIDs:
             should_apply_ids, curve_count, point_count, apply_ids_reason = _secret_paint_should_apply_ids(obj)
@@ -5541,17 +4882,10 @@ def apply_paint(self,context, **kwargs):
                 modifier["Input_14_attribute_name"] = obj.modifiers[0]["Input_83_attribute_name"] #weight mask
                 modifier["Input_14_use_attribute"] = True #weight mask turn on
             obj.modifiers[0]["Input_69"] = False #turn off noise scattering
-
-        #MOVE MODIFIER AT THE TOP OF THE STACK
         if bpy.app.version_string >= "4.0.0":
             obj.modifiers.move(len(obj.modifiers) - 1, 0)
         elif bpy.app.version_string < "4.0.0":
-            # while obj.modifiers[0] != modifier:
-            #     bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
             bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
-
-        # return{'FINISHED'}
-
         if pickup_trace:
             pickup_trace.action(
                 "apply_paint.prepare_modifier",
@@ -5559,9 +4893,6 @@ def apply_paint(self,context, **kwargs):
                 label=obj.name,
                 detail=f"apply_ids={applyIDs}; reason={apply_ids_reason}; node={node_to_use.name if node_to_use else 'None'}",
             )
-
-
-        #APPLY MODIF - make single user data first, reassign all the others, FAILS IF NO HAIR BECAUSE LOW DENSITY
         modifier_apply_start = time.perf_counter()
         successfully_applied_so_reimport_materials, shared_data_before_apply, material_count_before = _secret_paint_apply_geometry_nodes_modifier(
             context,
@@ -5582,8 +4913,6 @@ def apply_paint(self,context, **kwargs):
                 label=obj.name,
                 detail=f"shared_data={shared_data_before_apply}; applied={successfully_applied_so_reimport_materials}; reason={apply_ids_reason}",
             )
-
-        # REAPPEND MATERIALS (for some reason, applying GENERATOR modif deletes all materials, not necessary for APPLY ID modifier)
         if successfully_applied_so_reimport_materials:
             restore_materials_start = time.perf_counter()
             stable_ids_applied_for_conversion = False
@@ -5700,37 +5029,9 @@ def apply_paint(self,context, **kwargs):
                     label=obj.name,
                     detail=f"materials={material_count_before}; stable_attr_seed_count={stable_attr_seed_count}; stable_ids_after_conversion={stable_ids_applied_for_conversion}",
                 )
-        # #SNAP TO CLOSES SURFACE FOR ARMATURE DEFORMED OBJECTS ###ONLY IF OBJECT HAS ARMATURE MODIFIER
         _secret_paint_snap_curves_to_surface_if_armature(obj, pickup_trace=pickup_trace)
-
-
-        # if not applyIDs: self.report({'INFO'}, "Procedural Distribution converted into Manual Paint")  # need to add (self, context) in the function
-
-        # if N_Of_Selected==1 or saveMode=="SCULPT_CURVES": context3sculptbrush(context)
-
-
-        # print("=======")
-
-        # #REALIZE INSTANCES
-        # elif all_objs_are_orencurves and obj.modifiers["GeometryNodes"]["Input_69"] == False:
-        #     bpy.ops.object.mode_set(mode="OBJECT")
-        #     bpy.ops.object.select_all(action='DESELECT')
-        #     bpy.data.objects[obj.name].select_set(True)
-        #     bpy.context.view_layer.objects.active = bpy.data.objects[obj.name]  # make active
-        #
-        #     newly_duplicated_curve = curveseparate_function(context)
-        #     bpy.ops.object.mode_set(mode="OBJECT")
-        #
-        #     bpy.ops.object.duplicates_make_real()
-        #     bpy.data.objects.remove(newly_duplicated_curve, do_unlink=True)
-        #     for x in bpy.context.selected_objects: bpy.context.view_layer.objects.active = bpy.data.objects[x.name]
         if pickup_trace:
             pickup_trace.action("apply_paint.object_total", object_total_start, label=obj.name)
-
-
-    # bpy.ops.object.mode_set(mode="OBJECT")
-
-    # for x in objselection: bpy.data.objects[x.name].select_set(False)
     clear_selection_start = time.perf_counter()
     for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
     if pickup_trace:
@@ -5749,11 +5050,6 @@ def apply_paint(self,context, **kwargs):
         context3sculptbrush(context, activeobj=activeobj, keep_active_brush=keep_active_brush)
         if pickup_trace:
             pickup_trace.action("apply_paint.context3sculptbrush", context3sculptbrush_start, detail=f"keep_active_brush={keep_active_brush}")
-    # print("-----------------------------------------------------------")
-
-
-
-    # reproject_function(self, context) #WORKS BUT TWICE
     auto_uv_start = time.perf_counter()
     Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=objselection)  # SLOW FOR HIGHPOLY OBJECTS
     if pickup_trace:
@@ -5778,16 +5074,6 @@ def apply_paint(self,context, **kwargs):
                 reapply_conversion_stable_ids_start,
                 detail=f"objects={len(converted_from_procedural)}",
             )
-
-
-        # #REAL INSTANCES
-        # else:
-        #     bpy.ops.object.select_all(action='DESELECT')
-        #     bpy.data.objects[obj.name].select_set(True)
-        #     bpy.context.view_layer.objects.active = bpy.data.objects[obj.name]  # make active
-        #     bpy.ops.object.duplicates_make_real()
-        #     bpy.data.objects.remove(obj, do_unlink=True)
-
     if start_world_paint_after_apply:
         world_paint_start = time.perf_counter()
         world_paint_result = _secret_paint_start_world_paint_for_object(context, activeobj)
@@ -5821,31 +5107,10 @@ class orenscatterinstancesmodifiers(bpy.types.Operator):
             selected_obj.select_set(False)
         activeobj.select_set(True)
         bpy.context.view_layer.objects.active = activeobj
-        # for x in bpy.context.selected_objects: x.select_set(False) #objselection
-        # selection_list_only_for_active=[activeobj]
-        # if event.alt:  #SWITCH PROCEDURAL
-        #     checkbox_state = activeobj.modifiers["GeometryNodes"]["Input_69"]
-        #     objselection = bpy.context.selected_objects
-        #     if activeobj not in objselection: objselection.append(activeobj)
-        #     for obj in objselection:
-        #         if obj.type == "CURVES" and obj.modifiers:
-        #             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
-        #                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "orenpaint":
-        #                     obj.modifiers["GeometryNodes"]["Input_69"] = not checkbox_state
-        #                     obj.location = obj.location
-        # else: #CONVERT TO HAIR AND PAINT
-        #     selection_list_only_for_active=[]
-        #     selection_list_only_for_active.append(activeobj)
-        #     # objselection.append(activeobj)
-        #     apply_paint(self,context,activeobj=activeobj,objselection=selection_list_only_for_active)
-        #     # apply_paint(self,context,activeobj=activeobj,objselection=list(activeobj))
-        # objselection.append(activeobj)
-        # apply_paint(self,context,activeobj=activeobj,objselection=selection_list_only_for_active)
         secretpaint_update_modifier_f(context,upadte_provenance="secret.applypaint")
         _secret_paint_panel_clear_world_paint_object_guard()
         apply_paint(self,context,activeobj=activeobj, objselection=[activeobj], force_world_paint=True)
         _secret_paint_preview_world_paint_entry_source(context, activeobj, hold=False)
-        # apply_paint(self,context,activeobj=activeobj,objselection=list(activeobj))
         return {'FINISHED'}
 
     def execute(self, context):
@@ -5859,34 +5124,24 @@ class toggle_procedural(bpy.types.Operator):
     bl_label = "Toggle Procedural"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: StringProperty()
-    # def invoke(self, context, event):
     def execute(self, context):
 
         _secret_paint_panel_exit_paint_mode(context)
         secretpaint_update_modifier_f(context,upadte_provenance="secret.toggle_procedural")
 
         if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
-        # if event.alt:  #SWITCH PROCEDURAL
         activeobj= bpy.data.objects.get(self.object_name)
-        # if bpy.context.active_object != activeobj: bpy.context.view_layer.objects.active = activeobj
         checkbox_state = activeobj.modifiers[0]["Input_69"]
         objselection = bpy.context.selected_objects
         if activeobj not in objselection: objselection.append(activeobj)
-
-        # when called from button: if the button references an object that was not selected or active: disregard selection and just use the panel row object
         if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
 
         for obj in objselection:
             if obj.type == "CURVES" and obj.modifiers:
                 for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-
-                        #WHEN ENABLING PROCEDURAL, CALCULATE DENSITY AND TURN ON MASK FOR HUGE TERRAINS (only if switching TO procedural, not to manual)
                         if obj.type == "CURVES" and obj.modifiers[0]["Input_69"] == False and obj.modifiers[0]["Input_68"] > 0:
                             allTerrainArea = sum(face.area for face in obj.parent.data.polygons)  #area of mesh surface
-                            # print("Number of instances ---------",(allTerrainArea/   (   (1/   ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"]))   )   **2)))
-                            # (0.5 / ((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) * bpy.context.object.modifiers[0]["Input_100"])) * 2
-                            # if allTerrainArea / (1 / ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"] ** 2))) / 2 > 10000:  # (0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"]))
                             if (allTerrainArea/   (   (1/   ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"]))   )   **2))   > _secret_paint_pref("trigger_viewport_mask", 15000):
                                 obj.modifiers[0]["Input_98"] = False  # clean mask slots so that the function doesn't toggle the mask settings
                                 obj.modifiers[0]["Input_97"] = None
@@ -5894,13 +5149,6 @@ class toggle_procedural(bpy.types.Operator):
 
                         obj.modifiers[0]["Input_69"] = not checkbox_state  #invert procedural vs manual
                         obj.location = obj.location #update modifier
-
-        # else: #CONVERT TO HAIR AND PAINT
-        #     selection_list_only_for_active=[]
-        #     selection_list_only_for_active.append(activeobj)
-        #     # objselection.append(activeobj)
-        #     apply_paint(self,context,activeobj=activeobj,objselection=selection_list_only_for_active)
-        #     # apply_paint(self,context,activeobj=activeobj,objselection=list(activeobj))
         return {'FINISHED'}
 
 class SelectObjectOperator(bpy.types.Operator):
@@ -5909,7 +5157,6 @@ class SelectObjectOperator(bpy.types.Operator):
     bl_label = "Select Object"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: StringProperty()
-    # object_biome: StringProperty()
     def invoke(self, context, event):
 
         _secret_paint_panel_exit_paint_mode(context)
@@ -5922,11 +5169,7 @@ class SelectObjectOperator(bpy.types.Operator):
                 bpy.ops.object.mode_set(mode="OBJECT")
         except Exception:
             pass
-
-        ##################################################################
-
         if event.alt & event.ctrl:
-            # if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
             for x in objselection: bpy.data.objects[x.name].select_set(False)
             obj = bpy.data.objects.get(self.object_name)
             if obj and obj.name in bpy.context.view_layer.objects:
@@ -5956,7 +5199,6 @@ class SelectObjectOperator(bpy.types.Operator):
                     bpy.context.view_layer.active_layer_collection = original_collection
 
         elif event.shift & event.ctrl:
-            # for x in objselection: bpy.data.objects[x.name].select_set(False)
             oob = bpy.data.objects.get(self.object_name)
             if oob.name in bpy.context.view_layer.objects:
                 if oob not in objselection: objselection.append(bpy.data.objects.get(self.object_name))
@@ -5966,7 +5208,6 @@ class SelectObjectOperator(bpy.types.Operator):
             if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
             obj = bpy.data.objects.get(self.object_name)
             if obj and obj.name in bpy.context.view_layer.objects:
-                # bpy.context.view_layer.objects.active = obj
                 if obj in bpy.context.selected_objects: obj.select_set(False)
                 else: obj.select_set(True)
 
@@ -5988,14 +5229,6 @@ class SelectObjectOperator(bpy.types.Operator):
             if self.object_name and self.object_name in bpy.context.view_layer.objects:
                 bpy.context.view_layer.objects.active = bpy.data.objects[self.object_name]
                 bpy.data.objects[self.object_name].select_set(True)
-
-        # def execute(self, context):
-        #     for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
-        #     if self.object_name and self.object_name in bpy.context.view_layer.objects:
-        #         bpy.context.view_layer.objects.active = bpy.data.objects[self.object_name]
-        #         bpy.data.objects[self.object_name].select_set(True)
-        #     return {'FINISHED'}
-
         try:
             if bpy.context.object and bpy.context.object.mode != "OBJECT":
                 bpy.ops.object.mode_set(mode="OBJECT")
@@ -6022,7 +5255,6 @@ class biome_delete(bpy.types.Operator):
     bl_label = "Delete Biome"
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: StringProperty()  # bpy.props.PointerProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
 
         _secret_paint_panel_exit_paint_mode(context)
@@ -6043,10 +5275,8 @@ class biome_delete(bpy.types.Operator):
                         for modifier in hai.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
                                 hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-            #ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
             elif obj.type=="MESH" or obj.type=="EMPTY":
                 for hayr in bpy.context.scene.objects:
-                # for hayr in obj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
                     if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                         for modifier in hayr.modifiers: #if mask selected, if brush obj selected, if terrain selected
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
@@ -6065,7 +5295,6 @@ class biome_delete(bpy.types.Operator):
             return {'CANCELLED'}
 
         parent_surface = hair_in_bgroup[0].parent
-        #DELETE
         if obj in hair_in_bgroup:  # select parent surface if the active object is about to be deleted, so that the panel still displays the same surface
             parent_surface.select_set(True)
             bpy.context.view_layer.objects.active = parent_surface
@@ -6086,7 +5315,6 @@ class biome_delete(bpy.types.Operator):
 
 class SelectBiomeOperator(bpy.types.Operator):
     """Shift+Click: extend selection, Alt+Click: duplicate a backup system, Ctrl+Click: rename biome"""
-    # """Ctrl: select siblings; Shift: extend selection; Alt+CTRL: select similar hair; Shift+Ctrl: Select Brush Objs; Alt: duplicate a backup system, Shift+Ctrl+Alt: delete biome"""
     bl_idname = "secret.select_biome"
     bl_label = ""
     bl_options = {'REGISTER', 'UNDO'}
@@ -6216,47 +5444,6 @@ class SelectBiomeOperator(bpy.types.Operator):
             for hayr in hair[:]:
                 if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
             hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
-
-
-            # activeobj = bpy.data.objects.get(self.object_biome)
-            # objselection = bpy.context.selected_objects
-            # if activeobj not in objselection: objselection.append(activeobj)
-
-            # buttonbiome = bpy.data.objects.get(self.object_name)
-
-            # objselection = bpy.context.selected_objects
-            # if buttonobj not in objselection: objselection.append(buttonobj)
-
-            # # when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
-            # if buttonobj != bpy.context.active_object and buttonobj not in bpy.context.selected_objects: objselection = [buttonobj]
-
-
-
-            # activeobj = bpy.context.active_object
-            # objselection = bpy.context.selected_objects
-            ##################################################################
-
-            # #DELETE
-            # if event.shift & event.ctrl & event.alt:
-            #     #select parent surface
-            #     hair_in_bgroup[0].parent.select_set(True)
-            #     bpy.context.view_layer.objects.active = hair_in_bgroup[0].parent
-            #
-            #     for x in hair_in_bgroup:
-            #         bpy.data.objects.remove(x, do_unlink=True)
-
-
-
-            # # ALL BIOMES WITH SAME BRUSH OBJS
-            # elif event.alt & event.ctrl: pass
-            #     # if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
-            #     for x in hair: bpy.data.objects[x.name].select_set(False)
-            #     obj = bpy.data.objects.get(self.object_biome)
-            #     if obj and obj.name in bpy.context.view_layer.objects:
-            #         obj.select_set(True)
-            #         bpy.context.view_layer.objects.active = obj  # make active
-            #         select_biome_all_function(context)
-
             if event.alt:  #duplicate system
                 if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 new_bgroup_number = 1
@@ -6274,7 +5461,6 @@ class SelectBiomeOperator(bpy.types.Operator):
                         newobj = obj.copy()
                         newobj.data = obj.data.copy()
                         newobj.modifiers[0]["Socket_2"] = True
-                        # obj.modifiers[0]["Input_99"] = False
                         obj.modifiers[0]["Socket_0"] = new_bgroup_number
                         obj.modifiers[0]["Socket_2"] = False
                         bpy.context.collection.objects.link(newobj)
@@ -6283,14 +5469,6 @@ class SelectBiomeOperator(bpy.types.Operator):
                         bpy.context.view_layer.active_layer_collection = original_collection
                 _clear_side_panel_count_cache(reason="duplicate_biome")
                 _secret_paint_tag_redraw_view3d_areas(context)
-
-            # elif event.shift & event.ctrl:
-            #     # for x in hair: bpy.data.objects[x.name].select_set(False)
-            #     oob = bpy.data.objects.get(self.object_name)
-            #     if oob.name in bpy.context.view_layer.objects:
-            #         if oob not in hair: hair.append(bpy.data.objects.get(self.object_name))
-            #         orencurveselectobj_function(self,context, activeobj=activeobj,hair=hair)
-
             elif event.shift:
                 if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 yet_to_be_selected = []
@@ -6307,7 +5485,6 @@ class SelectBiomeOperator(bpy.types.Operator):
                         if ob.name in bpy.context.view_layer.objects:
                             ob.select_set(False)
                             for x in bpy.context.selected_objects: bpy.context.view_layer.objects.active = x
-
 
 
             elif event.ctrl:    #RENAME BIOME
@@ -6342,7 +5519,6 @@ class SelectBiomeOperator(bpy.types.Operator):
                 return {'RUNNING_MODAL'}
 
 
-
             else:
                 if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
                 for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
@@ -6350,49 +5526,12 @@ class SelectBiomeOperator(bpy.types.Operator):
                     if ob.name in bpy.context.view_layer.objects:
                         bpy.context.view_layer.objects.active = ob
                         ob.select_set(True)
-                # return self.execute(context)
-
-            # def execute(self, context):
-            #     for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
-            #     if self.object_name and self.object_name in bpy.context.view_layer.objects:
-            #         bpy.context.view_layer.objects.active = bpy.data.objects[self.object_name]
-            #         bpy.data.objects[self.object_name].select_set(True)
-            #     return {'FINISHED'}
         return {'FINISHED'}
-# # Custom operator class for hiding/showing objects
-# class ToggleVisibilityOperator(bpy.types.Operator):
-#     bl_idname = "object.toggle_visibility"
-#     bl_label = "Toggle Visibility"
-#     object_name: bpy.props.StringProperty()
-#     def execute(self, context):
-#         obj = bpy.data.objects.get(self.object_name)
-#         if obj:
-#             obj.hide_viewport = not obj.hide_viewport
-#         return {'FINISHED'}
-#     def invoke(self, context, event):
-#         if event.alt:
-#             selected_objects = bpy.context.selected_objects
-#             for obj in selected_objects:
-#                 obj.hide_viewport = not obj.hide_viewport
-#         elif event.ctrl:
-#             obj = bpy.data.objects.get(self.object_name)
-#             if obj:
-#                 viewportstatus = obj.hide_viewport
-#                 parent = obj.parent
-#                 if parent:
-#                     siblings = parent.children
-#                     for sibling in siblings:
-#                         sibling.hide_viewport = not viewportstatus
-#         else:
-#             return self.execute(context)
-#         return {'FINISHED'}
-# Custom operator class for hiding/showing objects
 def find_all_listed_paintsystems(context,**kwargs):
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
     if "objselection" in kwargs:objselection = kwargs.get("objselection")
-    # else:objselection = bpy.context.selected_objects
     else:objselection = bpy.context.scene.objects
     try:
         if activeobj not in objselection: objselection.append(activeobj)
@@ -6406,10 +5545,8 @@ def find_all_listed_paintsystems(context,**kwargs):
                 for modifier in hai.modifiers:
                     if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
                         listed_hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-    #ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
     elif activeobj.type=="MESH" or activeobj.type=="EMPTY":
         for hayr in bpy.context.scene.objects:
-        # for hayr in activeobj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
             if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                 for modifier in hayr.modifiers: #if mask selected, if brush activeobj selected, if terrain selected
                     if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == activeobj \
@@ -6444,8 +5581,6 @@ def biomegroupreorder_f(context,**kwargs):
     else:move_to_extreme = False
 
     secretpaint_update_modifier_f(context,upadte_provenance="def biomegroupreorder_f(context,**kwargs):")
-
-    #FIND DESTINAITON BIOME (+1 or to the extreme of the stack)
     hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
     if move_to_extreme:
         all_biome_numbers = []
@@ -6454,26 +5589,12 @@ def biomegroupreorder_f(context,**kwargs):
         if direction == -1: destination_biome = min(all_biome_numbers)-1
         elif direction == +1: destination_biome = max(all_biome_numbers)+1
     else: destination_biome = activeobj.modifiers[0]["Socket_0"] + direction
-
-
-
-    # hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
-    # they_are_all_hidden = True
-    # for hayr in hair[:]:
-    #     if hayr[0].modifiers[0]["Socket_0"] == destination_biome and hayr[0].modifiers[0]["Socket_2"] == False: they_are_all_hidden = False
     hair_in_destination_biome = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == destination_biome]
-    # viewport_visibility_mute = True if True in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_destination_biome] else False
-    ################################################################ v
-
-
-
-    #REASSIGN + INHERIT VISIBILITY STATUS + TEMP "SOLO VISIBILITY" STATUS + INHERIT BIOME NAME
     for obj in objselection:
         if obj.type == "CURVES" and obj.modifiers:
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                     modif["Socket_0"] = destination_biome
-                    # if they_are_all_hidden and len(hair_in_destination_biome) >=1: modif["Socket_2"] = True
                     modif["Socket_3"] = False #reset temp visibility
                     modif["Socket_4"] = False
                     modif["Socket_5"] = False
@@ -6481,15 +5602,9 @@ def biomegroupreorder_f(context,**kwargs):
                     if len(hair_in_destination_biome) >=1:
                         modif["Socket_2"] = hair_in_destination_biome[0].modifiers[0]["Socket_2"] #inherit biome visibility viewport from the destination biome that the hair is being transferred to. but only if it's not an empty biome, otherwise don't update and keep current state
                         modif["Socket_15"] = hair_in_destination_biome[0].modifiers[0]["Socket_15"] #inherit biome visibility viewport from the destination biome that the hair is being transferred to. but only if it's not an empty biome, otherwise don't update and keep current state
-                    # modif["Input_99"] = not checkbox_state
                     obj.location=obj.location
                     if hair_in_destination_biome: modif["Socket_8"] = hair_in_destination_biome[0].modifiers[0]["Socket_8"]   #BIOME NAME
-
-
-    #REMOVE GAPS (change biomes from 1,3,5 into 1,2,3)
-    # hair = find_all_listed_paintsystems(context,activeobj=activeobj,objselection=objselection)
     biome_remove_gaps(context, hair)
-
 
 
     return{'FINISHED'}
@@ -7366,7 +6481,7 @@ def _secret_paint_panel_run_deferred_vertex():
     return None
 
 
-def _secret_paint_panel_queue_vertex_action(context, buttonobj, *, remove_vgroup=False):
+def _secret_paint_panel_defer_vertex_action(context, buttonobj, *, remove_vgroup=False):
     global _SECRET_PAINT_PANEL_DEFERRED_VERTEX_TIMER_RUNNING
     try:
         object_name = buttonobj.name
@@ -7392,7 +6507,7 @@ def _secret_paint_panel_queue_vertex_action(context, buttonobj, *, remove_vgroup
 def _secret_paint_panel_vertex_prop_set(self, value):
     if not value:
         return
-    _secret_paint_panel_queue_vertex_action(
+    _secret_paint_panel_defer_vertex_action(
         bpy.context,
         self,
         remove_vgroup=_secret_paint_panel_modifier_key_down(0x12),
@@ -7784,7 +6899,7 @@ class panel_modified_click(bpy.types.Operator):
         if property_name == SECRET_PAINT_PANEL_VERTEX_PROP:
             if not alt:
                 return {'PASS_THROUGH'}
-            _secret_paint_panel_queue_vertex_action(context, buttonobj, remove_vgroup=True)
+            _secret_paint_panel_defer_vertex_action(context, buttonobj, remove_vgroup=True)
         elif property_name == SECRET_PAINT_PANEL_RENDER_PROP:
             _secret_paint_panel_render_modified_click(context, buttonobj, alt=alt, shift=shift)
         elif property_name == SECRET_PAINT_PANEL_MASK_PROP:
@@ -8449,7 +7564,6 @@ class biomegroupreorder(bpy.types.Operator):
     bl_label = "Move Up"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
         _secret_paint_panel_exit_paint_mode(context)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -8467,7 +7581,6 @@ class biomegroupreorder2(bpy.types.Operator):
     bl_label = "Move Down"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
         _secret_paint_panel_exit_paint_mode(context)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -8486,7 +7599,6 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
     object_biome: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
         buttonbiome = int(self.object_biome)
         buttonobj = bpy.data.objects.get(self.object_name)
@@ -8495,24 +7607,11 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
         objselection = bpy.context.selected_objects
         if buttonobj not in objselection: objselection.append(buttonobj) #sometimes the active object might not be selected
         if buttonobj != bpy.context.active_object and buttonobj not in bpy.context.selected_objects: objselection = [buttonobj]   #when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
-
-
-        # # all_bgroups=[]
-        # for hayr in hair[:]:
-        #     # if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
         hair = find_all_listed_paintsystems(context, activeobj=context.object)
         hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == buttonbiome]
         for ob in objselection[:]:  #constrain the selected objects to the active biome from where you pressed the button
             if ob not in hair_in_bgroup: objselection.remove(ob)
-    ############################## varaibles 1 (main)
-
-
-
-
-        #SOLO THIS LAYER  (the original selection becomes visible and marked as original "Socket_4", everything else gets turned off and marked as a temporary turn off "Socket_3"; this way I'm not affecting and toggling systems that were turned off by hand)
         if event.alt:
-
-            #IF CLICKING FROM THE ORIGINAL SYSTEM THAT YOU PREVIOUSLY SOLOED:  RESET EVERYTHING TO ORIGINAL STATE
             if buttonobj.modifiers[0]["Socket_4"] == True:   # if True in [hairr.modifiers[0]["Socket_3"] for hairr in hair_in_bgroup]:
                 for hayii in hair_in_bgroup:
                     if hayii.type == "CURVES":
@@ -8522,12 +7621,7 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                                 modif["Socket_3"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                                 modif["Socket_4"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
                                 hayii.location = hayii.location
-
-
-            #IF YOU'SOLOING A SYSTEM THAT WASN'T THE ORIGINAL SYSTEM YOU SOLOED BEFORE: RESET ALL CHECKBOXES AND SOLO FROM SCRATCH
             else:
-
-                #RESET ALL TEMPORARY CHECKBOXES ("TURN OFF SOLOED TEMP")
                 for hayyur in hair_in_bgroup:  #hair[:]:
                     if hayyur.type == "CURVES":
                         for modif in hayyur.modifiers:  # modifier.name == "GeometryNodes"
@@ -8540,23 +7634,17 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                     if hayii.type == "CURVES":
                         for modif in hayii.modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-
-                                #MARK OBJSELECTION AS ORIGINAL, IF ONE OF THE SYSTEMS IS HIDDEN: ENABLE, AND MARK   (IF WE'RE PROCESSING THE SYSTEM FROM WHICH WE CLICKED THE BUTTON, IT WILL BE MADE VISIBLE)
                                 if hayii in objselection:
                                     if modif["Input_99"] == True:                 # if modif["Input_99"] == False: modif["Socket_3"] = True  #IF IT WAS ALREADY HIDDEN, MARK FOR TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP") (in order to toggle back and forth exactly as everything was)
                                         modif["Input_99"] = False #enable
                                         modif["Socket_3"] = True  #MARK FOR TOGGLE
                                     modif["Socket_4"] = True  #MARK AS ORIGINAL SOLOED
-
-                                #IF WE'RE PROCESSING ANY OTHER SYSTEM THAT WASN'T SELECTED:
                                 else:
                                     if modif["Input_99"] == False: #CHECK IF THE SYSTEM WAS ALREADY ENABLED (because a system might already be manually hidden)
                                         modif["Socket_3"] = True #ONLY MARK THE SYSTEMS THAT WE'RE HIDING  (in order to avoid toggling visibility of systems that were turned off by hand)
                                         modif["Input_99"] = True  #HIDE IT
 
                                 hayii.location=hayii.location #update paint system
-
-        #HIDE IN THE VIEWPORT
         elif event.shift:
             mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
             mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
@@ -8575,14 +7663,9 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            # modif["Socket_14"] = not mute_visibility_viewport
                             modif["Input_99"] = mute_visibility_render_new
                             modif["Socket_14"] = mute_visibility_viewport_new
                             obj.location=obj.location
-
-
-
-        #ONLY HIDE SELECTED, also reset all other "TURN OFF SOLOED TEMP" checkboxes
         else:
             mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
             mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
@@ -8598,7 +7681,6 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            # modif["Input_99"] = not mute_visibility_render
                             modif["Input_99"] = mute_visibility_render_new
                             modif["Socket_14"] = mute_visibility_viewport_new
                             obj.location=obj.location
@@ -8610,28 +7692,6 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                             modif["Socket_3"] = False  #RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                             modif["Socket_4"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
                             hayyur.location = hayyur.location
-
-
-    # def invoke(self, context, event):
-    #     if event.alt:
-    #         obj = bpy.data.objects.get(self.object_name)
-    #         viewportstatus = obj.hide_render
-    #         selected_objects = bpy.context.selected_objects
-    #         for obj in selected_objects:
-    #             obj.hide_render = not viewportstatus
-    #     elif event.ctrl:
-    #         obj = bpy.data.objects.get(self.object_name)
-    #         viewportstatus = obj.hide_render
-    #         parent = obj.parent
-    #         if parent:
-    #             siblings = parent.children
-    #             for sibling in siblings:
-    #                 sibling.hide_render = not viewportstatus
-    #     else:
-    #         return self.execute(context)
-    #     return {'FINISHED'}
-
-
         _clear_side_panel_count_cache(reason="toggle_visibilityrender")
         _secret_paint_tag_redraw_view3d_areas(context)
         return {'FINISHED'}
@@ -8641,7 +7701,6 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
     bl_label = "Toggle Visibility"
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
         hair = find_all_listed_paintsystems(context, activeobj=context.object)
         hair_in_bgroup =[]
@@ -8649,20 +7708,8 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
         for hayr in hair[:]:
             if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome): hair_in_bgroup.append(hayr[0])
             else: hair_in_OTHER_bgroups.append(hayr[0])
-        ################################################ v
-
-
-
-
-
-
-
         if event.alt: #SOLO THIS BIOME
-
-
-            #IF CLICKING FROM THE ORIGINAL BIOME THAT YOU SOLOED:  RESET EVERYTHING TO ORIGINAL STATE
             if True in [hairr.modifiers[0]["Socket_6"] for hairr in hair_in_bgroup]:
-                # mute_system = True if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_OTHER_bgroups] else False  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
                 for hayii in hair[:]:
                     if hayii[0].type == "CURVES":
                         for modif in hayii[0].modifiers:  # modifier.name == "GeometryNodes"
@@ -8671,13 +7718,7 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                                 modif["Socket_5"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                                 modif["Socket_6"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
                                 hayii[0].location = hayii[0].location
-
-
-
-            #IF YOU'SOLOING A BIOME THAT WASN'T THE ORIGINAL SYSTEM YOU SOLOED BEFORE: RESET ALL CHECKBOXES AND SOLO FROM SCRATCH
             else:
-
-                #RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                 for hayyur in hair[:]:  # RESET THE BIOME TEMPORARY CHECKBOXES ("TURN OFF SOLOED TEMP")
                     if hayyur[0].type == "CURVES":
                         for modif in hayyur[0].modifiers:  # modifier.name == "GeometryNodes"
@@ -8690,24 +7731,17 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                     if hayii[0].type == "CURVES":
                         for modif in hayii[0].modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-
-                                #MARK CLICKED BIOME AS ORIGINAL, IF ONE OF THE SYSTEMS IS HIDDEN: ENABLE, AND MARK   (IF WE'RE PROCESSING THE SYSTEM FROM WHICH WE CLICKED THE BUTTON, IT WILL BE MADE VISIBLE)
                                 if hayii[0] in hair_in_bgroup:
                                     if modif["Socket_2"] == True:                 # if modif["Input_99"] == False: modif["Socket_3"] = True  #IF IT WAS ALREADY HIDDEN, MARK FOR TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP") (in order to toggle back and forth exactly as everything was)
                                         modif["Socket_2"] = False #enable biome
                                         modif["Socket_5"] = True  #MARK FOR TOGGLE
                                     modif["Socket_6"] = True  #MARK AS ORIGINAL SOLOED
-
-                                #IF WE'RE PROCESSING ANY OTHER SYSTEM THAT WASN'T SELECTED:
                                 else:
                                     if modif["Socket_2"] == False: #CHECK IF THE SYSTEM WAS ALREADY ENABLED (because a system might already be manually hidden)
                                         modif["Socket_5"] = True #ONLY MARK THE SYSTEMS THAT WE'RE HIDING  (in order to avoid toggling visibility of systems that were turned off by hand)
                                         modif["Socket_2"] = True  #HIDE IT
 
                                 hayii[0].location=hayii[0].location #update paint system
-
-
-        #HIDE IN THE VIEWPORT
         elif event.shift:
             mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
             mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
@@ -8729,10 +7763,6 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                             modif["Socket_2"] = mute_biome_visibility_render_new
                             modif["Socket_15"] = mute_biome_visibility_viewport_new
                             obj.location=obj.location
-
-
-
-        #ONLY HIDE SELECTED BIOME, also reset all other "TURN OFF SOLOED TEMP" checkboxes
         else:
             mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
             mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
@@ -8762,7 +7792,6 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
         _clear_side_panel_count_cache(reason="toggle_visibilityrender_biome")
         _secret_paint_tag_redraw_view3d_areas(context)
         return {'FINISHED'}
-# Custom operator class for toggling display as bounds
 class toggle_display_bounds(bpy.types.Operator):
     """Display as Bounds is the most efficient way to preserve the viewport performance when diplaying a large number of individual objects"""
     bl_idname = "secret.toggle_display_bounds"
@@ -8775,9 +7804,6 @@ class toggle_display_bounds(bpy.types.Operator):
             return {'CANCELLED'}
         objselection = bpy.context.selected_objects
         if buttonobj not in objselection: objselection.append(buttonobj)
-        # selected_objects = [obj for obj in bpy.context.selected_objects] #if obj.type == 'MESH']
-
-        # when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
         if buttonobj != bpy.context.active_object and buttonobj not in bpy.context.selected_objects: objselection = [buttonobj]
 
 
@@ -8787,29 +7813,6 @@ class toggle_display_bounds(bpy.types.Operator):
         _clear_side_panel_count_cache(reason="toggle_display_bounds")
         _secret_paint_tag_redraw_view3d_areas(context)
         return {'FINISHED'}
-
-    #     if event.alt:
-    #         selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
-    #         for obj in selected_objects:
-    #             obj.display_type = 'BOUNDS' if obj.display_type != 'BOUNDS' else 'TEXTURED'
-    #     elif event.ctrl:
-    #         obj = bpy.data.objects.get(self.object_name)
-    #         if obj.display_type == "BOUNDS": viewportstatus = "TEXTURED"
-    #         else: viewportstatus = "BOUNDS"
-    #         parent = obj.parent
-    #         if parent:
-    #             siblings = parent.children
-    #             for sibling in siblings:
-    #                 sibling.display_type = viewportstatus
-    #     else:
-    #         return self.execute(context)
-    #     return {'FINISHED'}
-    #
-    # def execute(self, context):
-    #     obj = bpy.data.objects.get(self.object_name)
-    #     if obj:
-    #         obj.display_type = 'BOUNDS' if obj.display_type != 'BOUNDS' else 'TEXTURED'
-    #     return {'FINISHED'}
 class toggle_display_bounds_biome(bpy.types.Operator):
     """Display as Bounds is the most efficient way to preserve the viewport performance when diplaying a large number of individual objects"""
     bl_idname = "secret.toggle_display_bounds_biome"
@@ -8828,22 +7831,15 @@ class toggle_display_bounds_biome(bpy.types.Operator):
                     for modifier in hai.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
                             hair.append((hai, hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-        # ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
         elif obj.type == "MESH" or obj.type == "EMPTY":
             for hayr in bpy.context.scene.objects:
-                # for hayr in obj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
                 if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                     for modifier in hayr.modifiers:  # if mask selected, if brush obj selected, if terrain selected
                         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
                                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
                                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
                             hair.append((hayr, hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-        # # hair_in_bgroup = []
-        # for hayr in hair[:]:
-        #     # if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
         hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
-        ####################################################
-
         if hair_in_bgroup:
             buttonobj_status= hair_in_bgroup[0].display_type
             for obj in hair_in_bgroup:
@@ -8871,22 +7867,15 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
                     for modifier in hai.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
                             hair.append((hai, hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-        # ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
         elif obj.type == "MESH" or obj.type == "EMPTY":
             for hayr in bpy.context.scene.objects:
-                # for hayr in obj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
                 if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                     for modifier in hayr.modifiers:  # if mask selected, if brush obj selected, if terrain selected
                         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
                                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
                                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
                             hair.append((hayr, hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-        # # hair_in_bgroup = []
-        # for hayr in hair[:]:
-        #     # if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
         hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
-        ####################################################
-
         maskobsel=None
         if hair_in_bgroup:
 
@@ -8908,11 +7897,6 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
             else: secretpaint_viewport_mask_function(self, context, activeobj=hair_in_bgroup[0], objselection=hair_in_bgroup, called_for_entire_biome = True)
             self.object_name = ("")
         return {'FINISHED'}
-
-#########################1111111111111111111111111111111111111##########################
-
-
-#########   UNIV   FUNCTIONS  ######
 def context3sculptbrush(context,**kwargs):
     pickup_trace = _get_pickup_trace()
     context3sculptbrush_start = time.perf_counter()
@@ -8930,41 +7914,6 @@ def context3sculptbrush(context,**kwargs):
         and _secret_paint_world_paint_enabled(context)
     ):
         return _secret_paint_start_world_paint_for_object(context, activeobj)
-
-    # bpy.context.tool_settings.curves_sculpt.brush = bpy.data.brushes["Density Curves"]
-
-    #CONTEXT AREA TO 3D VIEWPORT
-    # viewport_area = None
-    # for area in bpy.context.screen.areas:
-    #     if area.type == 'VIEW_3D':
-    #         viewport_area = area
-    #         break
-    # if viewport_area:
-    #     bpy.context.screen.areas[0] = viewport_area
-    #     bpy.context.space_data = viewport_area.spaces.active
-
-    # # For every screen in the file...
-    # for screen in bpy.data.screens:
-    #     for area in (a for a in screen.areas if a.type == 'VIEW_3D'):      # Find all the 3d viewports...
-    #         for region in (r for r in area.regions if r.type == 'WINDOW'): # Now find the Window region too for that area...
-    #             # Ok, we found the data we need to override
-    #             # at minimum the 'area' and 'region' needs to be set, but here I set all 3 as an example
-    #             override = {'screen': screen, 'area': area, 'region': region}
-    #             # bpy.ops.view3d.view_center_cursor(override)
-    #             bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")  # builtin_brush.density")
-
-    # for area in bpy.context.screen.areas:  # add hair tool  #DEACTIVATED FOR paint_from_library
-    #     if area.type == "VIEW_3D":
-    #         override = bpy.context.copy()
-    #         override["space_data"] = area.spaces[0]
-    #         override["area"] = area
-    #         # bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")  #builtin_brush.density")
-    # # bpy.ops.wm.tool_set_by_id(override, name="builtin_brush.add")
-    # # bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")  #builtin_brush.density")
-
-
-
-
     if activeobj.type == "CURVES":
         prepare_surface_start = time.perf_counter()
 
@@ -8980,8 +7929,6 @@ def context3sculptbrush(context,**kwargs):
             ensure_secret_paint_system_stable_root_positions(activeobj)
         except Exception:
             pass
-        #REASSIGN UVS
-        # if not activeobj.data.surface_uv_map:
         active_render_UV = None
         custom_uv = None
         for uvmap in activeobj.data.surface.data.uv_layers:  # bpy.context.object.data.uv_layers['UVMap.001'].active = True
@@ -9076,13 +8023,6 @@ def context3sculptbrush(context,**kwargs):
                 print("FAILED BRUSH DENSITYYYYY")
             if pickup_trace:
                 pickup_trace.action("context3sculptbrush.set_density_tool", set_density_tool_start)
-            # bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
-
-        # bpy.data.brushes["Density Curves"].curves_sculpt_brush_type =
-        # bpy.data.brushes["Curves Snake Hook"].curves_sculpt_brush_type =
-        # bpy.data.brushes["Grow / Shrink Curves"].curves_sculpt_brush_type =
-
-        #CREATE THEN REFERENCE BRUSHES        #'DELETE' 'DENSITY'  'SNAKE_HOOK'   'GROW_SHRINK'  'ADD'
         brush_density = []
         brush_grow = []
         brush_add = []
@@ -9121,7 +8061,6 @@ def context3sculptbrush(context,**kwargs):
             secret_paint_set_curves_brush_type(new_brush_density, 'DENSITY')
             new_brush_density.size = 150
             brush_density.append(new_brush_density)
-            # brush_density = [brush_density] #convert to a list if only one density brush was found
         if not brush_grow:
             new_brush_grow = bpy.data.brushes.new('Grow /Shrink Curves',mode="SCULPT_CURVES")
             secret_paint_set_curves_brush_type(new_brush_grow, 'GROW_SHRINK')
@@ -9156,14 +8095,9 @@ def context3sculptbrush(context,**kwargs):
                     f"delete={len(brush_delete)}; puff={len(brush_puff)}; comb={len(brush_comb)}"
                 ),
             )
-
-
-
-        #density brush always gets updated
         sync_density_start = time.perf_counter()
         density_minimum_distance = secret_paint_density_minimum_distance(context, activeobj)
         for bb in brush_density:
-            # if bpy.context.object.modifiers[0] and bpy.context.object.modifiers[0]["Input_68"] > 0: bb.curves_sculpt_settings.minimum_distance =    (0.5/((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"]))*1.5     #(0.314 / ((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) * bpy.context.object.modifiers[0]["Input_100"] ** 0.5))     ## brush_density.curves_sculpt_settings.minimum_distance = 0.5/(bpy.context.object.modifiers["GeometryNodes"]["Input_68"]*bpy.context.object.modifiers["GeometryNodes"]["Input_100"])        # if bpy.context.object.modifiers[0]: brush_density.curves_sculpt_settings.minimum_distance =  bpy.context.object.modifiers[0]["Socket_11"]
             settings = getattr(bb, "curves_sculpt_settings", None)
             if settings is None:
                 continue
@@ -9190,12 +8124,8 @@ def context3sculptbrush(context,**kwargs):
             _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
         if pickup_trace:
             pickup_trace.action("context3sculptbrush.sync_density_brush", sync_density_start, detail=f"density_brushes={len(brush_density)}")
-
-        #OVERRIDE ALL BRUSH SETTINGS
         if override_brush_settings:
             override_brush_settings_start = time.perf_counter()
-
-            #DENSITY BRUSH
             for bb in brush_density:
                 settings = getattr(bb, "curves_sculpt_settings", None)
                 if settings is None:
@@ -9207,15 +8137,12 @@ def context3sculptbrush(context,**kwargs):
                     1.0,
                     epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
                 )
-                # bb.falloff_shape = 'SPHERE'
                 if bpy.app.version_string >= "5.0.0":
                     _secret_paint_set_attr_if_different(bb, "curve_distance_falloff_preset", 'SMOOTHER')
                 elif bpy.app.version_string < "5.0.0":
                     _secret_paint_set_attr_if_different(bb, "curve_preset", 'SMOOTHER')
                 if settings.density_add_attempts <= 100:
                     _secret_paint_set_attr_if_different(settings, "density_add_attempts", 3000)
-
-            #growshrink brush
             for bb in brush_grow:
                 settings = getattr(bb, "curves_sculpt_settings", None)
                 _secret_paint_set_attr_if_different(
@@ -9230,14 +8157,11 @@ def context3sculptbrush(context,**kwargs):
                     _secret_paint_set_attr_if_different(settings, "use_uniform_scale", True)
                 elif bpy.app.version_string < "4.2.0":
                     _secret_paint_set_attr_if_different(settings, "scale_uniform", True)
-
-            #add brush
             for bb in brush_add:
                 settings = getattr(bb, "curves_sculpt_settings", None)
                 if settings is None:
                     continue
                 _secret_paint_set_attr_if_different(settings, "add_amount", 1)
-                # bb.falloff_shape = 'SPHERE'
                 _secret_paint_set_attr_if_different(bb, "use_frontface", True)
                 if bpy.app.version_string >= "4.2.0":
                     _secret_paint_set_attr_if_different(settings, "use_length_interpolate", True)
@@ -9253,19 +8177,9 @@ def context3sculptbrush(context,**kwargs):
                     0.32,  # was 0.3
                     epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
                 )
-                # brush_add.curves_sculpt_settings.curve_length = 1.32  #was 0.3
                 _secret_paint_set_attr_if_different(settings, "points_per_curve", 2)
-
-            # #delete brush
-            # for bb in brush_delete:
-            #     bb.falloff_shape = 'PROJECTED'
-
-            #puff brush
             for bb in brush_puff:
                 _secret_paint_set_attr_if_different(bb, "strength", 10)
-                # bb.falloff_shape = 'PROJECTED'
-
-            #comb brush
             for bb in brush_comb:
                 _secret_paint_set_attr_if_different(
                     bb,
@@ -9273,14 +8187,12 @@ def context3sculptbrush(context,**kwargs):
                     0.1,
                     epsilon=SECRET_PAINT_DENSITY_SPACING_EPSILON,
                 )
-                # bb.falloff_shape = 'PROJECTED'
             if pickup_trace:
                 pickup_trace.action(
                     "context3sculptbrush.override_brush_settings",
                     override_brush_settings_start,
                 detail=f"override=True; brushes={len(bpy.data.brushes)}",
                 )
-
 
 
         if not keep_active_brush:
@@ -9300,9 +8212,6 @@ def context3sculptbrush(context,**kwargs):
                 )
 
 
-
-
-
     elif activeobj.type=="CURVE":
         curve_edit_setup_start = time.perf_counter()
         bpy.ops.object.mode_set(mode="EDIT")  # edit mode
@@ -9311,13 +8220,6 @@ def context3sculptbrush(context,**kwargs):
                 override = bpy.context.copy()
                 override["space_data"] = area.spaces[0]
                 override["area"] = area
-                # bpy.ops.wm.tool_set_by_id(override, name="builtin_brush.add")
-                # bpy.ops.wm.tool_set_by_id(override, name="builtin_brush.density")
-                # if bpy.context.object.modifiers["GeometryNodes"]:
-                #     bpy.data.brushes["Density Curves"].curves_sculpt_settings.minimum_distance = bpy.context.object.modifiers["GeometryNodes"]["Input_68"]
-                # else: bpy.data.brushes["Density Curves"].curves_sculpt_settings.minimum_distance = 0.1
-
-                # bpy.ops.wm.tool_set_by_id(override, name="builtin.draw")
                 bpy.ops.wm.tool_set_by_id(name="builtin.draw")
 
                 if _secret_paint_pref("checkboxOverrideBrushes", True):
@@ -9337,9 +8239,6 @@ def context3sculptbrush(context,**kwargs):
                     bpy.context.scene.tool_settings.curve_paint_settings.curve_type = 'BEZIER'
         if pickup_trace:
             pickup_trace.action("context3sculptbrush.curve_edit_setup", curve_edit_setup_start, detail=f"active={activeobj.name if activeobj else 'None'}")
-
-
-            # bpy.data.brushes["Add Curves"].add_amount = 2
     if pickup_trace:
         pickup_trace.action(
             "context3sculptbrush.total",
@@ -9352,17 +8251,8 @@ def curve_draw_tool(context,**kwargs):
     else:dont_set_drawing_tool = False
 
     bpy.ops.object.mode_set(mode="EDIT")  # edit mode
-    # for area in bpy.context.screen.areas:  # draw tool
-    #     if area.type == "VIEW_3D":
-    #         override = bpy.context.copy()
-    #         override["space_data"] = area.spaces[0]
-    #         override["area"] = area
-    #         if dont_set_drawing_tool: bpy.ops.wm.tool_set_by_id(override, name="builtin.select_box")
-    #         else: bpy.ops.wm.tool_set_by_id(override, name="builtin.draw")
     if not dont_set_drawing_tool:
         bpy.ops.wm.tool_set_by_id(name="builtin.draw")
-
-    # return{'FINISHED'}
 def recurLayerCollection(layerColl, collName):  #paint. conversion
     found = None
     if (layerColl.name == collName):
@@ -9377,7 +8267,6 @@ def getChildren(parentobj):
         if ob.parent == parentobj:
             children.append(ob)
     return children
-# def orenpaint_viewport_mask_function(self,context,objselection=bpy.context.selected_objects,activeobj=bpy.context.active_object):  #DOESN'T WORK???
 def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,calledfrom_button=False, force_new_maskObj=False
 
     importpainting_multiple_assets = kwargs.get("importpainting_multiple_assets") if "importpainting_multiple_assets" in kwargs else False
@@ -9395,19 +8284,9 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
     else: force_new_maskObj = False
     if "called_for_entire_biome" in kwargs: called_for_entire_biome = kwargs.get("called_for_entire_biome")
     else: called_for_entire_biome = False
-
-    # print(activeobj)
-    # print(objselection)
-
-    #when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
     if called_for_entire_biome == False:  #ignore if called for the entire biome, because the active obj is improbable to match the randomly picked hair_in_bgroup[0]
         if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
-
-
-
-    # activeobj_BoundingBox_State = activeobj.display_type
     N_Of_Selected = len(objselection)  # bpy.context.selected_objects
-    # ActiveMode = bpy.context.object.mode
     selobjs_without_active = []
     objs_with_orencurve = []
     selobjs_without_active_with_orencurve = []
@@ -9440,10 +8319,6 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
 
     all_sel_are_orencurves = False
     if N_Of_Selected == len(objs_with_orencurve): all_sel_are_orencurves = True
-
-    ######################   v
-
-    # if mask and biome are selected, share mask:
     if mask_found:
         for scattered_hair in objs_with_orencurve:
             scattered_hair.modifiers[0]["Input_98"] = True
@@ -9452,20 +8327,10 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
             scattered_hair.hide_viewport = True  # refresh
             scattered_hair.hide_viewport = False  # refresh
             scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
-
-    # toggle or share settings:
     else:
         checkboxstatus = activeobj.modifiers[0]["Input_98"]
         maskstatus = activeobj.modifiers[0]["Input_97"]
-        # print(checkboxstatus)
-        # print(maskstatus)
-        # return {'FINISHED'}
-
-
-
-        # if all selected hair share same mask settings:
         if all_hair_share_same_mask_settings:
-            #TOGGLE MASK SETTINGS IF THEY'RE ALL THE SAME
             maskobj = None #[]
             if maskstatus == None:
                 Coll_of_Active = []  # CREATE MASK IN COLLECTION OF ACTIVE
@@ -9474,14 +8339,10 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
                 for i in ucol:
                     layer_collection = bpy.context.view_layer.layer_collection  # bpy.context.scene.collection
                     Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-                    # bpy.context.view_layer.active_layer_collection = Coll_of_Active
-
-                # ONLY USE ONE MASK FOR THE SAME SCENE
                 for ob in bpy.context.scene.objects:
                     if ob.name.startswith("Secret Paint Viewport Mask"):
                         maskobj = ob
                         break
-                # CREATE THE MASAK IF NOT FOUND
                 if not maskobj or force_new_maskObj:
                     if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -9501,21 +8362,6 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
                         for obbb in bpy.context.selected_objects: obbb.select_set(False)
                         maskobj.select_set(True)
                         bpy.context.view_layer.objects.active = maskobj
-
-                    # bpy.ops.mesh.primitive_cube_add(size=5, enter_editmode=False, align='WORLD',location=activeobj.location)
-                    # maskobj = bpy.context.active_object
-                    # maskobj.name = "Secret Paint Viewport Mask"
-
-                    # bpy.ops.mesh.select_all(action='DESELECT')
-                    # mesh = bmesh.from_edit_mesh(maskobj.data)
-                    # for vertex in mesh.verts:
-                    #     if vertex.co.z > 2:
-                    #         vertex.select = True
-                    # bpy.ops.mesh.delete(type='VERT')
-                    # # bpy.ops.mesh.select_all(action='SELECT')
-                    # # bpy.ops.mesh.subdivide(number_cuts=1, smoothness=1.0)
-                    # bpy.ops.object.mode_set(mode='OBJECT')
-
                     maskobj.visible_camera = False
                     maskobj.visible_diffuse = False
                     maskobj.visible_glossy = False
@@ -9542,8 +8388,6 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
                 scattered_hair.hide_viewport = True  # refresh
                 scattered_hair.hide_viewport = False  # refresh
                 scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
-
-        # else different settings: copy active hair's mask settings, wether empty or full
         else:
             for scattered_hair in objs_with_orencurve:
                 scattered_hair.modifiers[0]["Input_98"] = checkboxstatus
@@ -9551,9 +8395,6 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
                 scattered_hair.hide_viewport = True  # refresh
                 scattered_hair.hide_viewport = False  # refresh
                 scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
-
-
-    #DELETE UNUSED MASKS     #RESELECT SYSTEM AFTER DELETING MASK
     all_used_masks_in_blendfile=[]
     all_masks_in_blendfile=[]
     for obj in bpy.data.objects:
@@ -9567,48 +8408,6 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
             flag_make_row_object_active_after_deleting_mask = True if mask == bpy.context.active_object else False
             bpy.data.objects.remove(mask, do_unlink=True)
             if flag_make_row_object_active_after_deleting_mask: bpy.context.view_layer.objects.active = activeobj
-
-
-
-    #
-    # elif all_sel_are_orencurves:
-    #     Coll_of_Active = []   #CREATE MASK IN COLLECTION OF ACTIVE
-    #     original_collection = bpy.context.view_layer.active_layer_collection  # bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
-    #     ucol = activeobj.users_collection
-    #     for i in ucol:
-    #         layer_collection = bpy.context.view_layer.layer_collection  # bpy.context.scene.collection
-    #         Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-    #         bpy.context.view_layer.active_layer_collection = Coll_of_Active
-    #     bpy.ops.mesh.primitive_uv_sphere_add(enter_editmode=True, align='WORLD',location=activeobj.location, scale=(5, 5, 5))
-    #     bpy.context.view_layer.active_layer_collection = original_collection
-    #     maskobj = bpy.context.active_object
-    #     maskobj.name = "Orenpaint Viewport Mask"
-    #
-    #     bpy.ops.mesh.select_all(action='DESELECT')
-    #     mesh = bmesh.from_edit_mesh(maskobj.data)
-    #     for vertex in mesh.verts:
-    #         if vertex.co.z > 2:
-    #             vertex.select = True
-    #     bpy.ops.mesh.delete(type='VERT')
-    #     # bpy.ops.mesh.select_all(action='SELECT')
-    #     # bpy.ops.mesh.subdivide(number_cuts=1, smoothness=1.0)
-    #     bpy.ops.object.mode_set(mode='OBJECT')
-    #
-    #     maskobj.visible_camera = False
-    #     maskobj.visible_diffuse = False
-    #     maskobj.visible_glossy = False
-    #     maskobj.visible_transmission = False
-    #     maskobj.visible_volume_scatter = False
-    #     maskobj.visible_shadow = False
-    #     maskobj.display_type = 'WIRE'
-    #
-    #     for scattered_hair in objs_with_orencurve:
-    #         scattered_hair.modifiers["GeometryNodes"]["Input_97"] = maskobj
-    #         scattered_hair.modifiers["GeometryNodes"]["Input_98"] = True
-    #
-    #         scattered_hair.hide_viewport=True #refresh
-    #         scattered_hair.hide_viewport=False #refresh
-    #         scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
     return {'FINISHED'}
 
 
@@ -9691,9 +8490,6 @@ class secretpaint_viewport_mask(bpy.types.Operator):
             secretpaint_viewport_mask_function(self, context,activeobj=obbb)
         self.object_name = ("")
         return {'FINISHED'}
-    # def execute(self, context):
-    #     orenpaint_viewport_mask_function(self, context,activeobj=bpy.data.objects.get(self.object_name))
-    #     return {'FINISHED'}
 def selcollectionofactive(layerColl, collName):   # make active the parent collection of active object
     found = None
     if (layerColl.name == collName):
@@ -9737,14 +8533,12 @@ def select_biome_all_function(context):
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                     brushobj = activeobj.modifiers[0]["Input_2"]
                     brushcoll = activeobj.modifiers[0]["Input_9"]
-    # SELECT BIOMES WITH SAME BRUSH
     for obj in bpy.context.scene.objects:
         if obj.type == "CURVES":
             if obj.modifiers:
                 for modif in obj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and obj.modifiers[0]["Input_2"] == brushobj and obj.modifiers[0]["Input_9"] == brushcoll:
                         bpy.data.objects[obj.name].select_set(True)
-                        # print(obj.name)
     return {'FINISHED'}
 class select_biome_all(bpy.types.Operator):
     """Select all Biomes that share the same Brush object"""
@@ -9762,8 +8556,6 @@ def dupliObjCheckCoordinates(self, context,**kwargs):
     allCoordinates = []
     for obj in bpy.context.scene.objects:
         allCoordinates.append(str(obj.location))
-    # bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": True})
-
     dupliobj = activeobj.copy()
     bpy.context.scene.collection.objects.link(dupliobj)
 
@@ -9771,74 +8563,12 @@ def dupliObjCheckCoordinates(self, context,**kwargs):
         dupliobj.location[2] = dupliobj.location[2] + (((dupliobj.dimensions[2]) / 2) * 2.15)
 
     return dupliobj
-
-
-
-
-
-
-
-
-
-#EXPOSED BUTTONS
-
-# def orenpaint_base_function(*args,**kwargs):
-#     if "surfaceOBJ" in kwargs:surfaceOBJ = kwargs.get("surfaceOBJ")
-#     else:surfaceOBJ = bpy.context.active_object
-#     if surfaceOBJ == None: surfaceOBJ = bpy.context.active_object
-#     if "objselection" in kwargs:objselection = kwargs.get("objselection")
-#     else:objselection = bpy.context.selected_objects
-#     if surfaceOBJ not in objselection: objselection.append(surfaceOBJ)
-#
-#     bpy.context.view_layer.active_layer_collection = Coll_of_Active  # SELECT COLLECTION
-#     bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.context.scene.cursor.location, scale=(1, 1, 1))
-#     hairCurves = bpy.context.active_object
-#
-#     bpy.ops.object.modifier_remove(modifier="Surface Deform")
-#     contextorencurveappend(context)
-#     hairCurves.modifiers["GeometryNodes"]["Input_2"] = bpy.data.objects[brushOBJ.name]  # ["GeometryNodes"] #objinstance
-#     # bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = None  #reset collection
-#     hairCurves.modifiers["GeometryNodes"][
-#         "Input_16"] = 5  # MODE scatter  (ignore radius, different scale and rot nodes)
-#     hairCurves.modifiers["GeometryNodes"]["Input_6"][2] = 20  # random z rot
-#     hairCurves.modifiers["GeometryNodes"]["Input_15"] = 0.25  # random scale
-#     hairCurves.modifiers["GeometryNodes"]["Input_62"] = 0.5  # world noise scale
-#     # bpy.context.object.modifiers["GeometryNodes"]["Input_52"] = 1 # show original curve
-#
-#     if brushOBJ.type != "MESH":
-#         density_large = 1.0  # can't calculate the density from an empty object
-#     else:
-#         if brushOBJ.dimensions[0] > brushOBJ.dimensions[1]:
-#             density_large = 0.5 / (brushOBJ.dimensions[0] / 2 / brushOBJ.scale[0])
-#         else:
-#             density_large = 0.5 / (brushOBJ.dimensions[1] / 2 / brushOBJ.scale[1])
-#     hairCurves.modifiers["GeometryNodes"]["Input_68"] = density_large  # DENSITY SCATTER
-#     hairCurves.modifiers["GeometryNodes"]["Input_100"] = surfaceOBJ.scale[0]  # OBJ SCALE COMPENSATION
-#     hairCurves.modifiers["GeometryNodes"]["Input_73"] = surfaceOBJ  # SURFACE DENSITY SCATTER
-#
-#     # LINK MATERIALS
-#     for material_slot in brushOBJ.material_slots:
-#         if material_slot.material and material_slot.material.name not in hairCurves.data.materials:
-#             hairCurves.data.materials.append(material_slot.material)
-#
-#     bpy.data.objects[hairCurves.name].select_set(False)  # deselect in order to see better what it's being painted
-#     bpy.context.view_layer.active_layer_collection = original_collection
-#     context3sculptbrush(context)
-#
-#     return {'FINISHED'}
-#     return {'FINISHED'}
-#     return {'FINISHED'}
-# def orenpaint_function(self,context, event):
 def secretpaint_cleanup_empty_systems(self,context):
-    # cleanup empty hair systems in scene, for misclicks
     for obj in bpy.context.scene.objects:
         if obj.type == "CURVES" and obj.modifiers and obj != bpy.context.active_object and obj not in bpy.context.selected_objects:
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and (sum(len(spline.points) for spline in obj.data.curves)) == 0 and obj.modifiers[0]["Input_99"] == False and obj.modifiers[0]["Input_69"] == False:
                     bpy.data.objects.remove(obj, do_unlink=True)
-                #CLEANUP VGROUPS AS WELL??
-
-
 def _secret_paint_collection_from_candidate(collection_candidate):
     if collection_candidate is None:
         return None
@@ -9887,23 +8617,12 @@ def secretpaint_create_curve(self,context,**kwargs):
         kwargs.get("targetCollection") if "targetCollection" in kwargs else bpy.context.collection,
     )
     transfer_modifier = kwargs.get("transfer_modifier") if "transfer_modifier" in kwargs else False
-    # if "append_orenpaint" in kwargs:append_orenpaint = kwargs.get("append_orenpaint")
-    # else:append_orenpaint = False
-    ################################################
-
-
-    #CREATE NEW CURVE
     hairCurves = bpy.data.objects.new("Secret Paint", bpy.data.hair_curves.new("Secret Paint"))
     targetCollection.objects.link(hairCurves) #LINK TO TARGET TERRAIN COLLECTION
     if transfer_modifier:
-        # print("UPDAAAAAAAAAAAT secretpaint_create_curve")
         secretpaint_update_modifier_f(context,upadte_provenance="def secretpaint_create_curve(self,context,**kwargs)") #no need to append the node tree, just update and copy the existing modifier
     else: contextorencurveappend(context,activeobj=hairCurves)
-    # if append_orenpaint: contextorencurveappend(context,activeobj=hairCurves)
-    # else: orenpaint_update_modifier_f(context)
     hairCurves.data.surface = targetOBJsurface
-
-    #USE CUSTOM UV IF FOUND, ELIF THE RENDER ACTIVE UV, ELSE CREATE IT
     active_render_UV = None
     custom_uv = None
     for uvmap in targetOBJsurface.data.uv_layers:    #bpy.context.object.data.uv_layers['UVMap.001'].active = True
@@ -9911,26 +8630,17 @@ def secretpaint_create_curve(self,context,**kwargs):
         if uvmap.active_render: active_render_UV = uvmap.name
     if custom_uv: hairCurves.data.surface_uv_map = custom_uv
     elif active_render_UV: hairCurves.data.surface_uv_map = active_render_UV
-    # else: hairCurves.data.surface_uv_map = secret_paint_new_uvs(self, context, activeobj=targetOBJsurface).name
-
-
     hairCurves.rotation_euler = targetOBJsurface.matrix_world.to_euler('XYZ')  # rotation_euler
     hairCurves.scale = targetOBJsurface.scale
     hairCurves.location = targetOBJsurface.matrix_world.to_translation()  # location
     hairCurves.parent = targetOBJsurface
     hairCurves.matrix_parent_inverse = targetOBJsurface.matrix_world.inverted()
     hairCurves.display_type = hair_to_copyModifs_from.display_type #LINK BOUNDING BOX STATE  #brushOBJ[0]
-
-    # LINK MATERIALS
     if brushOBJ:
         material_cache = {}
         for brushh in brushOBJ:
             for material in _secret_paint_collect_safe_materials_from_object(brushh, material_cache):
                 _secret_paint_append_material_once(hairCurves.data.materials, material)
-
-
-
-    #LINK MODIFIERS
     if transfer_modifier:
         for mod in hair_to_copyModifs_from.modifiers:
             mod_copy = hairCurves.modifiers.new(mod.name, mod.type)
@@ -9941,30 +8651,22 @@ def secretpaint_create_curve(self,context,**kwargs):
                 except:
                     continue
                 setattr(mod_copy, attr, getattr(mod, attr))
-            # try:
                 for key, value in mod.items():
                     try:
                         mod_copy[key] = value
                     except: print("failllllllllll", value)
-            # except: print("failllllllllll")
     hairCurves.modifiers[0]["Input_99"] = True    #ALWAYS TURN OFF SYSTEM, CALCULATE IF MASK IS NEEDED, THEN TURN IT ON FOR EACH INDIVIDUAL SCATTER SCENARIO
     hairCurves.modifiers[0]["Input_71"] = float(random.choice(range(0, 10)))  # random noise W
     hairCurves.modifiers[0]["Input_73"] = targetOBJsurface #surface
     hairCurves.modifiers[0]["Input_100"] = abs(max(targetOBJsurface.scale))    # OBJ SCALE COMPENSATION calculated from max dimension
-    # hairCurves.modifiers[0]["Input_99"] = False    #ALWAYS TURN ON SYSTEM
-    # if bpy.context.preferences.addons[__package__].preferences.checkboxFasterViewportMask: hairCurves.modifiers[0]["Socket_10"] = True
     if targetOBJsurface.modifiers:   #if armature modifier detected, turn on deform on surface
         for mod in targetOBJsurface.modifiers:
             if mod.type in ["ARMATURE","CAST","CURVE","DISPLACE","HOOK","LAPLACIANDEFORM","LATTICE","MESH_DEFORM","SHRINKWRAP","SIMPLE_DEFORM","SMOOTH","CORRECTIVE_SMOOTH","LAPLACIANSMOOTH","SURFACE_DEFORM","WARP","WAVE",]:
                 hairCurves.modifiers[0]["Input_63"] = True #DEFORM ON SURFACE
                 targetOBJsurface.add_rest_position_attribute = True
-
-    #RECALCULATE PROCEDURAL DENSITY IF BRUSHOBJ IS A MESH, if brushobj is a paint system or empty, doesn't need to recalculate
     smallest_obj = brushOBJ[0]   #FIND SMALLES OBJECT WHEN PAINTING WITH A COLLECTION, when having similar flowers variations it's better to find the smallest one and calculate the density based on that rather than having spaces with the biggest one
     for obje in brushOBJ:
         if obje.type == "MESH":
-
-            #Check if it's an ASSEMBLY: then use its parent to calculate dimensions (geonode assemblies have 0 dimensions)
             thisobj_is_an_assembly = False
             if obje.modifiers:
                 for modif in obje.modifiers:
@@ -9989,17 +8691,7 @@ def secretpaint_create_curve(self,context,**kwargs):
             density_value = secret_paint_apply_object_size_density_multiplier(dimensions_of_smallest_axis, context)
             hairCurves.modifiers[0]["Input_68"] = density_value
             hairCurves.modifiers[0]["Socket_11"] =     (0.5/((density_value ** 0.5) *hairCurves.modifiers[0]["Input_100"]))*2
-
-        # else:
-        #     if smallest_obj.dimensions[0] == (0,0,0) and smallest_obj.scale[0] > (0,0,0): hairCurves.modifiers[0]["Input_68"] = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) #smallest_obj.scale[1])
-        #     else: hairCurves.modifiers[0]["Input_68"] = 5
-
-
-
-
     return hairCurves
-    # return {'FINISHED'}
-
 def auto_assembly_print(*parts):
     print("Secret Paint Auto Assembly:", *parts)
 
@@ -10136,10 +8828,7 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
     allow_auto_assembly_on_q = kwargs.get("allow_auto_assembly_on_q", True)
 
     if activeobj == None: return {'FINISHED'}
-
-    # activeobj = bpy.context.active_object
     activeobj_BoundingBox_State = activeobj.display_type
-    # objselection = bpy.context.selected_objects
     N_Of_Selected = len(objselection)  #len(bpy.context.selected_objects)
     ActiveMode = bpy.context.object.mode
     all_meshes =[]
@@ -10157,7 +8846,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             selobjs_without_active.append(oobjj)
         if oobjj.modifiers:
             for modifier in oobjj.modifiers:
-                # if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"): #modifier.node_group.name == "orenpaint":
                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" \
                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modifier.node_group.name) and ".001" <= modifier.node_group.name[-4:] <= ".999" : #modifier.node_group.name == "orenpaint":
                     if oobjj not in objs_with_orencurve: objs_with_orencurve.append(oobjj)
@@ -10176,11 +8864,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
 
     all_sel_are_orencurves = False
     if N_Of_Selected == len(objs_with_orencurve): all_sel_are_orencurves = True
-
-    # print(len(selobjs_without_active_with_orencurve))
-    # print(len(selobjs_without_active))
-
-    # get second selected object
     selobj=[]
     selobj_BoundingBox_State=[]
     if N_Of_Selected >=2:
@@ -10189,98 +8872,37 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                 selobj = obj
                 break
                 selobj_BoundingBox_State = selobj.display_type
-
-    # FIND COLLECTION OF ACTIVE
     Coll_of_Active=[]
     original_collection = bpy.context.view_layer.active_layer_collection   #bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
-    # ucol = activeobj.users_collection
-    # for i in ucol:
     for i in activeobj.users_collection:
         layer_collection = bpy.context.view_layer.layer_collection   #bpy.context.scene.collection
         Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-
-    # FIND COLLECTION OF ONE OF SELECTED
     collection_of_one_of_selected=[]
     if N_Of_Selected >=3:
-        # ucol = selobj.users_collection
-        # ucol = selobjs_without_active[0].users_collection
-        # for i in ucol:
         for i in selobj.users_collection:
-        # for i in selobjs_without_active[0].users_collection:
             layer_collection = bpy.context.view_layer.layer_collection #bpy.context.scene.collection
             collection_of_one_of_selected = recurLayerCollection(layer_collection, i.name)
-
-    # # find a geohair obj when many sel objects  UNUSED FOR NOW
-    # surface_for_hair = []
-    # if N_Of_Selected >= 3:
-    #     for obj in bpy.context.selected_objects:
-    #         if obj.type == "CURVES" and obj.modifiers:
-    #             for modif in obj.modifiers:
-    #                 if modif.type == "NODES":
-    #                     try:
-    #                         if obj.modifiers[modif.name]["Input_16"] == 5:
-    #                             surface_for_hair = obj
-    #                     except: pass
-
-
-    ######################################################### v  ######################################################### v
-
-
-
-
-
-
     if ActiveMode == "OBJECT" and N_Of_Selected == 2 and selobj and selobj.type in ["MESH","EMPTY","CURVE"]:
         selobj = secretpaint_prepare_q_brush_object(self, context, selobj, allow_auto_assembly=allow_auto_assembly_on_q)
         if selobj == None:
             auto_assembly_print("abort q", "active=", activeobj.name if activeobj else None)
             return {'FINISHED'}
-
-    #scatter sel obj on active surface
     if ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type in ["MESH","EMPTY","CURVE"]:
         print("scatter sel obj on active surface")
         Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj) #SLOW FOR HIGHPOLY OBJECTS
         hairCurves = secretpaint_create_curve(self,context,targetOBJ=activeobj,targetCollection=Coll_of_Active, brushOBJ=selobj, transfer_modifier=False)
         if hairCurves is None:
             return {'FINISHED'}
-
-        # contextorencurveappend(context,activeobj=hairCurves)
         hairCurves.modifiers[0]["Input_2"] = bpy.data.objects[selobj.name]  #["GeometryNodes"] #objinstance
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = None  #reset collection
         hairCurves.modifiers[0]["Input_16"] = 5 #MODE scatter  (ignore radius, different scale and rot nodes)
         hairCurves.modifiers[0]["Input_6"][2] = 20  # random z rot
-
-        # print("YYYYYYYYY",hairCurves.modifiers["GeometryNodes"]["Input_15"])
         percentage_value = 0.75  # This represents 75%
-        # percentage_string = f"{percentage_value}%"
-        # percentage_string = f"{percentage_value * 100:.2f}%"
-        # percentage_string = "{:.2%}".format(percentage_value)
-        # hairCurves.modifiers["GeometryNodes"]["Input_15"] = percentage_string # random scale
-
         hairCurves.modifiers[0]["Input_15"] = 0.25 # random scale
         hairCurves.modifiers[0]["Input_15"] = 0.25 # random scale
         hairCurves.modifiers[0]["Input_82"] = 1.04
         hairCurves.modifiers[0]["Input_62"] = 0.5 #scale random world
-        # hairCurves.modifiers[0]["Input_60"] =   0.3*   (0.5/       ((0.5/((hairCurves.modifiers[0]["Input_68"] ** 0.5) *hairCurves.modifiers[0]["Input_100"]))*2)  )     #world noise scale
         hairCurves.modifiers[0]["Input_60"] =   0.15*   ((hairCurves.modifiers[0]["Input_68"]    **0.5))     #world noise scale
-
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_52"] = 1 # show original curve
-        # if selobj.type!="MESH": density_large = 1.0 #can't calculate the density from an empty object
-        # else:
-        #     if selobj.dimensions[0] > selobj.dimensions[1]: density_large= 0.5/( selobj.dimensions[0]/2/selobj.scale[0])
-        #     else: density_large= 0.5/( selobj.dimensions[1]/2/selobj.scale[1])
-        # hairCurves.modifiers["GeometryNodes"]["Input_68"] =density_large  #DENSITY SCATTER
-        # hairCurves.modifiers["GeometryNodes"]["Input_100"] = abs(activeobj.scale[0])  # OBJ SCALE COMPENSATION
-        # hairCurves.modifiers["GeometryNodes"]["Input_73"] = activeobj #SURFACE DENSITY SCATTER
-        # if activeobj.modifiers:   #if armature modifier detected, turn on deform on surface
-        #     for mod in activeobj.modifiers:
-        #         if mod.type=="ARMATURE": hairCurves.modifiers["GeometryNodes"]["Input_63"] = True
-
-        # bpy.data.objects[hairCurves.name].select_set(False)  #deselect in order to see better what it's being painted
         for x in objselection: bpy.data.objects[x.name].select_set(False)
-        # bpy.context.view_layer.active_layer_collection = original_collection
-
-        #IF PAINTIMPORT FROM ASSET LIBRARY: shouldn't get into paint mode if importing multiple assets, but turn on procedural, also keep the terrain as the active object
         if importpainting_multiple_assets:
             allTerrainArea = sum(face.area for face in activeobj.data.polygons)  # area of mesh surface
             if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > _secret_paint_pref("trigger_viewport_mask", 15000):
@@ -10292,110 +8914,14 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             bpy.context.view_layer.objects.active = hairCurves
             if not defer_enter_paint_mode:
                 context3sculptbrush(context)
-
-        #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
         hairCurves.modifiers[0]["Input_99"] = False
-
-        #RESELECT ORIGINAL COLLECTION
-
-
-
-
-
-    # #scatter sel hair on active surface     (MERGED TO MANY HAIR)
-    # elif ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type == "CURVES" \
-    #         or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "MESH" and selobj.type == "CURVE":
-    #
-    #     hairCurves = orenpaint_create_curve(self,context, targetOBJ=activeobj, brushOBJ=selobj, targetCollection=Coll_of_Active, transfer_modifier=True)
-    #     # contextorencurveappend(context,activeobj=hairCurves)
-    #     # orenpaint_update_modifier_f(context) #check version number: assigns to all obj in blend file
-    #
-    #     # hairCurves.modifiers["GeometryNodes"]["Input_73"] = activeobj #SURFACE
-    #     # hairCurves.modifiers["GeometryNodes"]["Input_71"] = float(random.choice(range(0, 999999)))  # random noise W
-    #     # hairCurves.modifiers["GeometryNodes"]["Input_100"] = abs(activeobj.scale[0])  # OBJ SCALE COMPENSATION
-    #     # if activeobj.modifiers:   #if armature modifier detected, turn on deform on surface
-    #     #     for mod in activeobj.modifiers:
-    #     #         if mod.type=="ARMATURE": hairCurves.modifiers["GeometryNodes"]["Input_63"] = True
-    #     # for modifier in hairCurves.modifiers:
-    #     #     if modifier.type == 'NODES':  # modifier.name == "GeometryNodes"
-    #     #         if modifier.node_group and modifier.node_group.name == "Generate Hair Curves":
-    #     #             hairCurves.modifiers["Generate Hair Curves"]["Input_2"] = activeobj
-    #
-    #     hair_thatNeedA_mask=[]
-    #     allTerrainArea = sum(face.area for face in activeobj.data.polygons)  # activeobj.dimensions[0]*activeobj.dimensions[1]
-    #     if hairCurves.modifiers["GeometryNodes"]["Input_98"] \
-    #             or hairCurves.modifiers["GeometryNodes"]["Input_97"] \
-    #             or allTerrainArea / (0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"])) > 10000 and hairCurves.modifiers["GeometryNodes"]["Input_69"]:   #if masks, or density too high
-    #         if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-    #         # if allTerrainArea / hairCurves.modifiers["GeometryNodes"]["Input_68"] > 10000: hairCurves.display_type = 'BOUNDS'  # bounds for hair with huge density
-    #         hairCurves.modifiers["GeometryNodes"]["Input_98"] = False  # MASK1 clean mask slots so that the function doesn't toggle the mask settings
-    #         hairCurves.modifiers["GeometryNodes"]["Input_97"] = None  #mask2
-    #
-    #     for x in objselection: bpy.data.objects[x.name].select_set(False)
-    #     bpy.context.view_layer.objects.active = hairCurves
-    #
-    #
-    #     # if hair_thatNeedA_mask: NoMasksDetected = False
-    #     # else: NoMasksDetected=True
-    #     NoMasksDetected = True
-    #     if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1:NoMasksDetected=True  # if all hair to scatter are with same vgroup, skip mask because we'll start painting right away
-    #     elif hair_thatNeedA_mask: NoMasksDetected = False
-    #     # #fix vertex group
-    #     if hairCurves.modifiers["GeometryNodes"]["Input_69"]: vertexgrouppaint_function(self, context,NoMasksDetected, calledfrombutton=False, being_transferred_to_newmesh=True, activeobj=hairCurves)
-    #     # fix viewport masks only if modifier has a mask and it has procedural scattering
-    #     if NoMasksDetected==False and hairCurves.modifiers["GeometryNodes"]["Input_69"]: orenpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-    #
-    #
-    #     if hairCurves.modifiers["GeometryNodes"]["Input_69"] == False: context3sculptbrush(context)
-    #
-    #
-    #     print("scatter sel hair on active surface")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # scatter SEL COLLECTION on active surface  (risk conflicts with above "DUPLI BIOME ON A NEW OBJ")
     elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "MESH" and len(selobjs_without_active_with_orencurve)==0:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "MESH" and not biome_detected:  # and len(selobjs_without_active_with_orencurve)!= len(bpy.context.selected_objects):
         print("scatter sel collection on ACTIVE surface")
 
         Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj)  # SLOW FOR HIGHPOLY OBJECTS
-
-        # all_materials = []
-        # for ob in selobjs_without_active:  # make mats linked to obj and local
-        #     if ob.type != "CURVES" and ob != activeobj:
-        #         for mat_slot in ob.material_slots:
-        #             mat = mat_slot.material
-        #             if mat not in all_materials: all_materials.append(mat)
-
-        # hairCurves = orenpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=selobjs_without_active, targetCollection=Coll_of_Active, transfer_modifier=True, append_orenpaint=True)
         hairCurves = secretpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=selobjs_without_active, targetCollection=Coll_of_Active, transfer_modifier=False)
         if hairCurves is None:
             return {'FINISHED'}
-
-        # bpy.context.view_layer.active_layer_collection = Coll_of_Active  #SELECT COLLECTION
-        # bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.context.scene.cursor.location, scale=(1, 1, 1))
-
-        # hairCurves = bpy.context.active_object
-        # #APPLY SCALE
-        # bpy.ops.object.select_all(action='DESELECT')
-        # bpy.data.objects[hairCurves.name].select_set(True) #reselect original
-        # bpy.context.view_layer.objects.active = bpy.data.objects[hairCurves.name]  #make active
-        # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-
-        # bpy.ops.object.modifier_remove(modifier="Surface Deform")
-        # contextorencurveappend(context)
         hairCurves.modifiers[0]["Input_2"] = None  # reset obj brush
         hairCurves.modifiers[0]["Input_9"] = bpy.data.collections[collection_of_one_of_selected.name]
         hairCurves.modifiers[0]["Input_16"] = 5 #MODE scatter  (ignore radius, different scale and rot nodes)
@@ -10403,16 +8929,7 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         hairCurves.modifiers[0]["Input_15"] = 0.25 # random scale
         hairCurves.modifiers[0]["Input_62"] = 0.5 #world noise scale
         hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-
-        # hairCurves.modifiers["GeometryNodes"]["Input_73"] = activeobj #SURFACE DENSITY SCATTER
-        # hairCurves.modifiers["GeometryNodes"]["Input_52"] = 1 # show original curve
-
-        # for matteriall in all_materials: hairCurves.data.materials.append(matteriall) # #LINK MATERIALS
-
         for x in objselection: x.select_set(False)
-
-
-        #IF PAINTIMPORT FROM ASSET LIBRARY: shouldn't get into paint mode if importing multiple assets, but turn on procedural and calculate mask, also keep the terrain as active object
         if importpainting_multiple_assets:
             allTerrainArea = sum(face.area for face in activeobj.data.polygons)  # area of mesh surface
             if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > _secret_paint_pref("trigger_viewport_mask", 15000):
@@ -10424,18 +8941,7 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             bpy.context.view_layer.objects.active = hairCurves
             if not defer_enter_paint_mode:
                 context3sculptbrush(context, activeobj=hairCurves)
-
-
-        #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
         hairCurves.modifiers[0]["Input_99"] = False
-
-
-
-
-
-
-
-    # scatter selected coll with active hair settings on same surface
     elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and activeobj.type == "CURVES" and selobj.type in ["MESH","EMPTY","CURVE"]:
         print("-----------------------scatter selected coll with active hair settings on same surface")
 
@@ -10444,63 +8950,12 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         hairCurves = secretpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=selobjs_without_active, targetCollection=Coll_of_Active, transfer_modifier=True)
         if hairCurves is None:
             return {'FINISHED'}
-
-        # orenpaint_update_modifier_f(context)  # check version number: assigns to all obj in blend file
-        # #LINK MATERIALS
-        # all_materials = []
-        # for ob in bpy.context.selected_objects:  # make mats linked to obj and local
-        #     if ob.type != "CURVES" and ob != activeobj:
-        #         for mat_slot in ob.material_slots:
-        #             mat = mat_slot.material
-        #             if mat not in all_materials: all_materials.append(mat)
-
-        # bpy.context.view_layer.active_layer_collection = Coll_of_Active  #SELECT COLLECTION
-        # bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.data.surface.name]  # make active
-        # bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.data.objects[activeobj.name].location, scale=(1, 1, 1))
-        # hairCurves = bpy.context.active_object
-        # hairCurves.display_type = activeobj_BoundingBox_State #bounding box state
-        # bpy.ops.object.modifier_remove(modifier="Surface Deform")
-
-        # #APPLY SCALE
-        # bpy.ops.object.select_all(action='DESELECT')
-        # bpy.data.objects[hairCurves.name].select_set(True) #reselect original
-        # bpy.context.view_layer.objects.active = bpy.data.objects[hairCurves.name]  #make active
-        # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-
-        # bpy.ops.object.select_all(action='DESELECT')
-        # bpy.data.objects[hairCurves.name].select_set(True) #reselect original
-        # bpy.data.objects[activeobj.name].select_set(True) #reselect original
-        # bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-        # bpy.ops.object.make_links_data(type='MODIFIERS')
-        # bpy.context.active_object.select_set(False)
-        # for obj in bpy.context.selected_objects:
-        #     bpy.context.view_layer.objects.active = obj
-
-
-        # contextorencurveappend(context)
         hairCurves.modifiers[0]["Input_2"] = None #reset obj brush
         hairCurves.modifiers[0]["Input_9"] = bpy.data.collections[collection_of_one_of_selected.name]
         hairCurves.modifiers[0]["Input_39"] = False  # deactivate custom material
         hairCurves.modifiers[0]["Input_6"][2] = 20.0
         hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_16"] = 5 #MODE scatter  (ignore radius, different scale and rot nodes)
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_6"][2] = 20  # random z rot
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_15"] = 0.25 # random scale
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_62"] = 0.5 #world noise scale
-        # # bpy.context.object.modifiers["GeometryNodes"]["Input_52"] = 1 # show original curve
-        # if activeobj.data.surface.modifiers:   #if armature modifier detected, turn on deform on surface
-        #     for mod in activeobj.data.surface.modifiers:
-        #         if mod.type=="ARMATURE": hairCurves.modifiers["GeometryNodes"]["Input_63"] = True
-        #
-        # for matteriall in all_materials: hairCurves.data.materials.append(matteriall)        #LINK MATERIALS
-
-
-        # context3sculptbrush(context)
-        # bpy.context.view_layer.active_layer_collection = original_collection #RESELECT ORIGINAL COLLECTION
         for x in objselection: x.select_set(False)
-
-        #IF PAINTIMPORT FROM ASSET LIBRARY: shouldn't get into paint mode if importing multiple assets, but turn on procedural and calculate mask, also keep the terrain as active object
         if importpainting_multiple_assets:
             allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  # area of mesh surface
             if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > _secret_paint_pref("trigger_viewport_mask", 15000):
@@ -10512,244 +8967,15 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             bpy.context.view_layer.objects.active = hairCurves
             if not defer_enter_paint_mode:
                 context3sculptbrush(context, activeobj=hairCurves)
-
-
-        #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
         hairCurves.modifiers[0]["Input_99"] = False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    #MERGE VGROUPS for hair in same surface
     elif N_Of_Selected >=2 and len(all_found_parents) == 1 and all_sel_are_orencurves and ActiveMode == "OBJECT" and activeobj.type == "CURVES":
         if activeobj.parent.data.library: #.data.surface  # CAN'T WEIGHT PAINT IF SURFACE HAS LINKED MESH DATA (can't weight paint on linked data)
             self.report({'WARNING'}, "Can't Weight Paint on an object with Linked Mesh Data: paint with hair or make the data local")
         else:
             vertexgrouppaint_function(self, context,NoMasksDetected=True)
-
-
-
-
-
-
-
-    # #SHOULD DELETE AND MERGE FUNCTIONALITY INTO "many HAIR on MANY MESHES"
-    # #MANY HAIR on single MESH or HAIR (multiple hair + 1 target)  (risk conflicts with below "scatter sel collection on active surface")
-    # # elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and len(all_found_parents_without_activeobj)==1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(all_found_parents_without_activeobj)==1:
-    #     # print("MANY HAIR on single MESH or HAIR")
-    #     # print("UPDAAAAAAAAAAAT MANY HAIR on single MESH or HAIR")
-    #
-    #     secretpaint_update_modifier_f(context)   #update first because node version might not have biomes yet
-    #
-    #     Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=activeobj)  # SLOW FOR HIGHPOLY OBJECTS
-    #
-    #     #SET TO NEW BIOME, adjusted to avoid intersecting with existing biome in target mesh
-    #     #FIND ALL BIOMES FOR STARTER BRUSH
-    #     # hair=[]
-    #     # parent = selobjs_without_active_with_orencurve[0].parent
-    #     # if selobjs_without_active_with_orencurve[0].type=="CURVES" and parent:   #IF CURVE SELECTED
-    #     #     for hai in parent.children: # hair = getChildren(parent)
-    #     #         if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
-    #     #             for modifier in hai.modifiers:
-    #     #                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("orenpaint"):
-    #     #                     hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-    #     # #ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
-    #     # elif selobjs_without_active_with_orencurve[0].type=="MESH" or selobjs_without_active_with_orencurve[0].type=="EMPTY":
-    #     #     for hayr in bpy.context.scene.objects:
-    #     #     # for hayr in selobjs_without_active_with_orencurve[0].children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
-    #     #         if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
-    #     #             for modifier in hayr.modifiers: #if mask selected, if brush selobjs_without_active_with_orencurve[0] selected, if terrain selected
-    #     #                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "orenpaint" and modifier["Input_97"] == selobjs_without_active_with_orencurve[0] \
-    #     #                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "orenpaint" and modifier["Input_2"] == selobjs_without_active_with_orencurve[0] \
-    #     #                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "orenpaint" and modifier["Input_73"] == selobjs_without_active_with_orencurve[0]:
-    #     #                     hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-    #     all_bgroups_starter=[]
-    #     for hayr in selobjs_without_active:
-    #         if hayr.modifiers[0]["Socket_0"] not in all_bgroups_starter: all_bgroups_starter.append(hayr.modifiers[0]["Socket_0"])
-    #
-    #     # #FIND ALL BIOMES FOR TARGET
-    #     # hair=[]
-    #     # parent = activeobj.parent
-    #     # if activeobj.type=="CURVES" and parent:   #IF CURVE SELECTED
-    #     #     for hai in parent.children: # hair = getChildren(parent)
-    #     #         if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
-    #     #             for modifier in hai.modifiers:
-    #     #                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-    #     #                     hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-    #     # #ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
-    #     # elif activeobj.type=="MESH" or activeobj.type=="EMPTY":
-    #     #     for hayr in bpy.context.scene.objects:
-    #     #     # for hayr in activeobj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
-    #     #         if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
-    #     #             for modifier in hayr.modifiers: #if mask selected, if brush activeobj selected, if terrain selected
-    #     #                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == activeobj \
-    #     #                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == activeobj \
-    #     #                 or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == activeobj:
-    #     #                     hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-    #     # all_bgroups=[]
-    #     # for hayr in hair[:]:
-    #     #     if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
-    #     #     # hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
-    #
-    #     #LIST ALL ORIGINAL BIOMES ON THE ACTIVE OBJECT SURFACE AND REMOVE GAPS (change biomes from 1,3,5 into 1,2,3); trying to find out the starting number for the biomes to import, if biome1 and 2 are already on the active surface, it should start from 3
-    #     hair = find_all_listed_paintsystems(context, activeobj=activeobj, objselection=objselection)
-    #     all_bgroups = []
-    #     for hayr in hair[:]:
-    #         if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
-    #     all_bgroups.sort()
-    #     loop = 1
-    #     for biome_number in all_bgroups[:]:
-    #         for hayr in hair[:]:
-    #             if hayr[0].modifiers[0]["Socket_0"] == biome_number:
-    #                 hayr[0].modifiers[0]["Socket_0"] = loop
-    #                 hair.remove(hayr)
-    #         loop += 1
-    #
-    #
-    #     if all_bgroups: additional_biome_n = max(all_bgroups)
-    #     else: additional_biome_n= 0 #  -(min(all_bgroups_starter)-1)
-    #
-    #     #######################################################
-    #     #######################################################
-    #
-    #
-    #     highest_distribution_density=0  #create a mask if terrain is too big
-    #     newlycreated_hair=[]
-    #     hair_thatNeedA_mask=[] #for huge terrains, automatically add
-    #     if activeobj.type == "MESH": allTerrainArea = sum(face.area for face in activeobj.data.polygons)
-    #     elif activeobj.type == "CURVES": allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  #activeobj.data.surface
-    #     # print("") #WITHOUTH PRINTING SOMETHING IT CRASHES BLENDER???????????????????????
-    #     for hair in selobjs_without_active_with_orencurve:
-    #
-    #         hairCurves = secretpaint_create_curve(self,context, targetOBJ=activeobj, brushOBJ=hair, targetCollection=Coll_of_Active, transfer_modifier=True)
-    #         newlycreated_hair.append(hairCurves)
-    #
-    #         #LINK MODIFIERS
-    #         if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  # generate hair
-    #         #re-copy from original brush hair
-    #         hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  # density
-    #         hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
-    #         hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
-    #         hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  # spread
-    #         hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  # noise scale
-    #         hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  # edge blur
-    #
-    #         hairCurves.modifiers[0]["Input_60"] = hair.modifiers[0]["Input_60"]  # world noise scale
-    #         hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  # scale universal
-    #         hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  # scale random
-    #         hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  # scale random world
-    #         hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-    #         hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  # scale separate
-    #
-    #         hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  # global Z
-    #         hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  # rot
-    #         hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  # random rot
-    #         hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  # rot increments
-    #         hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  # loc
-    #         hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  # wind
-    #         hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  # mask check
-    #         hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  # mask
-    #
-    #         hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  # BIOME NUMBER, adjusted to avoid intersecting with existing biome in target mesh
-    #         if len(all_bgroups_starter)>=2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
-    #
-    #         if activeobj.data.library: #REMOVE WEIGHT IF SURFACE HAS LINKED MESH DATA (can't weight paint on linked data)
-    #             hairCurves.modifiers[0]["Input_83_attribute_name"] = None
-    #             hairCurves.modifiers[0]["Input_83_use_attribute"]=0
-    #         else:
-    #             hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  # VGROUP
-    #             hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  # VGROUP
-    #
-    #         # VIEWPORT MASK
-    #         if hairCurves.modifiers[0]["Input_98"] \
-    #         or hairCurves.modifiers[0]["Input_97"] \
-    #         or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))     > bpy.context.preferences.addons[__package__].preferences.trigger_viewport_mask and hairCurves.modifiers[0]["Input_69"]:      #(0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"]))             # or allTerrainArea /         (1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5)   * (hairCurves.modifiers[0]["Input_100"]**2)))       /2          > 10000 and hairCurves.modifiers[0]["Input_69"]:      #(0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"]))
-    #             if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-    #             hairCurves.modifiers[0]["Input_98"] = False  # clean mask slots so that the function doesn't toggle the mask settings
-    #             hairCurves.modifiers[0]["Input_97"] = None
-    #
-    #
-    #     #TERRAIN MATERIAL (only if there are no materials)
-    #     if len([slot.material for slot in activeobj.material_slots if slot.material != None]) == 0:
-    #         for i, mat_slot in enumerate(all_found_parents_without_activeobj[0].material_slots):
-    #             if mat_slot.material:
-    #                 if activeobj.material_slots and activeobj.material_slots[i]: activeobj.material_slots[i].material = mat_slot.material  # IF SLOT EXISTS
-    #                 else: activeobj.data.materials.append(mat_slot.material)
-    #
-    #     for x in objselection: bpy.data.objects[x.name].select_set(False)
-    #     for ojgb in newlycreated_hair: #RESELECT
-    #         if ojgb.name in bpy.context.view_layer.objects:
-    #             ojgb.select_set(True)  # select it
-    #             bpy.context.view_layer.objects.active = ojgb  # make active
-    #
-    #     NoMasksDetected = True
-    #     if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1: NoMasksDetected=True  #skip mask because we'll start painting right away (if all hair to scatter are with same vgroup)
-    #     elif hair_thatNeedA_mask: NoMasksDetected = False
-    #     else: NoMasksDetected=True
-    #     if auto_Mask_Optimization == False: NoMasksDetected=True  #DISABLE MASK WHEN EXPORTING BIOME SPHERE, it should not have masks, it interferes with selection handling
-    #
-    #     # fix vertex group mask
-    #     vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, paint_the_vertex=True)
-    #
-    #     if N_Of_Selected >= 2 and hairCurves.modifiers[0]["Input_69"] == False:
-    #         for x in newlycreated_hair: x.select_set(False) #objselection
-    #         context3sculptbrush(context, activeobj=newlycreated_hair[0])
-    #         NoMasksDetected = True #no need to mask if going to paint right away
-    #
-    #     #FIX VIEWPORT MASK:  after vertex group because when creating a mask it becomes active object ready to be moved
-    #     if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-    #
-    #     #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
-    #     for ojgb in newlycreated_hair:
-    #         ojgb.modifiers[0]["Input_99"] = False
-    #
-    #     print("MANY HAIR on single MESH or HAIR")
-
-
-
-
-
-
-
-
-
-
-
-    #many HAIR on MANY MESHES (multiple hair + multiple surfaces)  (risk conflicts with below "scatter sel collection on active surface")      ######SUBSTITUTED  MANY HAIR on single MESH or HAIR    and become "many HAIR BIOMES from MANY SURFACES to ALL MESHES (multiple hair + 1 surface)"
     elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(selobjs_without_active_with_orencurve)>=1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and len(all_meshes_that_are_not_parents) >=1 and len(selobjs_without_active_with_orencurve)>=1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and len(all_meshes) >=2 and len(selobjs_without_active_with_orencurve)>=1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and len(all_found_parents_without_activeobj)==1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 3 and all_meshes >=2 and len(all_found_parents)==1:
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 2:
         print("many HAIR on MANY MESHES")
         newlycreated_hair=[]
-
 
 
         if activeobj.type == "CURVES": all_meshes_to_scatter_onto = [activeobj.parent]     #WHEN SELECTING HAIR, THEN ANOTHER HAIR TO USE ITS TERRAIN, IGNORE THE LIST OF PARENT MESHES
@@ -10762,37 +8988,17 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             Coll_of_TaragetMesh = []
             for i in mesh.users_collection:
                 Coll_of_TaragetMesh = recurLayerCollection(bpy.context.view_layer.layer_collection, i.name)
-
-            # secretpaint_update_modifier_f(context)  # update first because node version might not have biomes yet
             Check_if_trigger_UV_Reprojection(self, context, activeobj=mesh, objselection=[mesh])  # SLOW FOR HIGHPOLY OBJECTS
-
-
-
-            #CHECK IF MASK IS NEEDED
             highest_distribution_density=0  #create a mask if terrain is too big
             hair_thatNeedA_mask=[] #for huge terrains, automatically add
             if mesh.type == "MESH": allTerrainArea = sum(face.area for face in mesh.data.polygons)
             elif mesh.type == "CURVES": allTerrainArea = sum(face.area for face in mesh.parent.data.polygons)  #activeobj.data.surface
-
-
-
-
-            #Wether or not to reset biome visibility based on how many biomes are being transferred
             all_bgroups_starter = []
             for hayr in selobjs_without_active_with_orencurve:
                 if hayr.modifiers[0]["Socket_0"] not in all_bgroups_starter: all_bgroups_starter.append(hayr.modifiers[0]["Socket_0"])
 
 
-
-
-
-
-
             for parentt in all_found_parents:
-
-
-
-                #LIST ALL EXISTING BIOMES ON THE TARGET SURFACE AND REMOVE GAPS (change biomes from 1,3,5 into 1,2,3); trying to find out the starting number for the biomes to import, if biome1 and 2 are already on the active surface, it should start from 3.   it does that for every parent so that each of the parent's children don't merge biomes with samae number
                 hair = find_all_listed_paintsystems(context, activeobj=mesh, objselection=[mesh])
                 all_bgroups = []
                 for hayr in hair[:]:
@@ -10809,60 +9015,20 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                 else: additional_biome_n = 0  # -(min(all_bgroups_starter)-1)
 
 
-
-
                 for hair in parentt.children:
                     if hair in selobjs_without_active_with_orencurve:
                         for modifier in hair.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-
-
-
-                            # for hair in selobjs_without_active_with_orencurve:
                                 hairCurves = secretpaint_create_curve(self,context, targetOBJ=mesh, brushOBJ=hair, targetCollection=Coll_of_TaragetMesh, transfer_modifier=True)
                                 if hairCurves is None:
                                     continue
                                 newlycreated_hair.append(hairCurves)
                                 newlycreated_hair_for_currentlyprocessing_mesh.append(hairCurves)
-                                # contextorencurveappend(context,targetOBJ=hairCurves)
-                                # orenpaint_update_modifier_f(context) #check version number: assigns to all obj in blend file
-
-                                # bpy.ops.object.curves_empty_hair_add(align='WORLD', location=targetOBJ.location)
-                                # hairCurves = bpy.context.active_object
-                                # hairCurves.display_type = hair.display_type #selobj_BoundingBox_State  # bounding box state
-                                # #APPLY SCALE
-                                # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-
-
-                                #LINK MODIFIERS
-                                # if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  # generate hair
                                 if _secret_paint_pref("checkboxKeepManualWhenTransferBiome", False) == False:
                                     if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  # generate hair
-
-                                #recopy from original brush hair #NOT NEEDED, automatically happens when creating new curve and copying the modifier value per value
                                 hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  # density
                                 hairCurves.modifiers[0]["Socket_11"] = hair.modifiers[0]["Socket_11"]  # density
                                 hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-                                # hairCurves.modifiers[0]["Input_2"] = hair.modifiers[0]["Input_2"]
-                                # hairCurves.modifiers[0]["Input_9"] = hair.modifiers[0]["Input_9"]
-                                # hairCurves.modifiers[0]["Input_72"] = hair.modifiers[0]["Input_72"]  # spread
-                                # hairCurves.modifiers[0]["Input_70"] = hair.modifiers[0]["Input_70"]  # noise scale
-                                # hairCurves.modifiers[0]["Input_82"] = hair.modifiers[0]["Input_82"]  # edge blur
-                                #
-                                # hairCurves.modifiers[0]["Input_8"] = hair.modifiers[0]["Input_8"]  # scale universal
-                                # hairCurves.modifiers[0]["Input_15"] = hair.modifiers[0]["Input_15"]  # scale random
-                                # hairCurves.modifiers[0]["Input_62"] = hair.modifiers[0]["Input_62"]  # scale random world
-                                # hairCurves.modifiers[0]["Input_13"] = hair.modifiers[0]["Input_13"]  # scale separate
-                                #
-                                # hairCurves.modifiers[0]["Input_51"] = hair.modifiers[0]["Input_51"]  # global Z
-                                # hairCurves.modifiers[0]["Input_65"] = hair.modifiers[0]["Input_65"]  # rot
-                                # hairCurves.modifiers[0]["Input_6"] = hair.modifiers[0]["Input_6"]  # random rot
-                                # hairCurves.modifiers[0]["Input_53"] = hair.modifiers[0]["Input_53"]  # rot increments
-                                # hairCurves.modifiers[0]["Input_23"] = hair.modifiers[0]["Input_23"]  # loc
-                                # hairCurves.modifiers[0]["Input_56"] = hair.modifiers[0]["Input_56"]  # wind
-                                # hairCurves.modifiers[0]["Input_98"] = hair.modifiers[0]["Input_98"]  # mask check
-                                # hairCurves.modifiers[0]["Input_97"] = hair.modifiers[0]["Input_97"]  # mask
-
                                 hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  # BIOME NUMBER, adjusted to avoid intersecting with existing biome in target mesh
                                 if len(all_bgroups_starter) >= 2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
 
@@ -10871,216 +9037,40 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                                     hairCurves.modifiers[0]["Input_83_use_attribute"] = False
                                 else:
                                     hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  # VGROUP
-                                    # hairCurves.modifiers[0]["Input_83_use_attribute"] = hair.modifiers[0]["Input_83_use_attribute"]  # VGROUP
                                     if hair.modifiers[0]["Input_83_use_attribute"] == 1 or hair.modifiers[0]["Input_83_use_attribute"] == True: new_attribute_status_convert_int_to_boolean = True
                                     elif hair.modifiers[0]["Input_83_use_attribute"] == 0 or hair.modifiers[0]["Input_83_use_attribute"] == False: new_attribute_status_convert_int_to_boolean = False
                                     hairCurves.modifiers[0]["Input_83_use_attribute"] = new_attribute_status_convert_int_to_boolean # VGROUP
-
-                                #VIEWPORT MASK
                                 if hairCurves.modifiers[0]["Input_98"] \
                                 or hairCurves.modifiers[0]["Input_97"]\
                                 or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))            > _secret_paint_pref("trigger_viewport_mask", 15000) and hairCurves.modifiers[0]["Input_69"]:  # or allTerrainArea / (0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"])) > 10000 and hairCurves.modifiers["GeometryNodes"]["Input_69"]:
                                     if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-                                    # if allTerrainArea / hairCurves.modifiers["GeometryNodes"]["Input_68"] > 10000: hairCurves.display_type = 'BOUNDS'  # bounds for hair with huge density
                                     hairCurves.modifiers[0]["Input_98"] = False  # clean mask slots so that the function doesn't toggle the mask settings
                                     hairCurves.modifiers[0]["Input_97"] = None
-                                # hairCurves.location = hairCurves.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
-
-                                # hairCurves.modifiers["GeometryNodes"]["Input_86"] = targetOBJ.modifiers["GeometryNodes"]["Input_86"] #mask slope
-                                # hairCurves.modifiers["GeometryNodes"]["Input_89"] = targetOBJ.modifiers["GeometryNodes"]["Input_89"] #mask slope inverted
-                                # hairCurves.modifiers["GeometryNodes"]["Input_91"] = targetOBJ.modifiers["GeometryNodes"]["Input_91"] #mask height
-                                # hairCurves.modifiers["GeometryNodes"]["Input_92"] = targetOBJ.modifiers["GeometryNodes"]["Input_92"] #mask height inverted
-                                # hairCurves.modifiers["GeometryNodes"]["Input_95"] = targetOBJ.modifiers["GeometryNodes"]["Input_95"] #mask obj
-                                # hairCurves.modifiers["GeometryNodes"]["Input_97"] = targetOBJ.modifiers["GeometryNodes"]["Input_97"] #mask obj
-                                # hairCurves.modifiers["GeometryNodes"]["Input_98"] = targetOBJ.modifiers["GeometryNodes"]["Input_98"] #mask viewport checkbox
-                                # hairCurves.modifiers["GeometryNodes"]["Input_83_attribute_name"] = targetOBJ.modifiers["GeometryNodes"]["Input_83_attribute_name"] #vgroup name
-                                # if targetOBJ.modifiers["GeometryNodes"]["Input_83_use_attribute"]==1 and hairCurves.modifiers["GeometryNodes"]["Input_83_use_attribute"]==0: bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")
-                                # elif targetOBJ.modifiers["GeometryNodes"]["Input_83_use_attribute"] == 0 and hairCurves.modifiers["GeometryNodes"]["Input_83_use_attribute"]==1: bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")
-
-
                                 hairCurves.select_set(True)  # select it
                                 bpy.context.view_layer.objects.active = hairCurves  # make active
-
-
-
-
-
-            # # TERRAIN MATERIAL (only if there are no materials)
-            # for target_surface in all_meshes_that_are_not_parents:
-            #     if len([slot.material for slot in target_surface.material_slots if slot.material != None]) == 0 and all_found_parents[0]:
-            #         for i, mat_slot in enumerate(all_found_parents[0].material_slots):
-            #             if mat_slot.material:
-            #
-            #                 if target_surface.material_slots and target_surface.material_slots[i]:
-            #                     target_surface.material_slots[i].material = mat_slot.material  # IF SLOT EXISTS
-            #                 else:
-            #                     target_surface.data.materials.append(mat_slot.material)
-            #
-            #                 # if activeobj.material_slots and activeobj.material_slots[i]: activeobj.material_slots[i].material = mat_slot.material  # IF SLOT EXISTS
-            #                 # else: activeobj.data.materials.append(mat_slot.material)
-
-
             NoMasksDetected = True
             if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1: NoMasksDetected=True  #skip mask because we'll start painting right away (if all hair to scatter are with same vgroup)
             elif hair_thatNeedA_mask: NoMasksDetected = False  #paint mask if objs that need it are found
             else: NoMasksDetected=True
             paint_the_vertex=False #AVOID VERTEX PAINT because we're transferring on multiple meshes
-            # vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair, activeobj=newlycreated_hair[0], paint_the_vertex=paint_the_vertex)
             vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
-            # FIX VIEWPORT MASK:  after vertex group because when creating a mask it becomes active object ready to be moved
             if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-
-
-
-        #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
         for ojgb in newlycreated_hair:
             ojgb.modifiers[0]["Input_99"] = False
             ojgb.location = ojgb.location #update
-
-        # for x in objselection: bpy.data.objects[x.name].select_set(False)
-        # for ojgb in newlycreated_hair:
-        #     ojgb.select_set(True)  # select it
-        #     bpy.context.view_layer.objects.active = ojgb  # make active
-            # ojgb.location = ojgb.location # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_2"] = bpy.data.objects[targetOBJ.name]
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = None
-        # context3sculptbrush(context)
-
-
         for x in bpy.context.selected_objects: x.select_set(False)
-        # if N_Of_Selected >= 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False: context3sculptbrush(context, activeobj=newlycreated_hair[0])   #hairCurves
         if N_Of_Selected == 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False and not defer_enter_paint_mode: context3sculptbrush(context, activeobj=newlycreated_hair[0])   #hairCurves
-
-        # #TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
-        # for ojgb in newlycreated_hair:
-        #     ojgb.modifiers[0]["Input_99"] = False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # scatter selected obj with active hair's settings on same surface
     elif ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "MESH" \
             or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "EMPTY" \
             or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "CURVE":
-
-        # orenpaint_update_modifier_f(context)  # check version number: assigns to all obj in blend file
-        # for x in objselection: bpy.data.objects[x.name].select_set(False)        #bpy.ops.object.select_all(action='DESELECT')
-        # bpy.data.objects[activeobj.name].select_set(True)  # select it
-        # bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-        # surfaceobj = activeobj.data.surface
         hairCurves = secretpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=selobj, targetCollection=Coll_of_Active, transfer_modifier=True)
         if hairCurves is None:
             return {'FINISHED'}
-
-
-        # bpy.ops.object.select_all(action='DESELECT')
-        # bpy.data.objects[surfaceobj.name].select_set(True)  # select it
-        # bpy.context.view_layer.objects.active = bpy.data.objects[surfaceobj.name]  # make active
-        # bpy.context.view_layer.active_layer_collection = Coll_of_Active #SELECT COLLECTION OF ACTIVE OBJ
-        # bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.data.objects[activeobj.name].location, scale=(1, 1, 1))
-        # hairCurves = bpy.context.active_object
-        # hairCurves.display_type = activeobj_BoundingBox_State #bounding box state
-        # # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-
-        # bpy.data.objects[activeobj.name].select_set(True)  # select it
-        # bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-        # bpy.ops.object.make_links_data(type='MODIFIERS')
-        # bpy.context.active_object.select_set(False)
-        # for obj in bpy.context.selected_objects:
-        #     bpy.context.view_layer.objects.active = obj
         hairCurves.modifiers[0]["Input_2"] = selobj
         hairCurves.modifiers[0]["Input_9"] = None #clean collection
         hairCurves.modifiers[0]["Input_39"] = False  # deactivate custom material
         hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-        # hairCurves.modifiers[0]["Input_99"] = False  # TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains; refer to function "secretpaint_create_curve" line 2768
-        # hairCurves.modifiers["GeometryNodes"]["Input_71"] = float(random.choice(range(0, 999999)))  # random noise W
-        # hairCurves.modifiers["GeometryNodes"]["Input_73"] = hairCurves.data.surface
-        # # bpy.ops.transform.translate(value=(0, 0, 0))  # best way to update the scene ;update scene
-        # if selobj.dimensions[0] > selobj.dimensions[1]: density_large = 0.5/( selobj.dimensions[0]/2)   #*selobj.modifiers["GeometryNodes"]["Input_100"] #/ hairCurves.scale[0]
-        # else: density_large = 0.5/( selobj.dimensions[1]/2)  #*selobj.modifiers["GeometryNodes"]["Input_100"] #/ hairCurves.scale[1]  # /2
-        # hairCurves.modifiers["GeometryNodes"]["Input_68"] = density_large  # DENSITY SCATTER
-        # # hairCurves.modifiers["GeometryNodes"]["Input_100"] = surfaceobj.scale[0]  # OBJ SCALE COMPENSATION
-        # if hairCurves.data.surface.modifiers:   #if armature modifier detected, turn on deform on surface
-        #     for mod in hairCurves.data.surface.modifiers:
-        #         if mod.type=="ARMATURE": hairCurves.modifiers["GeometryNodes"]["Input_63"] = True
-
-        # #LINK MATERIALS
-        # bpy.data.objects[selobj.name].select_set(True)  # reselect original
-        # bpy.context.view_layer.objects.active = bpy.data.objects[selobj.name]  # make active
-        # bpy.ops.object.make_links_data(type='MATERIAL')
-        # bpy.data.objects[selobj.name].select_set(False)  # reselect original
-        # bpy.context.view_layer.objects.active = bpy.data.objects[hairCurves.name]  # make active
-
         for x in objselection: bpy.data.objects[x.name].select_set(False)
-
-        #IF PAINTIMPORT FROM ASSET LIBRARY: shouldn't get into paint mode if importing multiple assets, but turn on procedural and calculate mask, also keep the terrain as active object
         if importpainting_multiple_assets:
             allTerrainArea = sum(face.area for face in activeobj.parent.data.polygons)  # area of mesh surface
             if (allTerrainArea / ((1 / ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))) ** 2)) > _secret_paint_pref("trigger_viewport_mask", 15000):
@@ -11091,66 +9081,9 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         else:
             bpy.context.view_layer.objects.active = hairCurves
             if not activeobj.modifiers[0]["Input_69"] and not defer_enter_paint_mode: context3sculptbrush(context, activeobj=hairCurves) #don't enter hair sculpt mode if noise scatter detected
-            # context3sculptbrush(context, activeobj=hairCurves)
-
-        # bpy.context.view_layer.objects.active = hairCurves
-        # bpy.context.view_layer.active_layer_collection = original_collection  # SELECT COLLECTION
-
-        # TURN ON SYSTEM, it's turned off by default to allow for viewport mask calculation first when transfering biomes to huge terrains (and other modifier interactions); refer to function "secretpaint_create_curve" line 2768
         hairCurves.modifiers[0]["Input_99"] = False
 
         print("scatter selected obj with active hair settings on same surface")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # SWICTH WHICH HAIR SYSTEM TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE  (avoid it when import-painting multiple assets from File Browser "Q")
-    # elif all_sel_are_orencurves and ActiveMode == "SCULPT_CURVES" and activeobj.type == "CURVES":
-    # elif ActiveMode == "SCULPT_CURVES" and activeobj.type == "CURVES":
     elif ActiveMode in ["SCULPT_CURVES", "WEIGHT_PAINT", "EDIT"]:
         pickup_trace_owner = None
         if _get_pickup_trace() is None:
@@ -11167,7 +9100,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         paint_type = []
         siblings_with_same_weight_paint = []
         hover_is_brush_source = False
-        # print("UPDAAAAAAAAAAAT SWICTH WHICH HAIR TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE")
         update_modifier_start = time.perf_counter()
         secretpaint_update_modifier_f(context,upadte_provenance="SWICTH WHICH HAIR SYSTEM TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE")  # check version number: assigns to all obj in blend file
         if pickup_trace:
@@ -11195,14 +9127,9 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         if pickup_trace:
             pickup_trace.set_meta("hover", hover_label)
             pickup_trace.action("q_pickup.hover_select", select_hover_start, detail=f"hover={hover_label}")
-
-        #not needed, applypaint already calls it # Check_if_trigger_UV_Reprojection(self, context, activeobj=hoverobj, objselection=hoverobj)  # SLOW FOR HIGHPOLY OBJECTS
-
-        #IF HOVEROBJ IS CURVES: mark to paint later
         if hoverobj and hoverobj.type in ["CURVE","CURVES"] and hoverobj.modifiers:
             inspect_curve_start = time.perf_counter()
             secret_paint_modifiers = 0
-            # bpy.ops.object.mode_set(mode="SCULPT_CURVES")  # without this, the modal map for selecting obj makes it so that when going back to obj mode and selecting a hai obj: weirdly jumps to paint mode
             for modif in hoverobj.modifiers:
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                     secret_paint_modifiers += 1
@@ -11215,28 +9142,15 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                     elif modif["Input_69"] == False:
                         paint_type="SCULPT_CURVES"
                         found_to_paint.append(hoverobj)
-                    # elif modif["Input_69"] == True and not modif["Input_83_attribute_name"]: paint_type="SCULPT_CURVES"    #don't select hair with procedural that still needs to be applied
             if pickup_trace:
                 pickup_trace.action(
                     "q_pickup.inspect_hover_curve",
                     inspect_curve_start,
                     detail=f"secret_modifiers={secret_paint_modifiers}; matches={len(found_to_paint)}; paint_type={paint_type if paint_type else 'none'}",
                 )
-
-
-
-
-
-
-
-
-        #ELIF MESH: FIND HAIR WITH SAME BRUSH
-        # elif result != {'PASS_THROUGH'} and hoverobj.type == "MESH" and hoverobj != activeobj.parent and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
         elif hoverobj and hoverobj.type == "MESH" and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
             print("KKKKKKKKKKKKKKKKKKKK")
-            #LIST ALL HAIR THAT ARE USING THE ACTIVE WEIGHT PAINT GROUP (only useful when creating the same vertex biome on another mesh)
             siblings_with_same_weight_paint=[]
-            # hair_to_sample=[]
             all_brush_objs=[]
             all_brush_colls=[]
             collect_sources_start = time.perf_counter()
@@ -11246,12 +9160,9 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                         for modif in children.modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and activeobj.vertex_groups.active.name == children.modifiers[0]["Input_83_attribute_name"]:
                                 siblings_with_same_weight_paint.append(children)
-                                # hair_to_sample.append(children)
                                 if children.modifiers[0]["Input_2"] and children.modifiers[0]["Input_2"] not in all_brush_objs: all_brush_objs.append(children.modifiers[0]["Input_2"])
                                 if children.modifiers[0]["Input_9"] and children.modifiers[0]["Input_9"] not in all_brush_colls: all_brush_colls.append(children.modifiers[0]["Input_9"])
             elif activeobj.type=="CURVES":
-                # hair_to_sample=[]
-                # hair_to_sample.append(activeobj)
                 siblings_with_same_weight_paint.append(activeobj)
                 if activeobj.modifiers[0]["Input_2"] and activeobj.modifiers[0]["Input_2"] not in all_brush_objs: all_brush_objs.append(activeobj.modifiers[0]["Input_2"])
                 if activeobj.modifiers[0]["Input_9"] and activeobj.modifiers[0]["Input_9"] not in all_brush_colls: all_brush_colls.append(activeobj.modifiers[0]["Input_9"])
@@ -11268,7 +9179,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                 )
 
 
-
             all_vgroups_in_hoverobjs_children =[]
             scan_hover_children_start = time.perf_counter()
             hover_children_scanned = 0
@@ -11278,23 +9188,10 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                     if children.type == "CURVES" and children.modifiers:
                         hover_children_scanned += 1
                         for modif in children.modifiers:
-                            # if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("orenpaint") and modif["Input_2"]==hair_to_sample[0].modifiers["GeometryNodes"]["Input_2"] and modif["Input_9"]==hair_to_sample[0].modifiers["GeometryNodes"]["Input_9"]:
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                                 hover_secret_paint_children += 1
                                 if modif["Input_2"] in all_brush_objs or modif["Input_9"] in all_brush_colls:
-
-
-                                    # find the most similar hair to the original
                                     if len(siblings_with_same_weight_paint) <= 1:
-                                        # print("########siblinnnnnnnnnnnnggggggggggggg",children.name)
-                                        # print("MMMMMMMMMMMMMMM-----------------",modif["Input_69"])
-                                        # print("KKKKKKKKKKKKKKKKKKK-----------------",modif["Input_83_use_attribute"])
-
-                                        # if hair.modifiers[0]["Input_83_use_attribute"] == 1 or hair.modifiers[0]["Input_83_use_attribute"] == True: new_attribute_status_convert_int_to_boolean = True
-                                        # elif hair.modifiers[0]["Input_83_use_attribute"] == 0 or hair.modifiers[0]["Input_83_use_attribute"] == False: new_attribute_status_convert_int_to_boolean = False
-                                        # hairCurves.modifiers[0]["Input_83_use_attribute"] = new_attribute_status_convert_int_to_boolean  # VGROUP
-                                        #
-                                        # if modif["Input_83_use_attribute"]==new_attribute_status_convert_int_to_boolean:
                                         if modif["Input_83_use_attribute"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_83_use_attribute"]:
                                             if modif["Input_69"] == True and modif["Input_83_use_attribute"]:
                                                 paint_type = "WEIGHT_PAINT"
@@ -11306,7 +9203,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                                                 found_to_paint = []
                                                 found_to_paint.append(children)
                                                 print("(((lllllllllllllllllllllllllll")
-                                            # elif modif["Input_69"] == True and not modif["Input_83_attribute_name"]: paint_type="SCULPT_CURVES"    #don't select hair with procedural that still needs to be applied
                                         if modif["Input_69"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_69"]:
                                             if modif["Input_69"] == True and modif["Input_83_use_attribute"]:
                                                 paint_type="WEIGHT_PAINT"
@@ -11318,7 +9214,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                                                 found_to_paint=[]
                                                 found_to_paint.append(children)
                                                 print("(((ooooooooooooooooooooo")
-                                            #elif modif["Input_69"] == True and not modif["Input_83_attribute_name"]: paint_type="SCULPT_CURVES"    #don't select hair with procedural that still needs to be applied
                                         if modif["Input_69"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_69"] and modif["Input_83_use_attribute"]==siblings_with_same_weight_paint[0].modifiers[0]["Input_83_use_attribute"]:
                                             if modif["Input_69"] == True and modif["Input_83_use_attribute"]:
                                                 paint_type = "WEIGHT_PAINT"
@@ -11331,12 +9226,7 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                                                 found_to_paint = []
                                                 found_to_paint.append(children)
                                                 print("(((9999999999999999999")
-                                            # elif modif["Input_69"] == True and not modif["Input_83_attribute_name"]: paint_type="SCULPT_CURVES"    #don't select hair with procedural that still needs to be applied
-                                            # break
-
-                                    # find same vgroup on new terrain
                                     elif len(siblings_with_same_weight_paint) >= 2:
-                                        # print("222222",)
                                         if modif["Input_83_attribute_name"] and modif["Input_83_attribute_name"] not in all_vgroups_in_hoverobjs_children: all_vgroups_in_hoverobjs_children.append(modif["Input_83_attribute_name"])
                                         if all_vgroups_in_hoverobjs_children and modif["Input_83_attribute_name"]==all_vgroups_in_hoverobjs_children[0]:
                                             paint_type="WEIGHT_PAINT"
@@ -11351,15 +9241,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                         f"paint_type={paint_type if paint_type else 'none'}"
                     ),
                 )
-
-
-        # #IF HOVEROBJ IS THE SURFACE OF THE ACTIVE PAINT SYSTEM
-        # elif result != {'PASS_THROUGH'} and hoverobj.type == "MESH" and hoverobj == activeobj.parent and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
-        #     print("MMMMMMMMMMMMMMMMMMMM", activeobj.name)
-        #     apply_paint(self, context, activeobj=activeobj, objselection=[activeobj], applyIDs=True)
-        # # return{'FINISHED'}
-
-        # #PAINT WHATEVER WAS FOUND
         if found_to_paint:
             pickup_outcome = "paint_existing"
             if pickup_trace:
@@ -11381,7 +9262,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                     pickup_trace.action("q_pickup.route_weight_paint", route_start, detail=f"target={found_to_paint[0].name}")
             elif paint_type=="SCULPT_CURVES":
                 route_start = time.perf_counter()
-                #APPLY PAINT BUT KEEP THE ACTIVE BRUSH IF WE WERE IN CURVE SCULPT MODE
                 if ActiveMode == "SCULPT_CURVES": apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True,keep_active_brush=True)
                 else: apply_paint(self,context,activeobj=found_to_paint[0], objselection=[found_to_paint[0]],applyIDs=True )
                 if pickup_trace:
@@ -11391,9 +9271,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                         detail=f"target={found_to_paint[0].name}; keep_active_brush={bool(ActiveMode == 'SCULPT_CURVES')}",
                     )
                 print("(((8888888888888888888888888")
-
-
-        #IF NO BRUSH FOUND: CREATE IT
         elif not found_to_paint and hoverobj and hoverobj.type=="MESH" and hoverobj!=activeobj.parent and not hoverobj.name.startswith("Secret Paint Viewport Mask"):
             if bool(hoverobj.data.library) and ActiveMode=="WEIGHT_PAINT":
                 pickup_outcome = "restore_linked_hover"
@@ -11412,8 +9289,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                         create_new_start,
                         detail=f"hover={hoverobj.name}; siblings={len(siblings_with_same_weight_paint)}",
                     )
-
-        #IF NOTHING FOUND OR CREATED: GO BACK TO ORIGINAL STATE
         else:
             pickup_outcome = "restore_original"
             restore_state_start = time.perf_counter()
@@ -11427,22 +9302,7 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         for ob in bpy.context.selected_objects: bpy.data.objects[ob.name].select_set(False) #paint better without selection
         if pickup_trace:
             pickup_trace.action("q_pickup.clear_selection", clear_selection_start)
-
-        #cleanup empty hair systems in scene, for misclicks, if have no curve and were visible and not procedural
-        # orenpaint_cleanup_empty_systems(self, context)
-        # for obj in bpy.context.scene.objects:
-        #     if obj.type == "CURVES" and obj.modifiers and obj!=bpy.context.active_object:
-        #         for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
-        #             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "orenpaint" and  (sum(len(spline.points) for spline in obj.data.curves)) ==0 and obj.modifiers["GeometryNodes"]["Input_99"] == False and obj.modifiers["GeometryNodes"]["Input_69"] == False:
-        #                 bpy.data.objects.remove(obj, do_unlink=True)
-        #                 # print("DELEEEEEEETED",)
-        #
-        #             #CLEANUP VGROUPS AS WELL
-
         print("SWICTH WHICH HAIR TO PAINT FROM SCULPT MODE OR EDIT MODE OR WEIGHT PAINT MODE")
-
-        # end_time = time.time()
-        # print("Milliseconds (Ping):",(end_time - start_time) * 1000)
         if pickup_trace_owner is not None:
             detail_hover = f"{hoverobj.name}<{hoverobj.type}>" if hoverobj else "None"
             detail_paint_type = paint_type if paint_type else "none"
@@ -11450,62 +9310,12 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                 pickup_trace_owner,
                 detail=f"outcome={pickup_outcome}; hover={detail_hover}; matches={len(found_to_paint)}; paint_type={detail_paint_type}",
             )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    #RESUME DRAWING CURVE
     elif ActiveMode == "OBJECT" and N_Of_Selected == 1 and activeobj.type == "CURVE":
         curve_draw_tool(context)
         print("RESUME DRAWING CURVE")
-
-    #RESUME PAINTING SELECTED HAIR, HOVER IF NO SELECTED OBJS   -ALSO MERGE VGROUP FOR SEL HAIR IN SAME SURFACE                              #overrides draw curve, but users are very unlikely to want to draw with a paint system
-    # elif all_sel_are_orencurves and ActiveMode == "OBJECT" and activeobj.type == "CURVES" \
-    #         or all_sel_are_orencurves and ActiveMode == "SCULPT_CURVES" and activeobj.type == "CURVES":
     elif len(all_found_parents)==1 and all_sel_are_orencurves and ActiveMode == "OBJECT" and activeobj.type == "CURVES" \
     or ActiveMode == "OBJECT" and N_Of_Selected == 0:
-        #not needed, called automatically from apply_paint function  #Check_if_trigger_UV_Reprojection(self, context, activeobj=all_found_parents[0], objselection=all_found_parents[0])  # SLOW FOR HIGHPOLY OBJECTS
-        # print("UPDAAAAAAAAAAAT RESUME PAINTING SELECTED HAIR, HOVER IF NO SELECTED OBJS")
         secretpaint_update_modifier_f(context,upadte_provenance="RESUME PAINTING SELECTED HAIR, HOVER IF NO SELECTED OBJS")  # check version number: assigns to all obj in blend file
-        # for ob in objselection: #deselect everythig, easier to see what you're painting
-        #     bpy.data.objects[ob.name].select_set(False)
-        # return{'FINISHED'}
-
-        # UNDER MOUSE CURSOR: SELECT HAIR AND PAINT
         if N_Of_Selected == 0:
             hoverobj, _hover_location = _secret_paint_hover_object_from_mouse(context, event)
             if hoverobj and hoverobj.type == "CURVES" and hoverobj.modifiers:
@@ -11515,7 +9325,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                         elif modif["Input_69"] == True and modif["Input_83_use_attribute"] == False:
                             apply_paint(self, context, activeobj=hoverobj, objselection=[hoverobj])
                         elif modif["Input_69"] == False:
-                            # context3sculptbrush(context)
                             apply_paint(self, context, activeobj=hoverobj, objselection=[hoverobj], applyIDs=True)
                         else: self.report({'WARNING'}, "Try again while hovering with the mouse on a hair system")
                     else: self.report({'WARNING'}, "Try again while hovering with the mouse on a hair system")
@@ -11525,196 +9334,14 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
 
             for ob in objselection: #deselect everythig, easier to see what you're painting
                 bpy.data.objects[ob.name].select_set(False)
-
-
-        #TRADITIONAL SELECTION
         elif N_Of_Selected == 1: #paint vertex or hair
             if activeobj.modifiers[0]["Input_69"] == True:
                 apply_paint(self, context, activeobj=activeobj, objselection=[activeobj])
-
-            # elif activeobj.modifiers["GeometryNodes"]["Input_69"] == False and not activeobj.modifiers["GeometryNodes"]["Input_83_use_attribute"]:
             elif activeobj.modifiers[0]["Input_69"] == False:
-                # context3sculptbrush(context)
                 apply_paint(self, context, activeobj=activeobj, objselection=[activeobj], applyIDs=True)
-
-
-            # if activeobj.modifiers["GeometryNodes"]["Input_69"] == True:
-            #     vertexgrouppaint_function(self, context,NoMasksDetected=True)
-            # else:
-            #     context3sculptbrush(context)
-        # #TRADITIONAL SELECTION
-        # elif N_Of_Selected >= 2: #paint vertex
-        #     vertexgrouppaint_function(self, context,NoMasksDetected=True)
-
-            # multiple with same parent:
-            # if share save vgroup: paint mode
-            #different vgroup: share active one or create new > paint
-            #different parent: scatter with same settings
-
-        # cleanup empty hair systems in scene, for misclicks
-        # orenpaint_cleanup_empty_systems(self, context)
-        # for obj in bpy.context.scene.objects:
-        #     if obj.type == "CURVES" and obj.modifiers and obj not bpy.context.active_object and obj not in :bpy.context.selected_objects
-        #         for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
-        #             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "orenpaint":
-        #                 if (sum(len(spline.points) for spline in obj.data.curves)) == 0 and \
-        #                         obj.modifiers["GeometryNodes"]["Input_99"] == False and \
-        #                         obj.modifiers["GeometryNodes"]["Input_69"] == False: bpy.data.objects.remove(obj,do_unlink=True)
-
-
         for x in objselection: bpy.data.objects[x.name].select_set(False)
 
         print("RESUME PAINTING SELECTED HAIR, HOVER IF NO SELECTED OBJS")
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # #scatter SEL HAIRS with ACTIVE HAIR settings            (MERGED TO MANY HAIR)                                #should unite with 3 above        or on ACTIVE SURFACE
-    # elif ActiveMode == "OBJECT" and N_Of_Selected >= 2 and all_sel_are_orencurves and len(all_found_parents)>=1:
-    #
-    #     # orenpaint_update_modifier_f(context)  # check version number: assigns to all obj in blend file
-    #
-    #
-    #     hair_thatNeedA_mask=[] #for huge terrains, automatically add
-    #     allTerrainArea = sum(face.area for face in activeobj.data.surface.data.polygons)
-    #     all_new_hair = []
-    #     for hair in selobjs_without_active:
-    #         hairCurves = orenpaint_create_curve(self, context, targetOBJ=activeobj, brushOBJ=hair, targetCollection=Coll_of_Active, transfer_modifier=True)
-    #         all_new_hair.append(hairCurves)
-    #
-    #         # bpy.context.view_layer.objects.active = activeobj.data.surface
-    #         # bpy.context.view_layer.active_layer_collection = Coll_of_Active #SELECT COLLECTION OF ACTIVE OBJ
-    #         # bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.data.objects[activeobj.name].location, scale=(1, 1, 1))
-    #         # hairCurves = bpy.context.active_object
-    #         # hairCurves.display_type = selobj_BoundingBox_State  # bounding box state
-    #         # all_new_hair.append(hairCurves)
-    #
-    #         # bpy.ops.object.select_all(action='DESELECT')
-    #         # bpy.data.objects[hairCurves.name].select_set(True)  # select it
-    #         # bpy.context.view_layer.objects.active = bpy.data.objects[hairCurves.name]  # make active
-    #         # #APPLY SCALE
-    #         # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    #
-    #         #LINK GEONODES + MATERIALS
-    #         # bpy.data.objects[hair.name].select_set(True)  # select it
-    #         # bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
-    #         # bpy.ops.object.make_links_data(type='MODIFIERS')
-    #         # bpy.ops.object.make_links_data(type='MATERIAL')
-    #         hairCurves.modifiers["GeometryNodes"]["Input_73"] = activeobj.data.surface #surface
-    #         hairCurves.modifiers["GeometryNodes"]["Input_68"] = hair.modifiers["GeometryNodes"]["Input_68"]
-    #         hairCurves.modifiers["GeometryNodes"]["Input_2"] = hair.modifiers["GeometryNodes"]["Input_2"]
-    #         hairCurves.modifiers["GeometryNodes"]["Input_9"] = hair.modifiers["GeometryNodes"]["Input_9"]
-    #         hairCurves.modifiers["GeometryNodes"]["Input_83_attribute_name"] = hair.modifiers["GeometryNodes"]["Input_83_attribute_name"]
-    #         hairCurves.modifiers["GeometryNodes"]["Input_83_use_attribute"] = hair.modifiers["GeometryNodes"]["Input_83_use_attribute"]
-    #         if N_Of_Selected >=3: hairCurves.modifiers["GeometryNodes"]["Input_69"] = True #generate hair
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_71"] = float(random.choice(range(0, 999999)))  # random noise W
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_86"] = activeobj.modifiers["GeometryNodes"]["Input_86"] #mask slope
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_89"] = activeobj.modifiers["GeometryNodes"]["Input_89"] #mask slope inverted
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_91"] = activeobj.modifiers["GeometryNodes"]["Input_91"] #mask height
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_92"] = activeobj.modifiers["GeometryNodes"]["Input_92"] #mask height inverted
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_95"] = activeobj.modifiers["GeometryNodes"]["Input_95"] #mask obj
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_97"] = activeobj.modifiers["GeometryNodes"]["Input_97"] #mask obj
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_98"] = activeobj.modifiers["GeometryNodes"]["Input_98"] #mask viewport checkbox
-    #         # if activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"] and not hairCurves.modifiers["GeometryNodes"]["Input_83_attribute_name"]: bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")
-    #         # elif not activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"] and hairCurves.modifiers["GeometryNodes"]["Input_83_attribute_name"]: bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")  #Input_83_use_attribute
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_83_attribute_name"] = activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"] #vgroup name
-    #         # if activeobj.data.surface.modifiers:   #if armature modifier detected, turn on deform on surface
-    #         #     for mod in activeobj.data.surface.modifiers:
-    #         #         if mod.type=="ARMATURE": hairCurves.modifiers["GeometryNodes"]["Input_63"] = True
-    #         # # hairCurves.modifiers["GeometryNodes"]["Input_73"] = hairCurves.object.data.surface
-    #         # # hairCurves.modifiers["GeometryNodes"]["Input_68"] = hair.modifiers["GeometryNodes"]["Input_68"]#density
-    #
-    #         # scales = activeobj.data.surface.scale
-    #         # max_scale = max(scales)
-    #         # if max_scale == scales[0]: largest_axis = activeobj.data.surface.scale[0]
-    #         # elif max_scale == scales[1]: largest_axis = activeobj.data.surface.scale[1]
-    #         # else: largest_axis = activeobj.data.surface.scale[2]
-    #         # hairCurves.modifiers["GeometryNodes"]["Input_100"] = abs(largest_axis) #activeobj.data.surface.scale[0]  # OBJ SCALE COMPENSATION
-    #         # for modifier in hairCurves.modifiers:
-    #         #     if modifier.type == 'NODES':  # modifier.name == "GeometryNodes"
-    #         #         if modifier.node_group and modifier.node_group.name == "Generate Hair Curves":
-    #         #             hairCurves.modifiers["Generate Hair Curves"]["Input_2"] = activeobj
-    #
-    #         if hairCurves.modifiers["GeometryNodes"]["Input_98"] \
-    #                 or hairCurves.modifiers["GeometryNodes"]["Input_97"] \
-    #                 or allTerrainArea / (0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"])) > 10000 and hairCurves.modifiers["GeometryNodes"]["Input_69"]:
-    #             if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-    #             # if allTerrainArea / hairCurves.modifiers["GeometryNodes"]["Input_68"] > 10000: hairCurves.display_type = 'BOUNDS'  # bounds for hair with huge density
-    #             hairCurves.modifiers["GeometryNodes"]["Input_97"] = None  # clean mask slots so that the function doesn't toggle the mask settings
-    #             hairCurves.modifiers["GeometryNodes"]["Input_98"] = False
-    #         # hairCurves.location = hairCurves.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
-    #
-    #
-    #     # bpy.ops.object.select_all(action='DESELECT')
-    #     for x in objselection: bpy.data.objects[x.name].select_set(False)
-    #     for obj in all_new_hair:
-    #         bpy.data.objects[obj.name].select_set(True)
-    #         bpy.context.view_layer.objects.active = obj
-    #         # obj.location = obj.location
-    #
-    #
-    #
-    #
-    #     NoMasksDetected = True
-    #     if len(all_hair_with_Vgroup) == len(selobjs_without_active) and len(all_Vgroups) == 1:NoMasksDetected=True  # if all hair to scatter are with same vgroup, skip mask because we'll start painting right away
-    #     elif hair_thatNeedA_mask: NoMasksDetected = False
-    #     # else: NoMasksDetected=True
-    #     # fix vertex group mask
-    #     vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True)
-    #     # FIX VIEWPORT MASK:  after vertex group because when creating a mask it becomes active object ready to be moved
-    #     if NoMasksDetected==False: orenpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
-    #
-    #
-    #     # bpy.context.object.modifiers["GeometryNodes"]["Input_2"] = bpy.data.objects[activeobj.name]
-    #     # bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = None
-    #     # bpy.ops.transform.translate(value=(0, 0, 0))  # best way to update the scene  # ojgb.location = ojgb.location  # best way to update the scene
-    #     if N_Of_Selected == 2 and selobj.modifiers["GeometryNodes"]["Input_69"] == False: context3sculptbrush(context)
-    #     # bpy.context.view_layer.active_layer_collection = original_collection #restore COLLECTION
-    #
-    #     print("scatter SEL HAIRS with ACTIVE HAIR settings")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    #DRAW CURVE, OBJ MODE, 1 or 2
     elif ActiveMode == "OBJECT" and N_Of_Selected == 1:
         if "circulararray" in kwargs: circulararray = kwargs.get("circulararray")
         else:circulararray = False
@@ -11763,8 +9390,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
 
         curve_data = bpy.data.curves.new(name="Secret Paint", type="CURVE")
         curve_data.dimensions = '3D'
-        # curve_data.resolution_u = 64  # Number of points to approximate the circle
-
         if circulararray:
             points = curve_data.splines.new(type='BEZIER')
             points.bezier_points.add(3)
@@ -11794,15 +9419,9 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         bpy.context.view_layer.objects.active = hairCurves
         hairCurves.select_set(True)
         contextorencurveappend(context)  # append and assign orenpaint geonode
-
-        #LINK MATERIALS
         material_cache = {}
         for material in _secret_paint_collect_safe_materials_from_object(activeobj, material_cache):
             _secret_paint_append_material_once(hairCurves.data.materials, material)
-
-        #DENSITY
-        # if activeobj.type in ["MESH","CURVE"] and activeobj.dimensions > (0,0,0): hairCurves.modifiers[0]["Input_68"] = (1 / ( max(activeobj.dimensions)  **2)  )   *2
-        # else:density_large = 1.0  #can't calculate the density from anything that's not a mesh
         obj_for_dimensions = activeobj
         if activeobj.type=="MESH" and activeobj.modifiers:  #IF IT'S AN ASSEMBLY USE ITS PARENT
             for modif in activeobj.modifiers:
@@ -11829,32 +9448,15 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         curve_draw_tool(context, dont_set_drawing_tool=dont_set_drawing_tool)
         context3sculptbrush(context)
         print("DRAW CURVE, OBJ MODE, 1 or 2")
-
-    # draw stretched curve
-
-
-
-
-
-
-
-
-
-
-    #draw sel obj with settings of active curve
     elif ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVE":
         selobj.select_set(False)
         bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'},TRANSFORM_OT_translate={})
         curveobj = bpy.context.active_object
-
-        #link materials
         selobj.select_set(True)  # select it
         bpy.context.view_layer.objects.active = bpy.data.objects[selobj.name]  # make active
         bpy.ops.object.make_links_data(type='MATERIAL')
         selobj.select_set(False)
         bpy.context.view_layer.objects.active = bpy.data.objects[curveobj.name]  # make active
-
-        #delete curves in edit mode
         bpy.ops.object.editmode_toggle()
         bpy.ops.curve.select_all(action='SELECT')
         bpy.ops.curve.dissolve_verts()
@@ -11862,13 +9464,6 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
         curve_draw_tool(context)
         bpy.context.object.modifiers[0]["Input_2"] = bpy.data.objects[selobj.name]
         print("draw sel obj with settings of active curve")
-
-
-
-
-    # secretpaint_cleanup_empty_systems(self, context)
-
-    # return {'FINISHED'}
 class orenscatter(bpy.types.Operator):
     """Select the object you want to paint with, press Q, paint on multiple terrains at once. Also works from the asset browser. Also converts procedural paint systems into manual mode."""
     bl_idname = "secret.paint"
@@ -11876,10 +9471,6 @@ class orenscatter(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     exit_paint_mode: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
     use_selected_source: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
-    # def execute(self, context):
-    #     orenpaint_function(self,context)
-    #     return {'FINISHED'}
-
     def execute(self, context):
         use_selected_source = bool(getattr(self, "use_selected_source", False))
         _secret_paint_q_debug_log(
@@ -12266,9 +9857,6 @@ class orenscatter(bpy.types.Operator):
                     event=event,
                 )
                 return result
-
-            # With legacy Q disabled, do not fall back into the old sculpt/weight-paint routing.
-            # World Paint owns validation and user-facing warnings until the preference is enabled again.
             _secret_paint_q_debug_log(
                 "secret.paint.invoke.start_world_paint_mode",
                 context,
@@ -12296,42 +9884,10 @@ class orenscatter(bpy.types.Operator):
             _secret_paint_q_debug_log("secret.paint.invoke.legacy_modal_add.fake_operator", context)
             return {'RUNNING_MODAL'}
         _secret_paint_q_debug_log("secret.paint.invoke.legacy_modal_add", context)
-        # orenpaint_function(self, context, event) #only executes on first loop
-        # self.timer = context.window_manager.event_timer_add(0.1, window=context.window)
         return {'RUNNING_MODAL'}
     def modal(self, context, event):
         secretpaint_function(self, context, event)
         return {'FINISHED'}
-
-        # logging.info("awyo")
-        # start_time = time.time()
-        # if event.type == 'GRLESS':  #LEFTMOUSE   # if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
-        #     orenpaint_function(self, context, event)
-    #     return {'PASS_THROUGH'}
-        #
-        # # if event.type == 'LEFTMOUSE' and event.value == 'PRESS':  # if event.type == 'GRLESS'\
-        # #     activeobj = bpy.context.active_object
-        # #     current_mode = bpy.context.object.mode
-        # #     bpy.ops.object.mode_set(mode="OBJECT")
-        # #     result = bpy.ops.view3d.select(location=(event.mouse_region_x, event.mouse_region_y))  # SELECT HOVEROBJ
-        # #     hoverobj = []
-        # #     if result != {'PASS_THROUGH'} and hoverobj!=activeobj:
-        # #         hoverobj = bpy.context.active_object
-        # #         bpy.data.objects[hoverobj.name].select_set(False)
-        # #         bpy.context.view_layer.objects.active = activeobj
-        # #         orenpaint_function(self,context, event)
-        # #     return {'PASS_THROUGH'}
-        #
-        # acceptable_modes=["SCULPT_CURVES","WEIGHT_PAINT"]
-        # if event.type == 'RIGHTMOUSE' or event.type == 'ESC' or bpy.context.object.mode not in acceptable_modes:
-        #     print("ENDED",)
-        #     return {'FINISHED'}
-        #
-        # end_time = time.time()
-        # print("Milliseconds (Ping):",(end_time - start_time) * 1000)
-        # return {'PASS_THROUGH'}
-
-
 class secretpaint_mode_pie(bpy.types.Operator):
     """Switch to Object Mode and start Secret Paint"""
     bl_idname = "secret.paint_mode_pie"
@@ -12388,10 +9944,6 @@ def paintbrushswitch_f(self, *args, **kwargs):
                 break
     else:
         hair_thatneeds_to_switch = ORIGINALactiveobj
-
-    # if len(objselection) == 1 and hair_thatneeds_to_switch.type == "CURVES" or \
-    #         len(objselection) == 1 and hair_thatneeds_to_switch.type == "CURVE":
-
     all_selected_are_meshes = True
     for obj in objselection: #bpy.context.selected_objects:
         if obj.type != "MESH": all_selected_are_meshes=False
@@ -12408,9 +9960,6 @@ def paintbrushswitch_f(self, *args, **kwargs):
             return {'FINISHED'}
     else:
         hoverobj = hair_thatneeds_to_switch
-
-    # activeobj = bpy.context.active_object
-    # objselection = bpy.context.selected_objects
     N_Of_Selected = len(objselection)
     randomselectedobj = []
     randomselected_non_hair = []
@@ -12428,25 +9977,10 @@ def paintbrushswitch_f(self, *args, **kwargs):
             if obj != hoverobj:
                 randomselectedobj = obj
                 selected_without_active.append(obj)
-
-            # if "orenpaint" not in obj.modifiers.node_tree: randomselected_non_hair = obj
             if obj.type != "CURVES" and obj.type != "CURVE": randomselected_non_hair = obj
-            # if obj.type != "CURVES": randomselected_non_hair = obj
-
             if obj.type != "CURVES": all_objs_are_hair = False
-            # if obj.type != "CURVE": all_objs_are_hair = False
-
-            # if obj.type == "CURVES" or obj.type == "CURVE": all_selected_hair.append(obj)
             if obj.type == "CURVES": all_selected_hair.append(obj)
-
-            # if obj.type != "CURVES" or obj.type != "CURVE": all_selected_non_hair.append(obj)
             if obj.type != "CURVES": all_selected_non_hair.append(obj)
-
-    ################################### v
-    # bpy.context.view_layer.objects.active = ORIGINALactiveobj
-    # ORIGINALactiveobj.select_set(True)
-    # for x in ORIGINALobjselection: x.select_set(True)
-
     if all_selected_are_meshes:
 
         for ob in selected_without_active:
@@ -12463,8 +9997,6 @@ def paintbrushswitch_f(self, *args, **kwargs):
                         ob.material_slots[i].link = mat_slot.link
                         ob.material_slots[i].material = safe_material  # IF SLOT EXISTS
                     else: _secret_paint_append_material_once(ob.data.materials, safe_material)
-
-            #copy modifiers
             for m in ob.modifiers:  # iterate over modifiers
                 ob.modifiers.remove(m)  # delete modifier
             for mod in hoverobj.modifiers:
@@ -12485,50 +10017,24 @@ def paintbrushswitch_f(self, *args, **kwargs):
         hoverobj.select_set(False)
         bpy.context.view_layer.objects.active = ORIGINALactiveobj
         return{'FINISHED'}
-
-
-
-    # switch sel hair to active obj
     if N_Of_Selected == 2 and randomselectedobj.type == "CURVES" and hoverobj.type != "CURVES" \
             or N_Of_Selected == 2 and randomselectedobj.type == "CURVE" and hoverobj.type != "CURVES":
 
         print("switch sel hair to active obj", )
-
-        # delete materials and link from obj
-        # for i in range(len(randomselectedobj.material_slots)): bpy.ops.object.material_slot_remove({'object': randomselectedobj})
-        # bpy.ops.object.make_links_data(type='MATERIAL')
         for hair in selected_without_active:
             _secret_paint_replace_curve_materials_from_sources(
                 hair,
                 _secret_paint_collect_safe_materials_from_object(hoverobj, material_cache),
             )
-
-            # next(m for m in bpy.context.active_object.modifiers if m.type == 'NODES').node_group = bpy.data.node_groups.get("orenpaint")
-            # set brush object
-            # hair.modifiers["GeometryNodes"]["Input_2"] = bpy.data.objects[selection1Name]
             hair.modifiers[0]["Input_2"] = hoverobj  # bursh obj
             hair.modifiers[0]["Input_9"] = None  # clean collection
-            # hair.modifiers["GeometryNodes"]["Input_68"] = activeobj.modifiers["GeometryNodes"]["Input_68"]  # density
             hair.modifiers[0]["Input_39"] = False  # deactivate custom material
-            # hair.modifiers["GeometryNodes"]["Input_100"] = randomselectedobj.scale[0]  # OBJ SCALE COMPENSATION
-            # if activeobj.type=="MESH":  #avoid for empty obj
-            #     if activeobj.dimensions[0] > activeobj.dimensions[1]:
-            #         density_large = 0.5/( (activeobj.dimensions[0] / 2) / activeobj.scale[0])
-            #     else:
-            #         density_large = 0.5/( (activeobj.dimensions[1] / 2) / activeobj.scale[1])
-            #     hair.modifiers["GeometryNodes"]["Input_68"] = density_large  # DENSITY SCATTER
-            # hair.location = hair.location
-
             bpy.context.active_object.select_set(False)
             for obj in bpy.context.selected_objects: bpy.context.view_layer.objects.active = obj
 
         for x in bpy.context.selected_objects: x.select_set(False)  # objselection
         bpy.context.view_layer.objects.active = saveactual_activeobj
         bpy.ops.object.mode_set(mode=current_mode)
-
-
-
-    # all sel objs are hair and link modif from active
     elif N_Of_Selected >= 2 and all_objs_are_hair:
         print("all sel objs are hair and link modif from active", )
 
@@ -12542,38 +10048,24 @@ def paintbrushswitch_f(self, *args, **kwargs):
             hair.modifiers[0]["Input_2"] = hoverobj.modifiers[0]["Input_2"]  # bursh obj
             hair.modifiers[0]["Input_9"] = hoverobj.modifiers[0]["Input_9"]  # clean collection
             hair.modifiers[0]["Input_68"] = hoverobj.modifiers[0]["Input_68"]  # density
-            # hair.modifiers["GeometryNodes"]["Input_69"] = activeobj.modifiers["GeometryNodes"]["Input_69"]  # procedural checkbox
             hair.modifiers[0]["Input_39"] = False  # deactivate custom material
             hair.modifiers[0]["Input_86"] = hoverobj.modifiers[0]["Input_86"]  # slope
             hair.modifiers[0]["Input_89"] = hoverobj.modifiers[0]["Input_89"]  # slope inverted
             hair.modifiers[0]["Input_91"] = hoverobj.modifiers[0]["Input_91"]  # height
             hair.modifiers[0]["Input_92"] = hoverobj.modifiers[0]["Input_92"]  # height inverted
-            # hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] = hoverobj.modifiers["GeometryNodes"]["Input_83_use_attribute"]     #weight group
-            # hair.modifiers["GeometryNodes"]["Input_83_attribute_name"] = hoverobj.modifiers["GeometryNodes"]["Input_83_attribute_name"]    #weight attribute
-            # hair.modifiers["GeometryNodes"]["Input_95"] = hoverobj.modifiers["GeometryNodes"]["Input_95"]        #mask object
-            # hair.modifiers["GeometryNodes"]["Input_98"] = hoverobj.modifiers["GeometryNodes"]["Input_98"]        #mask viewport checkbox
-            # hair.modifiers["GeometryNodes"]["Input_97"] = hoverobj.modifiers["GeometryNodes"]["Input_97"] #mask viewpoer
             hair.location = hair.location
-
-        # if only 2 curves, reselect original
         if N_Of_Selected == 2:
             bpy.context.active_object.select_set(False)
             for obj in bpy.context.selected_objects:
                 bpy.context.view_layer.objects.active = obj
-
-
-    # switch even multiple hair, use all non hair objs to switch to collection or a single obj
     elif N_Of_Selected >= 3:
         print("switch even multiple hair, use all non hair objs to switch to collection or a single", )
-
-        # ALL MATERIALS FROM NON HAIR OBJS
         all_materials_from_non_hair_objs = []
         for ob in all_selected_non_hair:  # make mats linked to obj and local
             for mat in _secret_paint_collect_safe_materials_from_object(ob, material_cache):
                 if mat not in all_materials_from_non_hair_objs: all_materials_from_non_hair_objs.append(mat)
 
         if len(all_selected_non_hair) >= 2:
-            # FIND COLLECTION FROM ONE OF THE NON HAIR OBJS
             ucol = randomselected_non_hair.users_collection
             for i in ucol:
                 layer_collection = bpy.context.view_layer.layer_collection
@@ -12581,56 +10073,28 @@ def paintbrushswitch_f(self, *args, **kwargs):
 
             for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
             for hair in all_selected_hair:
-                # MATERIALS
                 hair.active_material_index = 0
                 _secret_paint_replace_curve_materials_from_sources(hair, all_materials_from_non_hair_objs)
 
                 hair.modifiers[0]["Input_2"] = None
                 hair.modifiers[0]["Input_9"] = bpy.data.collections[layerColl.name]
                 hair.modifiers[0]["Input_39"] = False  # deactivate custom material
-
-                # bpy.data.objects[hair.name].select_set(True)  # select it
                 bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
                 bpy.ops.object.mode_set(mode=current_mode)
                 hair.location = hair.location
 
         elif len(all_selected_non_hair) == 1:
             for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
-
-            # all_materials=[]
-            # for mat_slot in all_selected_non_hair[0].material_slots:
-            #     mat = mat_slot.material
-            #     if mat not in all_materials: all_materials.append(mat)
-
             for hair in all_selected_hair:
                 hair.modifiers[0]["Input_2"] = bpy.data.objects[all_selected_non_hair[0].name]
                 hair.modifiers[0]["Input_9"] = None
                 hair.modifiers[0]["Input_39"] = False  # deactivate custom material
-                # if bpy.data.objects[all_selected_non_hair[0].name].dimensions[0] > \
-                #         bpy.data.objects[all_selected_non_hair[0].name].dimensions[1]:
-                #     density_large = 0.5/( (bpy.data.objects[all_selected_non_hair[0].name].dimensions[0])/2 / \
-                #                     bpy.data.objects[all_selected_non_hair[0].name].scale[0])
-                # else:
-                #     density_large = 0.5/( (bpy.data.objects[all_selected_non_hair[0].name].dimensions[1])/2 / \
-                #                     bpy.data.objects[all_selected_non_hair[0].name].scale[1])
-                # hair.modifiers["GeometryNodes"]["Input_68"] = density_large  # DENSITY SCATTER
-
-                # bpy.data.objects[hair.name].select_set(True)  # select it
                 bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
                 bpy.ops.object.mode_set(mode=current_mode)
 
                 hair.active_material_index = 0  # CLEAN MATERIALS
                 _secret_paint_replace_curve_materials_from_sources(hair, all_materials_from_non_hair_objs)
                 hair.location = hair.location
-
-
-        # bpy.ops.transform.translate(value=(0, 0, 0))  # best way to update the scene
-    # for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
-    # # for x in saveactual_objselection: x.select_set(True)
-    # bpy.context.view_layer.objects.active = saveactual_activeobj
-    # bpy.ops.object.mode_set(mode=current_mode)
-
-    # return{'FINISHED'}
 class orencurveswitch(bpy.types.Operator):
     """Use the active mesh or collection as Brush for the selected Paint System"""
     bl_idname = "secret.paintbrushswitch"
@@ -12654,8 +10118,6 @@ class orencurveswitch(bpy.types.Operator):
 
 def check_overlapping_uvs(self,context,**kwargs):
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
-
-    # if activeobj.type != 'MESH': return print("Active object is not a mesh.")  # Ensure it's a mesh
     if activeobj.type != 'MESH': return False
 
     mesh = activeobj.data
@@ -12678,7 +10140,6 @@ def check_overlapping_uvs(self,context,**kwargs):
             face_uv_sets[uv_set] = face.index  # Store UV set and face index
 
     if overlapping_faces:
-        # print(f"Overlapping UVs found on faces: {sorted(overlapping_faces)}")  # Print result
         print(f"Overlapping UVs found on faces")  # Print result
         bm.free()  # Free the BMesh
         return True
@@ -12686,40 +10147,6 @@ def check_overlapping_uvs(self,context,**kwargs):
         print("No overlapping UVs detected.")  # Print result
         bm.free()  # Free the BMesh
         return False
-
-    # #FASTER VERSION
-    # if activeobj.type != 'MESH': return print("Active object is not a mesh.")  # Ensure it's a mesh
-    #
-    # mesh = activeobj.data
-    # bm = bmesh.new()
-    # bm.from_mesh(mesh)
-    # uv_layer = bm.loops.layers.uv.active  # Get the active UV layer
-    # if not uv_layer: return print("No active UV map found.")  # Ensure a UV map exists
-    #
-    # face_uv_hashes = {}  # Dictionary to track hashed UV sets of faces
-    # overlapping_faces = set()  # Set to collect overlapping face indices
-    #
-    # for face in bm.faces:
-    #     uv_set = tuple(sorted(tuple(loop[uv_layer].uv) for loop in face.loops))  # Create a sorted tuple of UVs
-    #     uv_hash = hash(uv_set)  # Hash the UV set for faster lookup
-    #     if uv_hash in face_uv_hashes:
-    #         overlapping_faces.add(face.index)  # Add the current face index
-    #         overlapping_faces.add(face_uv_hashes[uv_hash])  # Add the face it overlaps with
-    #     else:
-    #         face_uv_hashes[uv_hash] = face.index  # Store UV hash and face index
-    #
-    # if overlapping_faces:
-    #     # print(f"Overlapping UVs found on faces: {sorted(overlapping_faces)}")  # Print result
-    #     print("Overlapping UVs found on faces:")  # Print result
-    #     bm.free()  # Free the BMesh
-    #     return True
-    # else:
-    #     print("No overlapping UVs detected.")  # Print result
-    #     bm.free()  # Free the BMesh
-    #     return False
-
-
-
 def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
     pickup_trace = _get_pickup_trace()
     auto_uv_total_start = time.perf_counter()
@@ -12733,41 +10160,16 @@ def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
         if pickup_trace:
             pickup_trace.action("auto_uv.total", auto_uv_total_start, detail="disabled_by_preference")
         return{'FINISHED'}
-
-    # print("OOOOOOOOO",activeobj, objselection)
-    # context = None
-    # event = None
-    # for i in args:
-    #     if type(i).__name__ == "Context": context = i
-    #     elif type(i).__name__ == "Event": event = i
-
-    # current_mode = bpy.context.object.mode
-    # hairlist = []
-    # unselected_siblings_list = []
     surface_to_reUV = []
     collect_surfaces_start = time.perf_counter()
-    # IF ITS A CURVE, GET SIBLINGS FROM PARENT. IF IT'S A MESH: GET CHILDREN
     for obj in objselection:
         if obj.type == "CURVES":
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                    # if obj not in hairlist: hairlist.append(obj)
                     if obj.parent and obj.parent.type == "MESH":
                         if obj.parent not in surface_to_reUV: surface_to_reUV.append(obj.parent)
-                        # for child in obj.parent.children:
-                        #     if child.type == "CURVES":
-                        #         for modif in child.modifiers:  # modifier.name == "GeometryNodes"
-                        #             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                        #                 if child not in hairlist: hairlist.append(child)
-                        #                 if child not in objselection and child not in unselected_siblings_list: unselected_siblings_list.append(child)
-
-
         elif obj.type == "MESH":
             if obj not in surface_to_reUV: surface_to_reUV.append(obj)
-            # for child in obj.children:
-            #     if child.type == "CURVES":
-            #         for modif in child.modifiers:  # modifier.name == "GeometryNodes"
-            #             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and child not in hairlist: hairlist.append(child)
     if pickup_trace:
         pickup_trace.action("auto_uv.collect_surfaces", collect_surfaces_start, detail=f"surfaces={len(surface_to_reUV)}")
 
@@ -12782,92 +10184,13 @@ def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
                 if pickup_trace:
                     pickup_trace.action("auto_uv.cached_uv_reuse", terrain_scan_start, label=terrain.name, detail=f"faces={face_count}")
                 continue
-            # reproject_function(self,context,automatically_triggererd=True,activeobj=activeobj, objselection=objselection)
             reproject_start = time.perf_counter()
             reproject_function(self,context,automatically_triggererd=True,activeobj=terrain, objselection=[terrain])
             if pickup_trace:
                 pickup_trace.action("auto_uv.reproject_function", reproject_start, label=terrain.name, detail=f"faces={face_count}")
-            # print("111111111")
-            # if check_overlapping_uvs(self,context,activeobj=terrain) == True: #VERY SLOW TO PROCESS, twice as slow as reprojecting, so migh as well do that by default, MOMENTARILY FREEZER INTERFACE FOR HIGHPOLY
-            # start_time = time.perf_counter()
-            # end_time = time.perf_counter()
-            # print("@@REPROJECT Milliseconds (Ping):",(end_time - start_time) * 1000)
-            # print("#### TRIGGERED REPROJECTING UVS ###")
-
     if pickup_trace:
         pickup_trace.action("auto_uv.total", auto_uv_total_start, detail=f"surfaces={len(surface_to_reUV)}")
     return{'FINISHED'}
-# def secret_paint_new_uvs(self,context,**kwargs):
-#     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
-#     else:activeobj = bpy.context.active_object
-#     if activeobj == None: activeobj = bpy.context.active_object
-#     actual_activeobj=bpy.context.active_object
-#
-#     # context = None
-#     # event = None
-#     # for i in args:
-#     #     if type(i).__name__ == "Context": context = i
-#     #     elif type(i).__name__ == "Event": event = i
-#
-#     # SEARCH FOR THE CUSTOM UV AND THE CURRENTLY ACTIVE UV
-#     previously_active_UV = None
-#     previously_active_UV_rendering = None
-#     custom_uv = None
-#     for UV in activeobj.data.uv_layers:
-#         if UV.active: previously_active_UV = UV  # saves performance: no need to set the active uv again if the custom auto uv was already the active one
-#         if UV.active_render: previously_active_UV_rendering = UV  # saves performance: no need to set the active uv again if the custom auto uv was already the active one
-#         if UV.name == "Secret Paint Auto UV": custom_uv = UV
-#
-#     uv_to_reproject = previously_active_UV_rendering
-#
-#
-#     if activeobj.data.library:
-#         self.report({'INFO'}, "Snapped the hair to the closest surface, but couldn't create new UVs since the object's geometry is linked from another .Blend file")
-#
-#     else:
-#
-#         bpy.context.view_layer.objects.active = activeobj #make active the one that needs to be edited
-#
-#         #CREATE IT IF NECESSARY
-#         if custom_uv==None: custom_uv = activeobj.data.uv_layers.new(name="Secret Paint Auto UV")
-#
-#         ####### IF THE CUSTOM UV IS STILL "NONE" IS BECAUSE IT COULDN'T BE CREATED SINCE THERE WERE ALREADY 8 UVS, BLENDER OBJECTS LIMITATION
-#         if custom_uv == None: uv_to_reproject = previously_active_UV_rendering
-#         else: uv_to_reproject = custom_uv
-#
-#
-#         #CHANGE ACTIVE UV BEFORE REPROJECTING
-#         changed_active_uv_so_restore_is_needed = False
-#         if previously_active_UV != uv_to_reproject:
-#             # print("22222222",previously_active_UV.name,"<previous .  changing active UV, uv to reproj:", uv_to_reproject.name)
-#             uv_to_reproject.active=True #only need to activate it if there was another active UV
-#             changed_active_uv_so_restore_is_needed =True
-#
-#         #AUTO REPROJECT THE ACTIVE UV
-#         bpy.context.view_layer.objects.active = activeobj
-#         for x in bpy.context.selected_objects: x.select_set(False)
-#         for window in context.window_manager.windows:
-#             screen = window.screen
-#             for area in screen.areas:
-#                 if area.type == 'VIEW_3D':
-#                     with context.temp_override(window=window, area=area):
-#                         # bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-#                         restoremode = bpy.context.object.mode
-#                         if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
-#                         bpy.ops.mesh.select_all(action='SELECT')
-#                         bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-#                         # bpy.ops.uv.smart_project(angle_limit=1.7, island_margin=0.1, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-#                         if restoremode != "EDIT": bpy.ops.object.mode_set(mode=restoremode)
-#                         # self.report({'INFO'}, "Smart UV Project 2")
-#                     break
-#         bpy.context.view_layer.objects.active = actual_activeobj
-#
-#         if changed_active_uv_so_restore_is_needed and previously_active_UV:
-#             previously_active_UV.active=True #restore previously active uv (only if it wasn't the custom uv, just to save performance) doesn't need to restore anything if there were no UVS before this function was executed
-#             # print("KKKKKKKKKKKKKKK",previously_active_UV.name,previously_active_UV.active)
-#
-#
-#     return uv_to_reproject
 def reproject_function(self,context,**kwargs):
     start_time = time.perf_counter()
 
@@ -12882,20 +10205,11 @@ def reproject_function(self,context,**kwargs):
     actualactiveobj = bpy.context.active_object
     changed_active_obj_so_restore_is_needed = False
     changed_selected_objs_so_restore_is_needed = False
-
-    # context = None
-    # event = None
-    # for i in args:
-    #     if type(i).__name__ == "Context": context = i
-    #     elif type(i).__name__ == "Event": event = i
-
     current_mode = bpy.context.object.mode
     dyntopo_status = activeobj.use_dynamic_topology_sculpting
     hairlist = []
     unselected_siblings_list = []
     surface_to_reUV = []
-
-    # IF ITS A CURVE, GET SIBLINGS FROM PARENT. IF IT'S A MESH: GET CHILDREN
     for obj in objselection:
         if obj.type == "CURVES":
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
@@ -12917,26 +10231,8 @@ def reproject_function(self,context,**kwargs):
                 if child.type == "CURVES":
                     for modif in child.modifiers:  # modifier.name == "GeometryNodes"
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and child not in hairlist: hairlist.append(child)
-
-    ########################################
-
-
-
-
-
-
-
-
-
-
-
-    ########  CREATE NEW UVS  ########   (changes active object and selection)
-
     if surface_to_reUV:
         for surface in surface_to_reUV:
-            # secret_paint_new_uvs(self, context, activeobj=surface)
-
-            # SEARCH FOR THE CUSTOM UV AND THE CURRENTLY ACTIVE UV
             previously_active_UV = None
             previously_active_UV_rendering = None
             custom_uv = None
@@ -12946,17 +10242,11 @@ def reproject_function(self,context,**kwargs):
                 if UV.name == SECRET_PAINT_AUTO_UV_NAME: custom_uv = UV
 
             uv_to_reproject = previously_active_UV_rendering
-
-            #CAN'T CREATE NEW UVS IF THE MESH DATA IS LINKED
             if surface.data.library:
                 if not automatically_triggererd: self.report({'INFO'}, "Snapped the hair to the closest surface, but couldn't create new UVs since the object's geometry is linked from another .Blend file")
 
             else:
-
-                # CREATE IT IF NECESSARY
                 if custom_uv == None: custom_uv = surface.data.uv_layers.new(name=SECRET_PAINT_AUTO_UV_NAME)
-
-                ####### IF THE CUSTOM UV IS STILL "NONE" IS BECAUSE IT COULDN'T BE CREATED SINCE THERE WERE ALREADY 8 UVS, BLENDER OBJECTS LIMITATION
                 if custom_uv == None:
                     uv_to_reproject = previously_active_UV_rendering
                 else:
@@ -12971,16 +10261,10 @@ def reproject_function(self,context,**kwargs):
                     if custom_uv:
                         uv_to_reproject = custom_uv
                 else:
-                    # CHANGE ACTIVE UV BEFORE REPROJECTING
                     changed_active_uv_so_restore_is_needed = False
                     if previously_active_UV != uv_to_reproject:
-                        # print("22222222",previously_active_UV.name,"<previous .  changing active UV, uv to reproj:", uv_to_reproject.name)
                         uv_to_reproject.active = True  # only need to activate it if there was another active UV
                         changed_active_uv_so_restore_is_needed = True
-
-                    # AUTO REPROJECT THE ACTIVE UV
-                    # bpy.context.view_layer.objects.active = activeobj
-                    # for x in bpy.context.selected_objects: x.select_set(False)
                     print("REPROJIIIIIII", surface)
                     manual_reproject_succeeded = False
                     try:   # FAILS WHEN PAINTING FROM THE ASSET LIBRARY
@@ -12994,49 +10278,24 @@ def reproject_function(self,context,**kwargs):
                                         if bpy.context.active_object != surface:
                                             bpy.context.view_layer.objects.active = surface  # make active the one that needs to be edited
                                             changed_active_obj_so_restore_is_needed =True
-                                        # bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
                                         restoremode = bpy.context.object.mode
                                         if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
                                         bpy.ops.mesh.select_all(action='SELECT')
                                         bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-                                        # bpy.ops.uv.smart_project(angle_limit=1.7, island_margin=0.1, area_weight=1, correct_aspect=True, scale_to_bounds=True)
                                         if restoremode != "EDIT": bpy.ops.object.mode_set(mode=restoremode)
-                                        # self.report({'INFO'}, "Smart UV Project 2")
                                     break
                         manual_reproject_succeeded = True
                     except: print("FAILED TO REPROJECT THE UV")
 
                     if manual_reproject_succeeded:
                         _secret_paint_store_auto_uv_cache(surface.data)
-
-                    # if changed_active_uv_so_restore_is_needed and previously_active_UV:
-                    #     previously_active_UV.active = True  # restore previously active uv (only if it wasn't the custom uv, just to save performance) doesn't need to restore anything if there were no UVS before this function was executed
-                    #     # print("KKKKKKKKKKKKKKK",previously_active_UV.name,previously_active_UV.active)
-
-                    # previously_active_UV_rendering.active = True  #CREATING NEW UVS INVALIDATES THE UV VARIABLES PREVIOUSLY SAVED???????? FOR NOW BRUTE FORCE CYCLE THROUGH AND ACTIVATE
                     for UVV in surface.data.uv_layers:
                         if UVV.active_render:
                             UVV.active = True
                             break
-
-            # if changed_active_uv_so_restore_is_needed and previously_active_UV:
-            #     previously_active_UV.active = True  # restore previously active uv (only if it wasn't the custom uv, just to save performance) doesn't need to restore anything if there were no UVS before this function was executed
-            #     # print("KKKKKKKKKKKKKKK",previously_active_UV.name,previously_active_UV.active)
-
-
-
-
-
-
-
-
     if hairlist:
-
-        # RESET SURFACE HAIR FROM PARENT
         for ob in hairlist:
             ob.data.surface = ob.parent
-
-            # RESET UVS
             active_render_UV = None
             custom_uv = None
             for uvmap in ob.data.surface.data.uv_layers:  # bpy.context.object.data.uv_layers['UVMap.001'].active = True
@@ -13046,10 +10305,6 @@ def reproject_function(self,context,**kwargs):
                 ob.data.surface_uv_map = custom_uv
             elif active_render_UV:
                 ob.data.surface_uv_map = active_render_UV
-
-
-        #SNAP HAIR TO CLOSEST SURFACE (changes active object and selection)    (only if called manually. don't want to snap hair automatically)
-        # if not automatically_triggererd:
         for x in objselection: bpy.data.objects[x.name].select_set(False)
         changed_selected_objs_so_restore_is_needed = True
         loop = 0
@@ -13062,13 +10317,6 @@ def reproject_function(self,context,**kwargs):
 
                 bpy.data.objects[ob.name].select_set(True)
                 bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
-        # RESTORE SELECTION
-        # for x in objselection: bpy.data.objects[x.name].select_set(True)
-        # if activeobj != bpy.context.view_layer.objects.active: bpy.context.view_layer.objects.active = activeobj
-
-
-
-    #RESTORE SELECTION and ACTIVE OBJ
     if not automatically_triggererd:
         if current_mode == "SCULPT_CURVES":
             for ob in hairlist: ob.select_set(False)
@@ -13080,46 +10328,12 @@ def reproject_function(self,context,**kwargs):
     else:
         if changed_active_obj_so_restore_is_needed: bpy.context.view_layer.objects.active = actualactiveobj
         if changed_selected_objs_so_restore_is_needed:
-            # for xx in actualobjselection: xx.select_set(False)
             for ob in bpy.context.selected_objects:
                 if ob not in actualobjselection: ob.select_set(False)
             for xx in actualobjselection: xx.select_set(True)
-
-    # for UVV in surface.data.uv_layers:
-    #     UVV.active = True
-
-
-    # APPLYING SCALE AT LOW LEVEL HAS STRANGE EFFECT ON SCALE, PROBABLY BECAUSE OF REFERENCE MATRIX
-    # mw = ob.matrix_world
-    # mb = ob.matrix_basis
-    # loc, rot, scale = mb.decompose()
-    # # rotation
-    # T = Matrix.Translation(loc)
-    # R = rot.to_matrix().to_4x4()
-    # S = Matrix.Diagonal(scale).to_4x4()
-    #
-    # if hasattr(ob.data, "transform"):
-    #     # ob.data.transform(R)
-    #     ob.data.transform(S)
-    #
-    # for c in ob.children:
-    #     # c.matrix_local = R @ c.matrix_local
-    #     c.matrix_local = S @ c.matrix_local
-    #
-    # # ob.matrix_basis = T @ S
-    # ob.matrix_basis = R @ T
-
-    # bpy.ops.object.select_all(action='DESELECT')
-    # RESTORE SELECTION
-    # bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-    # bpy.data.objects[activeobj.name].select_set(True)
-    # for x in objselection:  # for x in bpy.context.selected_objects:
-    #     bpy.data.objects[x.name].select_set(True)
-
     end_time = time.perf_counter()
 
     print(f"@@@ Reprojected UVs: reproject_function,snap hair to closest surface:{not automatically_triggererd}", "Milliseconds:",(end_time - start_time) * 1000)
-    # self.report({'INFO'}, "Reprojected UVs")  # need to add (self, context) in the function
     return {'FINISHED'}
 class clean_hair_orencurve(bpy.types.Operator):
     """When the terrain has incorrect UVs, for example after sculpting the terrain with dynamic topology, use this to quickly recreate the UVs. This is needed in order to be able to paint manually (geometry node hair limitation; only needed for manual painting, not for the procedural distribution). Also snaps hair to the closest surfaces"""
@@ -13141,133 +10355,22 @@ def context283482(self,context,**kwargs):    #### orengroup ###
 
     activeobj = bpy.context.active_object
     objs = bpy.context.selected_objects
-
-
-
-    # for window in context.window_manager.windows:
-    #     screen = window.screen
-    #     for area in screen.areas:
-    #         if area.type == 'VIEW_3D':
-    #             with context.temp_override(window=window, area=area):
-
-    # List of object references
     if Importing_Into_Active:
         objs.remove(activeobj) #avoid reprocessing the active object if we're just bringing other objects into the active's collection
         activeobj.select_set(False)
-
-
-    # # fix axis brush obj for selected objects
-    # for x in bpy.context.selected_objects:
-    #     x.track_axis = 'POS_Z'
-    # # x is replacing:   bpy.context.object
-
-    # if bpy.context.view_layer.objects.active == None:
-    #     for x in bpy.context.selected_objects:
-    #         bpy.context.view_layer.objects.active = x
-
-
-    # save name of active obect to rename collection later
     orengroupfirst = bpy.context.active_object
     orengroupfirstName = orengroupfirst.name
-
-    # # cursor to active object
-    # bpy.ops.view3d.snap_cursor_to_active()
-
-    # select collection that contains current active object // just use active collection for now
     C = bpy.context
     active_coll = C.view_layer.active_layer_collection.collection
-
-    # # save name of active collection for instancing later
-    # reselparentcoll = bpy.context.view_layer.active_layer_collection
-    # #other method
-    # #colselection1=bpy.context.view_layer.active_layer_collection.collection
-    # #colselection1Name = bpy.data.collections.get(colselection1.name)
-    # #print(colselection1Name)
-
     if Importing_Into_Active == False:
         coll_target = bpy.data.collections.new(orengroupfirstName) # create children collection named as active object  #orengroupfirstnewcoll
         active_coll.children.link(coll_target) # link collection to make it appear in the parent
-
-        # #select orengroupfirstnewcoll as active collection
-        # bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.active_layer_collection.children[orengroupfirstnewcoll.name]
-
-        # coll_target = bpy.context.collection          # Set target collection based on the collection in context (selected)
-        #  = orengroupfirstnewcoll          # Set target collection based on the collection in context (selected)
-        #coll_target = C.scene.collection.children.get("new")  # other method: Set target collection to a known collection
-
-
-    # If target found and object list not empty
     if coll_target and objs:
-
-        # # Loop through all objects and their children
-        # for ob in objs[:]:
-        #     for children in ob.children_recursive:
-        #         if children not in objs: objs.append(children)
-
         for ob in objs:
             for coll in ob.users_collection:
                 coll.objects.unlink(ob) # Unlink the object
             coll_target.objects.link(ob) # Link each object to the target collection
             ob.select_set(True)
-
-
-
-
-
-
-
-    # # RECENTER COLLECTION INSTANCES
-    # if Importing_Into_Active == False: orengrouprecentercollectionobj_function(context, objselection=objs)
-
-    # # set instance offset from cursor, force outliner context command?
-    # #bpy.ops.object.instance_offset_from_cursor
-    # bpy.data.collections[orengroupfirstnewcoll.name].instance_offset[0] = bpy.context.scene.cursor.location[0]
-    # bpy.data.collections[orengroupfirstnewcoll.name].instance_offset[1] = bpy.context.scene.cursor.location[1]
-    # bpy.data.collections[orengroupfirstnewcoll.name].instance_offset[2] = bpy.context.scene.cursor.location[2]
-
-
-
-
-    # # reselect original coll as active collection
-    # bpy.context.view_layer.active_layer_collection = reselparentcoll
-
-
-    # #reselect original object
-    # bpy.context.view_layer.objects.active = bpy.data.objects[orengroupfirstName]
-    # bpy.data.objects[orengroupfirstName].select_set(True)
-
-
-
-
-
-    # if context.scene.mypropertieslist.checkboxorengroupinstance:  #INSTANCE COLL WHILE GROUPING
-    #
-    #
-    #     # create and select collection instance
-    #     source_collection = bpy.data.collections[orengroupfirstnewcoll.name]
-    #     instance_obj = bpy.data.objects.new(name=orengroupfirstName, object_data=None)
-    #     instance_obj.location = bpy.context.scene.cursor.location # snap to cursor
-    #     instance_obj.instance_collection = source_collection
-    #     instance_obj.instance_type = 'COLLECTION'
-    #     parent_collection = bpy.context.view_layer.active_layer_collection
-    #     parent_collection.collection.objects.link(instance_obj)
-    #
-    #     # deselect all objs
-    #     bpy.ops.object.select_all(action='DESELECT')
-    #     # select instance object
-    #     # bpy.context.view_layer.objects.active = bpy.data.objects[orengroupfirstnewcoll.name]
-    #     # instance_obj.select_set(True)
-    #     bpy.data.objects[instance_obj.name].select_set(True) #select it
-    #     bpy.context.view_layer.objects.active = bpy.data.objects[instance_obj.name]  #make active
-    #
-    #     # enter translate mode
-    #     # bpy.ops.transform.translate('INVOKE_DEFAULT')
-    #
-    #     ### end of orengroup ###
-    #
-    #     bpy.data.objects[instance_obj.name].location = (orengroupfirst.location[0], orengroupfirst.location[1], orengroupfirst.location[2]+orengroupfirst.dimensions[2])
-
-# break
     self.report({'INFO'}, "Added to collection of active")
 
     return {"FINISHED"}
@@ -13295,7 +10398,6 @@ def _tool_settings_from_context(context):
 
 
 def _set_weight_paint_value(context, value):
-    # Blender has moved this value between tool settings and the active brush across versions.
     tool_settings = _tool_settings_from_context(context)
     if tool_settings == None:
         return False
@@ -13341,7 +10443,6 @@ def _get_weight_paint_value(context, default=1.0):
 
 
 def brush_vertex_paint(activeobj,objselection,vertex_group,context):
-    # print(vertex_group)
     pickup_trace = _get_pickup_trace()
     brush_vertex_paint_start = time.perf_counter()
     mode_set_start = time.perf_counter()
@@ -13360,15 +10461,11 @@ def brush_vertex_paint(activeobj,objselection,vertex_group,context):
     bpy.ops.object.vertex_group_set_active(group=vertex_group)  # bpy.context.scene.tool_settings.vertex_group_weight = surfaceobj.vertex_groups.get(biomename).index
     if pickup_trace:
         pickup_trace.action("brush_vertex_paint.set_active_group", set_group_start, detail=f"group={vertex_group}")
-    # active_object.vertex_groups.active.name
-    # bpy.ops.object.vertex_group_set_active(group="Biome1")  # bpy.context.scene.tool_settings.vertex_group_weight = surfaceobj.vertex_groups.get(biomename).index
-
     activeobj.modifiers[0]["Input_69"] = True  # ENABLE NOISE SCATTER
     activeobj.location = activeobj.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
     if pickup_trace:
         pickup_trace.action("brush_vertex_paint.total", brush_vertex_paint_start, detail=f"group={vertex_group}; active={activeobj.name if activeobj else 'None'}")
 def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton=False, being_transferred_to_newmesh=False,**kwargs):
-    # print("JOOOOOOOOOOOOOOOOOOOOOO",NoMasksDetected)
     pickup_trace = _get_pickup_trace()
     vertexgrouppaint_start = time.perf_counter()
     if bpy.context.object.mode != "OBJECT":
@@ -13386,8 +10483,6 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
 
     if "called_for_entire_biome" in kwargs: called_for_entire_biome = kwargs.get("called_for_entire_biome")
     else: called_for_entire_biome = False
-
-    #when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
     if called_for_entire_biome == False: #IGNORE WHEN CALLED FOR THE ENTIRE BIOME (hair_in_bgroup[0] might not correspond with actual active object)
         if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
 
@@ -13397,13 +10492,6 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
 
     if "paint_the_vertex" in kwargs: paint_the_vertex = kwargs.get("paint_the_vertex")
     else: paint_the_vertex = True
-
-    # objselection = bpy.context.selected_objects
-    # activeobj = bpy.context.active_object  #   bpy.data.objects["armature"]     bpy.context.object["armature"]     <bpy_struct, Object("left") at 0x000001C2D10E5608>
-
-
-    # if activeobj.type=="CURVES": surfaceobj = activeobj.data.surface
-    # else: surfaceobj = activeobj
     if activeobj.type!="CURVES":
         self.report({'WARNING'}, "Active object is not a hair curve")
         return {"CANCELLED"}
@@ -13431,17 +10519,10 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
             collect_selection_start,
             detail=f"selected_hair={len(only_hair_from_selected)}; vertex_groups={len(all_vertex_groups)}; remove={remove_vgroup}; transfer={being_transferred_to_newmesh}",
         )
-    #############################################################################################
-
-    #TRANSFERRED BIOME, deal with vertex groups
     if being_transferred_to_newmesh:
-        # print("---------vertexgrouppaint_functin TRANSFERRRR")
-
         if all_vertex_groups: #if there are any vertex groups
             sameVgroup_forAllHair = True
             for vgroup in all_vertex_groups:
-
-                # create vgroup incrementally, with all vertex assigned
                 numb = 1
                 while surfaceobj.vertex_groups.get("Biome" + str(numb)): numb += 1
                 biomename = "Biome" + str(numb)
@@ -13451,7 +10532,6 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
 
                 loopN=1
                 for hair in only_hair_from_selected[:]:
-                # for hair in only_hair_from_selected:
                     loopN += 1
                     if vgroup == hair.modifiers[0]["Input_83_attribute_name"]:
 
@@ -13459,29 +10539,15 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                         hair.modifiers[0]["Input_69"] = True
 
                         if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] =True #1 # TURN ON ATTRIBUTE
-                        # if hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] == False:  # TURN ON ATTRIBUTE
-                        #     bpy.data.objects[hair.name].select_set(True)
-                        #     bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
-                        #     bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")  # hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] = True
                         hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
                         only_hair_from_selected.remove(hair) #remove processed hair from list for future vgroup loops, possiblity of overlapping names (biome1 gets created but it already existed in one of hair, so it worngfully matches with the newly created vgroup)
                     else: sameVgroup_forAllHair=False
-            # print("KKKKKKKKKKKKKKKKKKKKKKK",)
             if sameVgroup_forAllHair and NoMasksDetected and paint_the_vertex:   #go to paint mode if all hair have same vgroup: and no masks detected
                 bpy.data.objects[surfaceobj.name].select_set(True)
                 bpy.context.view_layer.objects.active = surfaceobj #select terrain
                 for i in range(len(surfaceobj.data.vertices)):
                     new_vertex_group.add([i], 0.0, 'REPLACE')
                 brush_vertex_paint(activeobj, objselection, biomename, context)
-        ############################variables
-
-
-
-
-
-
-    #BUTTON: if one selected hair: remove vertex
-    # elif calledfrombutton and len(objselection)==1 and activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"] and activeobj.modifiers["GeometryNodes"]["Input_69"]==True:       #activeobj.modifiers["GeometryNodes"]["Input_83_use_attribute"]:
     elif remove_vgroup:
         remove_vgroup_start = time.perf_counter()
         removed_vgroups=[]
@@ -13492,8 +10558,6 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
             if hair.modifiers[0]["Input_83_use_attribute"] == True: hair.modifiers[0]["Input_83_use_attribute"] = False  # TURN OFF ATTRIBUTE
             hair.location = hair.location
             if hair.parent: parent_of_hair=hair.parent
-
-        #CLEANUP UNUSED VGROUPS     # if parent_of_hair:
         all_Vgroups_used_in_biome=[]
         for child in parent_of_hair.children:
             if child.type == "CURVES" and child.modifiers or child.type == "CURVE" and child.modifiers:
@@ -13504,40 +10568,17 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
             if g not in all_Vgroups_used_in_biome: parent_of_hair.vertex_groups.remove(parent_of_hair.vertex_groups.get(g))
         if pickup_trace:
             pickup_trace.action("vertexgrouppaint.remove_vgroup", remove_vgroup_start, detail=f"removed={len(removed_vgroups)}")
-
-
-
-
-
-
-
-
-    #scatter Q SHORTCUT: vgroup NOT USED in modifier: create, share, paint
     elif activeobj.modifiers[0]["Input_83_use_attribute"]==False:
-    # elif len(objselection) >=2 and activeobj.modifiers["GeometryNodes"]["Input_83_use_attribute"]==0: #and activeobj.modifiers["GeometryNodes"]["Input_69"]==False:
-    # elif activeobj.modifiers["GeometryNodes"]["Input_83_use_attribute"]==0 and activeobj.modifiers["GeometryNodes"]["Input_69"]==True:
-    #     print("---------vertexgrouppaint_functon 1111111111111111111")
         create_vgroup_start = time.perf_counter()
-        #create vgroup
         numb = 1
         while surfaceobj.vertex_groups.get("Biome"+str(numb)): numb += 1
         biomename = "Biome"+str(numb)
         surfaceobj.vertex_groups.new(name=biomename)
-
-        #assign it
-        # print("ooooooooo",only_hair_from_selected)
         for hair in only_hair_from_selected:
-             #TURN ON ATTRIBUTE
             hair.modifiers[0]["Input_83_attribute_name"] = biomename
             hair.modifiers[0]["Input_69"] = True
             if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  # TURN ON ATTRIBUTE
-            # if hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] == False: #TURN ON ATTRIBUTE
-            #     bpy.data.objects[hair.name].select_set(True)
-            #     bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
-            #     bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")   # hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] = True
             hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
-
-        # paint mode
         bpy.data.objects[surfaceobj.name].select_set(True)  # select it   #BONES bpy.data.objects[c.id_data.name].pose.bones[bone.name].bone.select = False
         bpy.context.view_layer.objects.active = surfaceobj  # make active
         brush_vertex_paint(activeobj,objselection,biomename, context)
@@ -13547,36 +10588,16 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                 create_vgroup_start,
                 detail=f"group={biomename}; assigned_hair={len(only_hair_from_selected)}",
             )
-
-        #clean unassigned biomes by checking siblings?
-
-
-    #scatter Q SHORTCUT: share active vgroup, paint
     elif len(all_vertex_groups) >= 1 and vertex_ofParent:
-    # elif len(all_vertex_groups) >= 1 and activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"] and surfaceobj.vertex_groups.get(activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"]):
-    # elif len(all_vertex_groups) >= 1 and surfaceobj.vertex_groups.get(activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"]):
-    # elif len(all_vertex_groups) >= 1 and surfaceobj.vertex_groups.get(biomeofactive):
-    #     print("---------vertexgrouppaint_funcion 222222222222")
         share_vgroup_start = time.perf_counter()
-
-        #share vgroup from active (not needed if only one selected)
         if len(only_hair_from_selected)!=1:
             for hair in only_hair_from_selected:
-                # hair.modifiers["GeometryNodes"]["Input_83_attribute_name"] = activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"]
                 hair.modifiers[0]["Input_83_attribute_name"] = biomeofactive
                 hair.modifiers[0]["Input_69"] = True
                 if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  # TURN ON ATTRIBUTE
-                # if hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] == False: #TURN ON ATTRIBUTE
-                #     bpy.data.objects[hair.name].select_set(True)
-                #     bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]  # make active
-                #     bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")
                 hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
-
-        # go to paint mode with the found vertex group
-        # bpy.data.objects[surfaceobj.name].eselect_set(True)  # select it   #BONES bpy.data.objects[c.id_data.name].pose.bones[bone.name].bone.select = False
         for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
         bpy.context.view_layer.objects.active = surfaceobj  # make active
-        # brush_vertex_paint(activeobj,objselection,activeobj.modifiers["GeometryNodes"]["Input_83_attribute_name"], context)
         brush_vertex_paint(activeobj,objselection,biomeofactive,context)
         if pickup_trace:
             pickup_trace.action(
@@ -13598,7 +10619,6 @@ class vertexgrouppaint(bpy.types.Operator):
     bl_label = "Weight Paint"
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
 
         _secret_paint_panel_exit_paint_mode(context)
@@ -13614,7 +10634,6 @@ class vertexgrouppaint_biome(bpy.types.Operator):
     bl_label = "Weight Paint"
     bl_options = {'REGISTER', 'UNDO'}
     object_biome: bpy.props.StringProperty()
-    # def execute(self, context):
     def invoke(self, context, event):
 
         _secret_paint_panel_exit_paint_mode(context)
@@ -13630,19 +10649,14 @@ class vertexgrouppaint_biome(bpy.types.Operator):
                         for modifier in hai.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
                                 hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
-            #ELIF MASK or BRUSH SELECTED or PARENTED TO TERRAIN
             elif obj.type=="MESH" or obj.type=="EMPTY":
                 for hayr in bpy.context.scene.objects:
-                # for hayr in obj.children:  #only terrain selected, lighter to calculate bc doesn't have to iterate in whole scene, but can't select mask and brushobj
                     if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                         for modifier in hayr.modifiers: #if mask selected, if brush obj selected, if terrain selected
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
                             or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
                             or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
                                 hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-            # # all_bgroups=[]
-            # for hayr in hair[:]:
-            #     # if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
             hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
 
 
@@ -13675,10 +10689,6 @@ def orencurveselectobj_function(self,context, **kwargs):
                 layer_collection = bpy.context.view_layer.layer_collection  # bpy.context.scene.collection
                 Coll_of_Active = recurLayerCollection(layer_collection, i.name)
                 if Coll_of_Active and Coll_of_Active.name not in all_colls_used_as_brush: all_colls_used_as_brush.append(Coll_of_Active.name)
-    ####################################################################
-
-
-    #GET HAIR FROM MESH or drawn curve
     if len(all_selected_meshes)==len(objselection):
         for obj in bpy.context.scene.objects:
             if obj.type in ["CURVES","CURVE"]:  #if obj.type == "CURVES":
@@ -13688,20 +10698,11 @@ def orencurveselectobj_function(self,context, **kwargs):
                             if modif.node_group:
                                 if modif.node_group.name.startswith("Secret Paint"):
                                     if modif["Input_9"] and modif["Input_9"].name in all_colls_used_as_brush:
-                                        # if modif["Input_9"].name == Coll_of_Active.name:
-                                            # bpy.data.objects[activeobj.name].select_set(False)
                                             bpy.data.objects[obj.name].select_set(True)
                                             bpy.context.view_layer.objects.active = bpy.data.objects[obj.name]  # make active
-                                            # bpy.ops.view3d.view_selected(use_all_regions=True)
-                                            # bpy.data.objects[activeobj.name].select_set(True)
                                     if modif["Input_2"] and modif["Input_2"] in objselection:
-                                        # bpy.data.objects[activeobj.name].select_set(False)
                                         bpy.data.objects[obj.name].select_set(True)
                                         bpy.context.view_layer.objects.active = bpy.data.objects[obj.name]  # make active
-                                        # bpy.ops.view3d.view_selected(use_all_regions=True)
-                                        # bpy.data.objects[activeobj.name].select_set(True)
-
-    #GET MESH FROM HAIR or drawn curve
     elif len(all_selected_curves)==len(objselection):
         for objj in objselection: objj.select_set(False) #DESELECT ORIGINAL
         for obj in objselection:
@@ -13718,105 +10719,18 @@ def orencurveselectobj_function(self,context, **kwargs):
                                                 bpy.context.view_layer.objects.active = ob
                                                 bpy.ops.view3d.view_selected(use_all_regions=True)
                                             elif len(objselection)==1:
-                                                # activeobj.select_set(False)
                                                 ob.select_set(True)
                                                 bpy.context.view_layer.objects.active = ob
                                                 bpy.ops.view3d.view_selected(use_all_regions=True)
-                                                # activeobj.select_set(True)
-
                                     if modif["Input_2"]:
                                         if len(objselection)>=2:
                                             modif["Input_2"].select_set(True)
                                             bpy.context.view_layer.objects.active = modif["Input_2"]
                                             bpy.ops.view3d.view_selected(use_all_regions=True)
                                         elif len(objselection)==1:
-                                            # activeobj.select_set(False)
                                             modif["Input_2"].select_set(True)
                                             bpy.context.view_layer.objects.active = modif["Input_2"]
                                             bpy.ops.view3d.view_selected(use_all_regions=True)
-                                            # activeobj.select_set(True)
-
-                                        # # bpy.data.objects[activeobj.name].select_set(False)
-                                        # bpy.context.view_layer.objects.active = modif["Input_2"]
-                                        # bpy.data.objects[modif["Input_2"].name].select_set(True)  # select it
-                                        # # bpy.ops.view3d.view_selected(use_all_regions=True)
-                                        # # bpy.data.objects[activeobj.name].select_set(True)
-
-
-
-
-
-
-
-
-
-
-
-        # SELECT BAKE EMPTY TEMP
-
-        # elif activeobj.type == "EMPTY" and activeobj.name.startswith("oren"):
-        #     activeobj = bpy.context.active_object
-        #
-        #     #LIST ALL BONES IN SCENE
-        #     objsReferencingEmpty =[]
-        #     armaturesReferencingEmpty =[]
-        #     bonesReferencingEmpty =[]
-        #     allBonesinfile =[]
-        #     try:  # try because there might not be any armatures in the scene
-        #         bpy.ops.object.select_all(action='DESELECT')  # find all bones in the scene for booleanlist
-        #         for obj in bpy.context.scene.objects:
-        #             obj.select_set(obj.type == "ARMATURE")
-        #             for obj in bpy.context.selected_objects:
-        #                 bpy.context.view_layer.objects.active = obj
-        #         bpy.ops.object.posemode_toggle()  # enter pose mode
-        #         allBonesinfile = bpy.context.visible_pose_bones  # all visible bones in blend file
-        #
-        #         for bone in allBonesinfile: #select all bones with orenconstraint if they reference active empty
-        #             for c in bone.constraints:
-        #                 if c.name.startswith("orenChild") and bone.constraints[c.name].target == activeobj:  # if 'oren' in c.name:   #if 'oren' not in c.name:
-        #                     # bpy.data.objects[c.id_data.name].pose.bones[c.name].bone.select = True
-        #                     bonesReferencingEmpty.append(bone)
-        #                     armaturesReferencingEmpty.append(bpy.data.objects[c.id_data.name])
-        #
-        #         bpy.ops.object.posemode_toggle()  # enter pose mode
-        #         bpy.ops.object.select_all(action='DESELECT')
-        #     except: pass
-        #
-        #
-        #
-        #     #select all obj with orenconstraint referencing active empty
-        #     for ob in bpy.context.scene.objects:
-        #         for c in ob.constraints:
-        #             if c.name.startswith("orenChild") and ob.constraints[c.name].target == activeobj:  # if 'oren' in c.name:   #if 'oren' not in c.name:
-        #                 bpy.data.objects[ob.name].select_set(True)
-        #                 objsReferencingEmpty.append(ob)
-        #                 bpy.context.view_layer.objects.active = ob
-        #                 # allEmptiesActiveafterCleanup.append(ob.constraints[c.name].target)
-        #
-        #     #select armatures if any, deselect only their bones and select pertinent ones (preserving selection of other armatures)
-        #     if armaturesReferencingEmpty:
-        #         for armat in armaturesReferencingEmpty:
-        #             bpy.data.objects[armat.name].select_set(True)
-        #             bpy.context.view_layer.objects.active = armat
-        #         bpy.ops.object.mode_set(mode="POSE")
-        #         bpy.ops.pose.select_all(action='DESELECT')
-        #         for bone in bonesReferencingEmpty:
-        #             # bpy.data.objects[c.id_data.name].pose.bones[c.name].bone.select = True
-        #             bone.bone.select = True
-        #
-        #     # print("bones", bonesReferencingEmpty)
-        #     # print("armatures", armaturesReferencingEmpty)
-        #     # print("objs", objsReferencingEmpty)
-        #     if objsReferencingEmpty or bonesReferencingEmpty:   #reselect original if nothing is found
-        #         self.report({'INFO'}, "Selected obj and bones constrained to this empty")
-        #     else:
-        #         self.report({'WARNING'}, "No constraints are using this empty")
-        #         bpy.ops.object.select_all(action='DESELECT')  # bpy.ops.pose.select_all(action='DESELECT')
-        #         bpy.data.objects[activeobj.name].select_set(True)  # select it
-        #         bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-
-
-
     return {'FINISHED'}
 class orencurveselectobj(bpy.types.Operator):
     """For orenpaint and Hair scattering: selects brush object. If mesh selected: select all biomes that are using it"""
@@ -13826,20 +10740,6 @@ class orencurveselectobj(bpy.types.Operator):
     def execute(self, context):
         orencurveselectobj_function(self,context)
         return {'FINISHED'}
-
-
-
-
-
-
-
-
-#####UTILS
-
-
-
-
-
 def convert_and_join_f(self,context):
     activeobj = bpy.context.active_object
     if activeobj.type == "MESH": objtype = "MESH"
@@ -13853,12 +10753,6 @@ def convert_and_join_f(self,context):
 
     activeobjlocation = tuple(bpy.context.active_object.location)
     objselection = bpy.context.selected_objects  # bpy.context.selected_objects[0]   #bpy.context.scene.objects
-
-    # if activeobj == None: bpy.context.view_layer.objects.active = objselection[0]
-
-    # return{'FINISHED'}
-
-    # REMOVE ORIGINAL BEZIER CURVES (after applying instances, the bezier curves need to be deleted, both normal and secret paint curves)
     linked_detected_will_cause_dupli_everything = False
     all_curves=[]
     for obj in objselection:
@@ -13869,48 +10763,24 @@ def convert_and_join_f(self,context):
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                         obj.modifiers[0]["Input_50"] = True  # realize instances modifier
                         obj.location = obj.location #update
-        # if obj.type in ["CURVES", "CURVE"]:
-        #     all_curves.append(obj)
-        # try:
-        #     obj.modifiers[0]["Input_50"] = True  #realize instances modifier
-        #     obj.location = obj.location
-        # except:pass
     bpy.ops.object.duplicates_make_real()
-
-    #REMOVE ALL CURVES
     for ob in all_curves:
         bpy.data.objects.remove(ob, do_unlink=True)
     newobjselection = bpy.context.selected_objects
-
-    #REMOVE EMPTIES
     for ob in newobjselection:
         if ob.type == "EMPTY":
             newobjselection.remove(ob)
             bpy.data.objects.remove(ob, do_unlink=True)
-
-
-
-
-    #detect if there are LIBRARY LINKS because they will create duplis to delete after it's converted to mesh
     for ob in newobjselection:
         bpy.context.view_layer.objects.active = ob  #need a random active object before converting to mesh, will change to accurate one later
         if ob.data.library: linked_detected_will_cause_dupli_everything = True
-
-    #CONVERT TO MESH
     bpy.ops.object.make_single_user(object=True, obdata=True)   #make everything single user
     bpy.ops.object.convert(target='MESH')
-
-    #REMOVE DUPLIS THAT WERE CREATED WHEN CONVERTING TO MESH IF THE MESH HAD A LIBRARY LINK
     if linked_detected_will_cause_dupli_everything:
         for ob in newobjselection:
             newobjselection.remove(ob)
             bpy.data.objects.remove(ob, do_unlink=True)
         newobjselection = bpy.context.selected_objects #after deleting the old ones, redefine the selection with new one
-
-
-
-
-    #NEW ACTIVE BASED ON LOCATION
     center_found = False
     for ob in newobjselection:
         if tuple(ob.location) == activeobjlocation:
@@ -13922,8 +10792,6 @@ def convert_and_join_f(self,context):
     if not center_found:     #RECENTER ORIGIN
         bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
         bpy.ops.object.align_tools(subject='1', active_too=True, advanced=True, loc_z=True, ref1='0', ref2='0', self_or_active='0')
-
-    #UPDATE EXISTING MESH
     reupdating_existing_mesh=False
     ob_to_update=[]
     data_to_update = []
@@ -13938,11 +10806,7 @@ def convert_and_join_f(self,context):
         for ob in ob_to_update: ob.data = bpy.context.view_layer.objects.active.data #SWITCH EVERY OBJECT
 
 
-
     bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
-
-
-    #DELETE ACTIVE IF JUST UPDATING EXISTING, else keep it anad rename it
     if reupdating_existing_mesh:
         bpy.data.objects.remove(bpy.context.view_layer.objects.active, do_unlink=True)
         self.report({'INFO'}, "Updated Existing Mesh Assembly")  # need to add (self, context) in the function
@@ -13950,7 +10814,6 @@ def convert_and_join_f(self,context):
         bpy.context.view_layer.objects.active.name = bpy.context.view_layer.objects.active.data.name = activeobjDATANAME +"ASSEMBLY-"+objtype
         self.report({'INFO'}, "Created a new Mesh Assembly")  # need to add (self, context) in the function
         bpy.ops.transform.translate('INVOKE_DEFAULT', use_proportional_edit=False)
-
 
 
     return {'FINISHED'}
@@ -13964,22 +10827,10 @@ class convert_and_join(bpy.types.Operator):
         return {'FINISHED'}
 
 
-
-
 def realize_instances_f(self,context):
-    # bpy.ops.object.mode_set(mode="OBJECT")
     activeobj = bpy.context.active_object
     activeobj.select_set(True)
     objselection = bpy.context.selected_objects  # if activeobj not in objselection: objselection.append(activeobj)
-
-
-    # for ob in new_obs:
-    #     if ob.type=="EMPTY": print("EMPTYYYYYYY",ob.name)
-    # KB3D_CBD_BldgMdBusStop_A_grp building cyberdistrict.002
-    # KB3D_CBD_BldgMdBusStop_A_grp building cyberdistrict.003
-    # if activeobj.type =="CURVE":surface_to_parent_to = activeobj
-    # else: surface_to_parent_to = activeobj.parent
-
     for obj in objselection:
         all_brush_coll_instans = []  # FIND ALL REFERENCED EMPTY INSTANCES, both from brushOBJ and brushCOll with collInstance inside
         all_assemblies_modifiers = []  # FIND ALL REFERENCED EMPTY INSTANCES, both from brushOBJ and brushCOll with collInstance inside
@@ -13991,39 +10842,27 @@ def realize_instances_f(self,context):
         bpy.context.view_layer.objects.active = obj
 
         if obj.type in ["CURVES","CURVE"] and obj.modifiers:
-            # REALIZE SELECTED HAIR STRANDS   IF IN EDIT MODE ONLY (by duplicating and deleting the inversly selected
             hide_original_paint_system = True
             if bpy.context.object.mode != "OBJECT" and obj.type == "CURVES":
                 realized_partial_hair =True
 
                 apply_paint(self, context)
-
-                #CREATE NEW HAIR OBJECT
                 Coll_of_Active = []
                 original_collection = bpy.context.view_layer.active_layer_collection  # bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
                 ucol = obj.users_collection
                 for i in ucol:
                     layer_collection = bpy.context.view_layer.layer_collection  # bpy.context.scene.collection
                     Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-                    # bpy.context.view_layer.active_layer_collection = Coll_of_Active
                 newobj = obj.copy()
                 objs_to_delete_afterwards.append(newobj)
-                # bpy.context.view_layer.active_layer_collection = original_collection
                 newobj.data = obj.data.copy()
                 bpy.context.collection.objects.link(newobj)
-                # newobj.modifiers[0]["Input_99"] = True
-                # obj.modifiers[0]["Input_99"] = False
-
-                #DELETE THE SELECTED HAIR CURVES IN THE ORIGINAL PAINT SYSTEM
                 newobj.select_set(False)
                 bpy.ops.object.mode_set(mode="EDIT")
                 try: bpy.ops.curves.select_linked() #only works if in point select mode, not hair select mode
                 except:pass
                 bpy.ops.curves.delete()
                 bpy.ops.curves.select_all(action='SELECT') #reselect all curves
-
-                #DELETE THE INVERSE IN THE NEWLY CREATED HAIR SYSTEM
-                # obj.select_set(False)
                 newobj.select_set(True)
                 bpy.context.view_layer.objects.active = newobj
                 bpy.ops.object.mode_set(mode="EDIT")
@@ -14032,27 +10871,17 @@ def realize_instances_f(self,context):
                 bpy.ops.curves.select_all(action='INVERT')
                 bpy.ops.curves.delete()
                 bpy.ops.object.mode_set(mode="OBJECT")
-                # activeobj = newobj
-                # objselection = [activeobj]
-
-                #DO NOT DISABLE THE ORIGINAL PAINT SYSTEM BECAUSE A NEW ONE WAS CREATED
                 hide_original_paint_system = False
-
-            # DISABLE ORIGINAL PAINT SYSTEM, but not the draw curve, that one is better to disable just from the actual modifier, not the TURN OFF SYSTEM checkbox
             if hide_original_paint_system and obj.type == "CURVES":
                 for modif in obj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" \
                     or modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999":
                         modif["Input_99"] = True
-
-            #TURN OFF ASSEMBLIES MODIFIER FOR THE BRUSH OBJECT OF THE PAINT SYSTEM
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
 
                     if modif["Input_2"] and modif["Input_2"] not in all_brush_coll_instans:
                         if modif["Input_2"].instance_collection: all_brush_coll_instans.append(modif["Input_2"])
-
-                        #ASSEMBLY
                         elif modif["Input_2"].modifiers and modif["Input_2"].modifiers[0].type == "NODES" and modif["Input_2"].modifiers[0].node_group and "ASSEMBLY" in modif["Input_2"].modifiers[0].node_group.name and modif["Input_2"].modifiers[0].show_viewport == True:
                             if modif["Input_2"].modifiers[0] not in all_assemblies_modifiers: all_assemblies_modifiers.append(modif["Input_2"].modifiers[0])
                             modif["Input_2"].modifiers[0].show_viewport = False
@@ -14060,8 +10889,6 @@ def realize_instances_f(self,context):
                     if modif["Input_9"]:
                         for obij in modif["Input_9"].all_objects:
                             if obij.instance_collection and obij not in all_brush_coll_instans: all_brush_coll_instans.append(obij)  # LIST EMPTIES THAT ARE INSTANCING
-
-                            #ASSEMBLIES turn off in order to apply instances correctly, turn modifier on afterwards
                             elif obij.modifiers and obij.modifiers[0].type=="NODES" and obij.modifiers[0].node_group and "ASSEMBLY" in obij.modifiers[0].node_group.name and obij.modifiers[0].show_viewport == True:
                                 if obij.modifiers[0] not in all_assemblies_modifiers: all_assemblies_modifiers.append(obij.modifiers[0])
                                 obij.modifiers[0].show_viewport = False
@@ -14070,12 +10897,8 @@ def realize_instances_f(self,context):
         all_data = []
         if all_brush_coll_instans:
             for instance in all_brush_coll_instans:
-                # print("INSTTTTTTTTTTTTT",instance.name)
                 for x in instance.instance_collection.all_objects:
                     if x.data not in all_data: all_data.append(x.data)
-
-
-
 
 
         all_previous_objects = set(bpy.context.scene.objects)
@@ -14085,9 +10908,7 @@ def realize_instances_f(self,context):
 
         for ob in objselection:
             if ob.type == "EMPTY" and not ob.instance_collection:
-                # if ob in objs_to_delete_afterwards: objs_to_delete_afterwards.remove(ob)
                 bpy.data.objects.remove(ob, do_unlink=True)  # WHEN CONVERTING A COLL INSTANCE TO INDIVIDAUL OBJECTS, delete the new empty that gets created
-        #IF BEZIER CURVE DISABLE MODIFIER
         if obj.type == "CURVE":
             for modif in obj.modifiers:
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
@@ -14099,31 +10920,11 @@ def realize_instances_f(self,context):
             bpy.data.objects.remove(obj, do_unlink=True)
             objselection.remove(obj)
             continue
-
-
-        #TURN ASSEMBLIES BACK ON FOR THE BRUSH OBJ, NOT THE NEWLY REALIZED INSTANCES
         for modif in all_assemblies_modifiers: modif.show_viewport = True
-        # return{'FINISHED'}
-
         new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
-
-        # inverted_matrix = None
-        # for ob in new_obs:
-        #     if ob.matrix_world[0][0]!=0:
-        #         bezier_parent = ob
-        #         inverted_matrix = ob.matrix_world.inverted()
-        #         break
-
-        # CONVERT EMPTIES TO COLL INSTANCE
         for ob in new_obs:
-
-            #HANDLE REALIZED ASSEMBLIES
             if ob.modifiers and ob.modifiers[0].type == "NODES" and ob.modifiers[0].node_group and "ASSEMBLY" in ob.modifiers[0].node_group.name and ob.modifiers[0].show_viewport == False:
                 ob.modifiers[0].show_viewport = True #TURN ON MODIFIER
-                # continue #don't use the rest of the script for assemblies
-
-
-
             if ob.type == "EMPTY":
                 for instance in all_brush_coll_instans:
                     if ob.name.startswith(instance.name.rsplit('.', 1)[0]):  # IF EMPTY IS NAMED LIKE A PAINTED COLLINSTANCE: reference that collinstance's actual collection       (name without .005)
@@ -14134,8 +10935,6 @@ def realize_instances_f(self,context):
                 objs_to_delete_afterwards.append(ob)
 
             if obj.type == "CURVE":
-                # if ob != bezier_parent: ob.parent = bezier_parent
-                # ob.matrix_parent_inverse = inverted_matrix  # .data.surface
                 ob.parent = obj
                 ob.matrix_parent_inverse = obj.matrix_world.inverted()  # .data.surface
             elif obj.type == "CURVES":
@@ -14146,29 +10945,15 @@ def realize_instances_f(self,context):
                 if obj.parent:
                     ob.parent = obj.parent  # activeobj.parent   #.data.surface
                     ob.matrix_parent_inverse = obj.parent.matrix_world.inverted()  # .data.surface
-
-
-
-
-        # DELETE OVERLAPPING EMPTIES and remove from list "new_obs"
         all_empties_coordinates = []
         for ob in new_obs:
             if ob.type == "EMPTY" and str(ob.location) not in all_empties_coordinates:
-                # print("FIRST ONE MEANT TO SURVIVE", ob.name, str(ob.location))
                 all_empties_coordinates.append(str(ob.location))
             elif ob.type == "EMPTY" and str(ob.location) in all_empties_coordinates and ob not in objs_to_delete_afterwards:
-                # print("SECOND MEANT FOR DELETION", ob.name, str(ob.location))
                 objs_to_delete_afterwards.append(ob)
-
-        # DELETE OVERLAPPING MESHES with same mesh data and identical transforms (from bezier curve duplicates)
-        # Key: (mesh_data_name, location_tuple, rotation_tuple, scale_tuple) -> first object seen
         mesh_instances_seen = {}
         for ob in new_obs:
             if ob.type == "MESH" and ob.data and ob not in objs_to_delete_afterwards:
-                # Create a unique key based on mesh data and transform (rounded to avoid float precision issues)
-                # Use 2 decimal places (~1cm) for location to catch floating-point duplicates from geometry nodes
-                # (e.g., -8126.250488 vs -8126.249023 both round to -8126.25)
-                # Rotation and scale use 4 decimal places for adequate precision
                 loc = tuple(round(v, 2) for v in ob.location)
                 rot = tuple(round(v, 4) for v in ob.rotation_euler)
                 scale = tuple(round(v, 4) for v in ob.scale)
@@ -14177,15 +10962,9 @@ def realize_instances_f(self,context):
                 if instance_key not in mesh_instances_seen:
                     mesh_instances_seen[instance_key] = ob
                 else:
-                    # Duplicate found - mark for deletion
                     objs_to_delete_afterwards.append(ob)
-
-
-
-        # DELETE REMAINING INDIVIDUAL OBJECTS (to only leave empties)
         for objj in objs_to_delete_afterwards:
             bpy.data.objects.remove(objj, do_unlink=True)  # delete hair obj
-
 
 
     return {'FINISHED'}
@@ -14198,94 +10977,6 @@ class realize_instances(bpy.types.Operator):
     def execute(self, context):
         realize_instances_f(self,context)
         return {'FINISHED'}
-
-
-# def contextduplicatehaircurves(Coll_of_Active,context):
-#
-#     bpy.ops.object.mode_set(mode="OBJECT")
-#     curveobj = bpy.context.active_object
-#     curveobj_BoundingBox_State = bpy.context.object.display_type
-#     surfaceobj = bpy.context.object.data.surface
-#
-#     # FIND COLLECTION OF ACTIVE
-#     original_collection = bpy.context.view_layer.active_layer_collection   #bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
-#     # ucol = curveobj.users_collection
-#     # for i in ucol:
-#     #     layer_collection = bpy.context.view_layer.layer_collection   #bpy.context.scene.collection
-#     #     Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-#     bpy.context.view_layer.active_layer_collection = Coll_of_Active  # SELECT COLLECTION OF ACTIVE OBJ
-#
-#     bpy.ops.object.select_all(action='DESELECT')
-#     bpy.data.objects[surfaceobj.name].select_set(True)  # select it
-#     bpy.context.view_layer.objects.active = bpy.data.objects[surfaceobj.name]  # make active
-#     bpy.ops.object.curves_empty_hair_add(align='WORLD', location=bpy.data.objects[surfaceobj.name].location, scale=(1, 1, 1))
-#     bpy.context.object.display_type = curveobj_BoundingBox_State  # bounding box state
-#
-#     # #APPLY SCALE
-#     # hairCurves = bpy.context.active_object
-#     # bpy.ops.object.select_all(action='DESELECT')
-#     # bpy.data.objects[hairCurves.name].select_set(True)  # reselect original
-#     # bpy.context.view_layer.objects.active = bpy.data.objects[hairCurves.name]  # make active
-#     # bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-#
-#     bpy.data.objects[curveobj.name].select_set(True)  # select it
-#     bpy.context.view_layer.objects.active = bpy.data.objects[curveobj.name]  # make active
-#     bpy.ops.object.make_links_data(type='MODIFIERS')
-#     bpy.ops.object.make_links_data(type='MATERIAL')
-#
-#     bpy.context.active_object.select_set(False)
-#     for obj in bpy.context.selected_objects:
-#         bpy.context.view_layer.objects.active = obj
-#
-#     if bpy.context.object.modifiers["GeometryNodes"]: #don't enter hair sculpt mode if noise scatter detected
-#         if bpy.context.object.modifiers["GeometryNodes"]["Input_69"] == False:
-#             context3sculptbrush(context)
-#         else:
-#             bpy.context.object.modifiers["GeometryNodes"]["Input_71"] = float(random.choice(range(0, 999999)))  # random noise W
-#             bpy.context.object.location = bpy.context.object.location  # best way to update the scene ;update scene
-#
-#     else: context3sculptbrush(context)
-#
-#     bpy.context.view_layer.active_layer_collection = original_collection
-#     return {'FINISHED'}
-# # def context238441(context):
-# #     bpy.ops.object.mode_set(mode="OBJECT")
-# #     curveobj = bpy.context.active_object.name
-# #     surfaceobj = bpy.context.object.data.surface
-# #
-# #     bpy.data.objects[surfaceobj.name].select_set(True) #select it
-# #     bpy.context.view_layer.objects.active = bpy.data.objects[surfaceobj.name]  #make active
-# #
-# #     bpy.ops.object.curves_empty_hair_add(align='WORLD', location= bpy.data.objects[surfaceobj.name].location, scale=(1, 1, 1))
-# #
-# #     bpy.data.objects[curveobj].select_set(True) #select it
-# #     bpy.context.view_layer.objects.active = bpy.data.objects[curveobj]  #make active
-# #     bpy.ops.object.make_links_data(type='MODIFIERS')
-# #
-# #     bpy.context.active_object.select_set(False)
-# #     for obj in bpy.context.selected_objects:
-# #         bpy.context.view_layer.objects.active = obj
-# #     bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-# #
-# #     # obj = bpy.context.active_object
-# #     # for mod in [m for m in obj.modifiers if m.type == 'PARTICLE_SYSTEM']:
-# #     #     bpy.ops.object.modifier_remove( modifier = mod.name )
-# #     return {'FINISHED'}
-# class orenscatterduplicatehair(bpy.types.Operator):
-#     """duplicate"""
-#     bl_idname = "oren.orenscatterduplicatehair"
-#     bl_label = "duplicate hair"
-#     def execute(self, context):
-#         # context238441(context)
-#
-#         original_collection = bpy.context.view_layer.active_layer_collection  # bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
-#         ucol = bpy.context.object.users_collection
-#         for i in ucol:
-#             layer_collection = bpy.context.view_layer.layer_collection  # bpy.context.scene.collection
-#             Coll_of_Active = recurLayerCollection(layer_collection, i.name)
-#
-#         contextduplicatehaircurves(Coll_of_Active,context)
-#         return {'FINISHED'}
 def context237411(context):
     if len (bpy.context.selected_objects ) == 2:
         brushobj = bpy.context.active_object.name
@@ -14297,16 +10988,6 @@ def context237411(context):
 
         bpy.ops.object.duplicate_move_linked(OBJECT_OT_duplicate={"linked":True, "mode":'TRANSLATION'}, TRANSFORM_OT_translate={})
         bpy.context.object.modifiers[0]["Input_2"] = bpy.data.objects[brushobj]
-        # newcurveobj = bpy.context.active_object.name
-
-        # bpy.data.objects[originalcurveobj].select_set(True) #select it
-        # bpy.context.view_layer.objects.active = bpy.data.objects[originalcurveobj]  #make active
-        # bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
-        #
-        # bpy.context.active_object.select_set(False)
-        # for obj in bpy.context.selected_objects:
-        #     bpy.context.view_layer.objects.active = obj
-
         bpy.ops.object.mode_set(mode="EDIT")
         for area in bpy.context.screen.areas:   # draw tool
             if area.type == "VIEW_3D":
@@ -14315,12 +10996,6 @@ def context237411(context):
                 override["area"] = area
                 bpy.ops.wm.tool_set_by_id(override, name="builtin.draw")
         bpy.ops.object.mode_set(mode="OBJECT")
-
-
-    # elif len (bpy.context.selected_objects ) == 1:    # if two obj selected,
-    #     curveobj = bpy.context.active_object.name
-
-
     return {'FINISHED'}
 class microbiome(bpy.types.Operator):
     """Select an object, select a system. Create a microbiome around the active system"""
@@ -14331,7 +11006,6 @@ class microbiome(bpy.types.Operator):
         context237411(context)
         return {'FINISHED'}
 def createMaterialIfNone(self, context,**kwargs):
-    # create material
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
@@ -14343,7 +11017,6 @@ def createMaterialIfNone(self, context,**kwargs):
         if activeobj.data.materials:
             activeobj.data.materials[0] = mat
         else:
-            # activeobj.active_material = bpy.data.materials[mat.name]
             activeobj.data.materials.append(mat)
         self.report({'INFO'}, "A new material was created since there was none.")
 def newmaterial_f(self, context):
@@ -14359,13 +11032,10 @@ def newmaterial_f(self, context):
                     brushobj = obj.modifiers[0]["Input_2"]
                     custommaterial=None
                     if obj.modifiers[0]["Input_39"] and obj.modifiers[0]["Input_40"]: custommaterial = obj.modifiers[0]["Input_40"]
-
-                    #dupli brush obj
                     brushobj=dupliObjCheckCoordinates(self, context, activeobj=brushobj)  # bpy.ops.transform.translate(value=(0, 0, finaltranslationAmount), orient_axis_ortho='X', orient_type='GLOBAL',orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL',constraint_axis=(False, False, True), mirror=False, use_proportional_edit=False,proportional_edit_falloff='SMOOTH', proportional_size=1,use_proportional_connected=False, use_proportional_projected=False)
                     createMaterialIfNone(self, context, activeobj = brushobj)
 
                     obj.data.materials.clear()
-                    #dupli materials
                     for mat_slot in brushobj.material_slots:
                         if mat_slot.material:
                             mat = mat_slot.material
@@ -14381,7 +11051,6 @@ def newmaterial_f(self, context):
                     obj.modifiers[0]["Input_2"] = brushobj
                     obj.modifiers[0]["Input_39"] = False
                     new_duplis.append(brushobj)
-
 
 
         elif obj.type=="MESH":  #if no geo nodes found, then just make a duplicate with new mat
@@ -14413,19 +11082,237 @@ class orencurvenewmaterial(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         newmaterial_f(self, context)
-        # contex39482(context)
         return {'FINISHED'}
+
+
+SECRET_PAINT_EXPORT_FINALIZE_CLI_COMMAND = "secret_paint_export_finalize"
+_SECRET_PAINT_REGISTERED_CLI_COMMANDS = {}
+
+
+def _secret_paint_cli_args(argv):
+    if len(argv) == 1 and isinstance(argv[0], (list, tuple)):
+        return list(argv[0])
+    return list(argv)
+
+
+def _secret_paint_cli_arg_value(argv, option_name):
+    args = _secret_paint_cli_args(argv)
+    try:
+        index = args.index(option_name)
+    except ValueError:
+        return None
+    value_index = index + 1
+    if value_index >= len(args):
+        return None
+    return args[value_index]
+
+
+def _secret_paint_cli_bootstrap_expression():
+    return (
+        "import addon_utils\n"
+        "import importlib.util\n"
+        "import pathlib\n"
+        "import sys\n"
+        "import types\n"
+        "for mod in addon_utils.modules():\n"
+        "    if getattr(mod, 'bl_info', {}).get('name') == 'Secret Paint':\n"
+        "        addon_dir = pathlib.Path(mod.__file__).resolve().parent\n"
+        "        package_name = '_secret_paint_export_cli_package'\n"
+        "        package = types.ModuleType(package_name)\n"
+        "        package.__path__ = [str(addon_dir)]\n"
+        "        sys.modules[package_name] = package\n"
+        "        shared_path = addon_dir / 'secret_paint_shared.py'\n"
+        "        spec = importlib.util.spec_from_file_location(package_name + '.secret_paint_shared', str(shared_path))\n"
+        "        shared = importlib.util.module_from_spec(spec)\n"
+        "        sys.modules[spec.name] = shared\n"
+        "        spec.loader.exec_module(shared)\n"
+        "        shared.register_secret_paint_cli_commands()\n"
+        "        break\n"
+    )
+
+
+def _secret_paint_write_json(path, payload):
+    with open(path, 'w', encoding='utf-8') as json_file:
+        json_file.write(json.dumps(payload, indent=4))
+
+
+def _secret_paint_export_finalize_payload(payload):
+    source_file_path = payload["source_file_path"]
+    collection_name = payload["collection_name"]
+    hide_non_curve_for_preview = bool(payload.get("hide_non_curve_for_preview", False))
+
+    bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
+
+    with bpy.data.libraries.load(source_file_path) as (data_from, data_to):
+        data_to.collections = [
+            name for name in data_from.collections
+            if collection_name == name
+        ]
+
+    hidden_to_restore = []
+    for coll in data_to.collections:
+        try:
+            bpy.context.collection.children.link(coll)
+        except Exception:
+            pass
+
+        if hide_non_curve_for_preview:
+            for oob in coll.all_objects:
+                if oob.type != "CURVES" and not oob.name.startswith("Secret Paint Biome"):
+                    hidden_to_restore.append(oob)
+                    oob.location = (0, 0, 0)
+                    oob.scale = (0, 0, 0)
+                    if oob.asset_data:
+                        oob.asset_clear()
+                    if oob.use_fake_user:
+                        oob.use_fake_user = False
+
+    nodes_to_switch = []
+    cleanup_generator = []
+    for node_tree in bpy.data.node_groups:
+        if (
+            node_tree.name == "Secret Paint" or
+            node_tree.name.startswith("Secret Paint") and
+            re.search(r"\.\d{3}$", node_tree.name) and
+            ".001" <= node_tree.name[-4:] <= ".999"
+        ):
+            if not node_tree.library:
+                node_tree.name = "Secret Paint.001"
+            if node_tree not in nodes_to_switch:
+                nodes_to_switch.append(node_tree)
+        if (
+            node_tree.name == "Secret Generator" or
+            node_tree.name.startswith("Secret Generator") and
+            re.search(r"\.\d{3}$", node_tree.name) and
+            ".001" <= node_tree.name[-4:] <= ".999"
+        ):
+            if not node_tree.library:
+                node_tree.name = "Secret Generator.001"
+            if node_tree not in cleanup_generator:
+                cleanup_generator.append(node_tree)
+
+    all_previous_nodes = set(bpy.data.node_groups)
+    file_path = _secret_paint_source_blend_path()
+    inner_path = "NodeTree"
+    object_name = "Secret Paint"
+    try:
+        bpy.ops.wm.append(
+            filepath=os.path.join(file_path, inner_path, object_name),
+            directory=os.path.join(file_path, inner_path),
+            filename=object_name)
+    except Exception:
+        print("[[[[[[[[[[[[ SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
+
+    for lib in list(bpy.data.libraries):
+        if lib.name in [
+            "Secret Paint.blend",
+            "Secret Paint 4.0 and older.blend",
+            "Secret Paint 4.1.blend",
+            "Secret Paint 4.2.0.blend",
+        ]:
+            bpy.data.libraries.remove(lib, do_unlink=True)
+
+    orenpaintNode = None
+    for nod in bpy.data.node_groups:
+        if nod not in all_previous_nodes and nod.name.startswith("Secret Paint"):
+            orenpaintNode = nod
+            break
+
+    if orenpaintNode is not None:
+        for obj in bpy.data.objects:
+            if obj.type in ["CURVES", "CURVE"]:
+                for modif in obj.modifiers:
+                    if (
+                        modif.type == 'NODES' and
+                        modif.node_group and
+                        modif.node_group.name.startswith(("Secret Paint", "orenpaint")) and
+                        "ASSEMBLY" not in modif.node_group.name
+                    ):
+                        modif.node_group = orenpaintNode
+
+    for nod in nodes_to_switch[:]:
+        bpy.data.node_groups.remove(nod, do_unlink=True)
+    for nod in cleanup_generator[:]:
+        bpy.data.node_groups.remove(nod, do_unlink=True)
+
+    for mask in list(bpy.data.masks):
+        bpy.data.masks.remove(mask, do_unlink=True)
+    for coll in bpy.data.collections:
+        if coll.asset_data:
+            coll.asset_generate_preview()
+    for oob in hidden_to_restore:
+        oob.scale = (1, 1, 1)
+
+    bpy.ops.wm.save_mainfile()
+
+
+def _secret_paint_export_finalize_cli(*argv):
+    request_path = _secret_paint_cli_arg_value(argv, "--request")
+    if not request_path:
+        print("secret_paint_export_finalize requires --request <path>")
+        return 2
+
+    result_path = None
+    try:
+        with open(request_path, encoding='utf-8') as request_file:
+            payload = json.load(request_file)
+        result_path = payload.get("result_path")
+        _secret_paint_export_finalize_payload(payload)
+        result = {"ok": True, "error": "", "traceback": ""}
+        exit_code = 0
+    except Exception as exception:
+        trace = traceback.format_exc()
+        print(trace)
+        result = {"ok": False, "error": str(exception), "traceback": trace}
+        exit_code = 1
+
+    if result_path:
+        try:
+            _secret_paint_write_json(result_path, result)
+        except Exception:
+            traceback.print_exc()
+            return 1
+
+    return exit_code
+
+
+def register_secret_paint_cli_commands():
+    register_cli_command = getattr(bpy.utils, "register_cli_command", None)
+    if register_cli_command is None:
+        print("Secret Paint export CLI command unavailable: bpy.utils.register_cli_command is missing")
+        return
+    if SECRET_PAINT_EXPORT_FINALIZE_CLI_COMMAND in _SECRET_PAINT_REGISTERED_CLI_COMMANDS:
+        return
+    try:
+        command = register_cli_command(
+            SECRET_PAINT_EXPORT_FINALIZE_CLI_COMMAND,
+            _secret_paint_export_finalize_cli)
+        _SECRET_PAINT_REGISTERED_CLI_COMMANDS[SECRET_PAINT_EXPORT_FINALIZE_CLI_COMMAND] = command
+    except Exception:
+        traceback.print_exc()
+
+
+def unregister_secret_paint_cli_commands():
+    unregister_cli_command = getattr(bpy.utils, "unregister_cli_command", None)
+    if unregister_cli_command is None:
+        _SECRET_PAINT_REGISTERED_CLI_COMMANDS.clear()
+        return
+    for command_id, command in tuple(_SECRET_PAINT_REGISTERED_CLI_COMMANDS.items()):
+        try:
+            unregister_cli_command(command)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            _SECRET_PAINT_REGISTERED_CLI_COMMANDS.pop(command_id, None)
+
+
 def export_to_asset_library_function(self,context,event): #paint. conversion
-
-    # if bpy.data.is_saved:
-    #     bpy.ops.wm.save_mainfile()
-    # if not bpy.data.is_saved:
-    #     self.report({'ERROR'}, "Save current blend file first")
-    #     return{'CANCELLED'}
-
     if bpy.context.preferences.addons[__package__].preferences.biome_library == "(No Library Found, create one first)":
         self.report({'ERROR'}, "No Library Found, create one first")
         return{'FINISHED'}
+    if not hasattr(bpy.utils, "register_cli_command"):
+        self.report({'ERROR'}, "This Blender build does not support registered CLI commands")
+        return {'CANCELLED'}
 
     try: ActiveMode = bpy.context.object.mode
     except:
@@ -14456,13 +11343,6 @@ def export_to_asset_library_function(self,context,event): #paint. conversion
     else: biome_detected = False
     if len(objselection)==len(all_selected_hair): all_sel_are_hair=True
     else: all_sel_are_hair=False
-    ########################################################################################
-
-
-
-    #BIOME SPHERE
-    # new_collection=[]
-    # CREATE TEMP COLLECTION
     asset_name = bpy.context.preferences.addons[__package__].preferences.biomeAssetName  # biome_name = bpy.context.preferences.addons[__package__].preferences.biomename #context.scene.mypropertieslist.biomename
     if not asset_name and activeobj: asset_name = activeobj.name
     new_collection = bpy.data.collections.new(asset_name)
@@ -14471,27 +11351,12 @@ def export_to_asset_library_function(self,context,event): #paint. conversion
     newobjs_toDelete=[]
     if biome_detected and all_parent_surfaces == all_meshes and len(all_meshes)==1\
     or all_sel_are_hair:
-
-
-
-
-
-        #FIND LEAST DENSE PAINT SYSTEM (for biome plane right zize)
         largest = all_selected_hair[0]
         for ob in all_selected_hair:
             if ob.modifiers[0]["Input_68"] < largest.modifiers[0]["Input_68"]: largest=ob
-        # # #RESIZE BALL TO SHOW AT LEAST 20 UNITS OF LEAST DENSE SYSTEM (more accurate thumbnail)
-        # # surface_area = (((1 / ((largest.modifiers["GeometryNodes"]["Input_68"] ** 0.5) * (largest.modifiers["GeometryNodes"]["Input_100"] ** 2))) / 2) **2 )      *    (50*math.pi) #number of objects i want around the sphere
-        # #RESIZE BALL TO SHOW AT LEAST 5 UNITS OF LEAST DENSE SYSTEM (more accurate thumbnail)
-        # surface_area = (((1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * (largest.modifiers[0]["Input_100"] ** 2))) / 2) **2 )      *    (12*math.pi) #number of objects i want around the sphere
-        # radius = math.sqrt(surface_area / (4 * math.pi))
-
         xsize =  1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * (largest.modifiers[0]["Input_100"]** 0.5))     # xsize =  1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * largest.modifiers[0]["Input_100"])
-        # xsize =  allTerrainArea/   (   (   (0.5/   ((bpy.context.object.modifiers[0]["Input_68"] ** 0.5) *bpy.context.object.modifiers[0]["Input_100"])   )   *2)   **2)     # xsize =  1 / ((largest.modifiers[0]["Input_68"] ** 0.5) * largest.modifiers[0]["Input_100"])
         number_instaces_to_show = 12
         radius = (number_instaces_to_show * (xsize * xsize)) ** 0.5   #lenght of one of the sides of the plane
-
-        #BIOME PLANE
         subdivisions = 4
         meshhh = bpy.data.meshes.new("Secret Paint Biome")
         bm = bmesh.new()
@@ -14504,36 +11369,12 @@ def export_to_asset_library_function(self,context,event): #paint. conversion
         bm.free()
         cubeOBJ = bpy.data.objects.new("Secret Paint Biome", meshhh)
         new_collection.objects.link(cubeOBJ)  #bpy.context.collection.objects.link(cubeOBJ)  # Link the object to the scene collection
-
-        # meshhh = bpy.data.meshes.new("Secret Paint Biome")  # Create a new mesh data block
-        # cubeOBJ = bpy.data.objects.new("Secret Paint Biome", meshhh)  # Create a new object with the mesh data
-        # new_collection.objects.link(cubeOBJ)  #bpy.context.collection.objects.link(cubeOBJ)  # Link the object to the scene collection
-        # verts = [ (-radius / 2, -radius / 2, 0), (radius / 2, -radius / 2, 0), (radius / 2, radius / 2, 0), (-radius / 2, radius / 2, 0)]
-        # edges = []  # Define edges (none needed for this plane)
-        # faces = [(0, 1, 2, 3)]  # Define a single face with four vertices
-        # meshhh.from_pydata(verts, edges, faces)  # Assign vertices and faces to the mesh
-        # meshhh.update()  # Update the mesh with the new data
-        # # bpy.ops.mesh.primitive_uv_sphere_add(radius=radius, enter_editmode=False, align='WORLD', location=(0, 0, 0),scale=(1, 1, 1))
-        # # cubeOBJ = bpy.context.active_object
-
         cubeOBJ.use_fake_user = 1
-        # bpy.context.object.name = "Biome sphere"
-        # for ob in objselection:
-        #     bpy.data.objects[ob.name].select_set(True)
-        # orenpaint_function(self, context, event) #orenscatter biome on sphere
         all_previous_objects = set(bpy.context.scene.objects)
         secretpaint_function(self, context, event, activeobj=cubeOBJ, objselection=objselection, auto_Mask_Optimization=False) #orenscatter biome on sphere
         newobjs_toDelete = list(set(bpy.context.scene.objects) - all_previous_objects) #if a single biome is detected, just export that
         newobjs_toDelete.append(cubeOBJ)
         objselection = newobjs_toDelete
-
-
-
-
-
-
-        #MATERIAL OF TERRAIN
-        # if activeobj.parent.material_slots:
         if all_parent_surfaces[0].material_slots:
             for source_mat_slot in all_parent_surfaces[0].material_slots:  #.data.surface
                 source_mat = source_mat_slot.material
@@ -14548,119 +11389,20 @@ def export_to_asset_library_function(self,context,event): #paint. conversion
                 if len(cubeOBJ.children)==1:
                     hair.modifiers[0]["Input_69"] = True
                     if hair.modifiers[0]["Input_83_use_attribute"] == True: hair.modifiers[0]["Input_83_use_attribute"] = False  # TURN OFF ATTRIBUTE
-                    # if hair.modifiers["GeometryNodes"]["Input_83_use_attribute"] == True:
-                    #     bpy.context.view_layer.objects.active = bpy.data.objects[hair.name]
-                    #     bpy.ops.object.geometry_nodes_input_attribute_toggle(prop_path="[\"Input_83_use_attribute\"]",modifier_name="GeometryNodes")
                     hair.modifiers[0]["Input_83_attribute_name"] = ""
                     bpy.ops.object.mode_set(mode="OBJECT")
-                # bpy.data.objects[hair.name].select_set(True)
                 if hair not in objselection: objselection.append(hair)
-
-        #RESTORE SELECTION
         for x in bpy.context.selected_objects: x.select_set(False) #objselection
         if activeobj: bpy.context.view_layer.objects.active = activeobj
         for x in ORIG_objselection: x.select_set(True)
         bpy.ops.object.mode_set(mode=ActiveMode)
-
-
-    # #UNMARK OTHER ASSETS and fake users
-    # for o in bpy.data.objects:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.collections:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.materials:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.textures:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    #
-    # for o in bpy.data.node_groups:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.texts:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.masks:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.images:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.worlds:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.particles:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.meshes:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.hair_curves:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.lights:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.cameras:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.brushes:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.screens:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    # for o in bpy.data.workspaces:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-    #     # try: bpy.data.workspaces.remove(o, do_unlink=True)
-    #     # except:pass
-    # for o in bpy.data.paint_curves:
-    #     if o.asset_data: o.asset_clear()
-    #     if o.use_fake_user: o.use_fake_user = False
-
-
-
-
-    # #LINK TO NEW COLLECTION
-    # # biome_name = bpy.context.preferences.addons[__package__].preferences.biomename #context.scene.mypropertieslist.biomename
-    # asset_name = bpy.context.preferences.addons[__package__].preferences.biomeAssetName
-    # if not asset_name and activeobj: asset_name=activeobj.name
-    # # else: asset_name= os.path.basename(biome_name)
-    # # new_collection = bpy.data.collections.new(os.path.basename(biome_name)) #only the last element of the path
-    # new_collection = bpy.data.collections.new(asset_name) #only the last element of the path
-    # bpy.context.scene.collection.children.link(new_collection)
-    # print("SSSSSSSSSSSSSSSSSSSS",new_collection)
     for obj in objselection:
-        # new_collection.objects.link(obj)
         if obj.name not in new_collection.all_objects: new_collection.objects.link(obj)
-        # if obj.parent not in new_collection: new_collection.objects.link(obj.parent)
     new_collection.asset_mark()  #generate preview before adding brush objects
     new_collection.asset_generate_preview()
     for obj in all_brush_objs: #new_collection.objects.link(obj)
-        # # if obj not in new_collection.all_objects: new_collection.objects.link(obj)
-        # try:new_collection.objects.link(obj)
-        # except:pass
         if obj.name not in new_collection.all_objects: new_collection.objects.link(obj)
     for coll in all_brush_collections: new_collection.children.link(coll)
-    # return
-    # time.sleep(10)
-    # preview = new_collection.preview
-    # print(preview)
-    # bpy.data.images['PreviewImageName'].save_render(filepath=preview_path)  #SAVE PREVIEW EXTERNALLY?
-
-    # return{'FINISHED'}
-
-
-
-
-
-
-
-    #CATALOG ASSIGNMENT OR CREATION
     target_catalog = bpy.context.preferences.addons[__package__].preferences.biomenamecategory #= "Biomes/Nature/Short Grass"
     if target_catalog:
         folder = bpy.context.preferences.addons[__package__].preferences.biome_library + "/blender_assets.cats.txt"   # folder = Path(bpy.data.filepath).parent.parent     bpy.context.preferences.filepaths.asset_libraries[-1].path
@@ -14686,425 +11428,79 @@ def export_to_asset_library_function(self,context,event): #paint. conversion
                 uuid = part1+"-"+part2+"-"+part3+"-"+part4+"-"+part5
                 final = uuid +":"+target_catalog+":"+target_catalog.replace('/', '-')
                 f.write("\n"+final)
-
-            #ASSIGN FOUND OR CREATED
-            # obj=bpy.data.objects["c1"]
             new_collection.asset_data.catalog_id = uuid
-
-
-
-
-
-
-
-    #GET FOLDER OR CREATE IT
     biome_name = bpy.context.preferences.addons[__package__].preferences.biomename #context.scene.mypropertieslist.biomename
     path= bpy.context.preferences.addons[__package__].preferences.biome_library + os.path.dirname(biome_name) #path without the last element     bpy.context.preferences.filepaths.asset_libraries[-1].path
     if not os.path.exists(path): os.makedirs(path) #create folder if it doesn't exist
-
-    #CREATE TEMP .BLEND FROM CURRENTLY OPENED (to make data transferable) #create temp file in order to append the biome ball without having to save the opened scene
     temp_blend=(path+ "\\tempSecretPaintExport.blend").replace("\\", "\\\\")
     bpy.ops.wm.save_as_mainfile(copy=True, filepath=temp_blend)
-
-    # return{'FINISHED'}
-
-    #CHECK IF TARGET EXPORT .blend ALREADY EXISTS
-    # numb = 1  #INCREMENTAL NAMING
-    # while os.path.exists(path + '/' + os.path.basename(biome_name) + ".blend" if numb==1 else path + '/' + os.path.basename(biome_name) + ' ' + str(numb) + ".blend"): numb += 1
-    # finalpath = path + '/' + os.path.basename(biome_name) + ".blend" if numb==1 else path + '/' + os.path.basename(biome_name) + ' ' + str(numb) + ".blend"
-    # finalpath = path + '/' + os.path.basename(biome_name) + ".blend"
     finalpath = path + '/' + os.path.basename(biome_name)
     if not finalpath.endswith(".blend"): finalpath= finalpath+".blend" #optionally have the folder path with .blend
-    #CREATE EMPTY.BLEND IF IT DOESN'T EXIST
-    # if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks = {*bpy.data.window_managers}, fake_user=False, path_remap="ABSOLUTE")
-    # if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks ={bpy.context.active_object}, fake_user=False, path_remap="ABSOLUTE")
-    # if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks ={*bpy.data.worlds}, fake_user=False, path_remap="ABSOLUTE")
-    # if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks ={new_collection}, fake_user=False, path_remap="ABSOLUTE")
-    # if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks ={*bpy.data.workspaces}, fake_user=False, path_remap="ABSOLUTE")
     if not os.path.exists(finalpath): bpy.data.libraries.write(finalpath, datablocks ={*bpy.data.masks}, fake_user=False, path_remap="ABSOLUTE")
+    request_path = os.path.join(path, "tempSecretPaintExportRequest.json")
+    result_path = os.path.join(path, "tempSecretPaintExportResult.json")
+    for temp_path in (request_path, result_path):
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
 
-    # return{'FINISHED'}
-    # blend_path = "C:/Users/loren/AppData/Roaming/Blender Foundation/Blender/3.6/scripts/addons/orenpaint/orenpaint.blend"
-    move_objects_script = path+"/tempSecretExportScript.py"  #"C:/Users/loren/AppData/Roaming/Blender Foundation/Blender/3.6/scripts/addons/orenpaint/script.py"
-    # move_objects_script = os.path.dirname(blend_path)
-    # Save move_objects.py script
-    current_file = bpy.data.filepath.replace("\\", "\\\\")
-    move_objects_script_content = f'''
-import bpy
-import os
-import re
+    export_payload = {
+        "source_file_path": temp_blend,
+        "collection_name": new_collection.name,
+        "hide_non_curve_for_preview": bool(newobjs_toDelete),
+        "result_path": result_path,
+    }
+    _secret_paint_write_json(request_path, export_payload)
 
-# bpy.ops.mesh.primitive_torus_add(align='WORLD', location=(0, 0, 0), rotation=(0, 0, 0), major_radius=1, minor_radius=0.25, abso_major_rad=1.25, abso_minor_rad=0.75)
-
-# from bpy.utils import resource_path   # import nodegroup
-from pathlib import Path  #paint_from_library(bpy.types.Operator)
-import addon_utils
-
-
-# for o in bpy.context.scene.objects:
-#     o.location[0]=o.location[0]+5.0
-
-#select scene collection
-bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
-
-# source_file_path = "C:\\\\Users\\\\loren\\\\Assets\\\\3D\\\\objects\\\\Biomes\\\\tempSecretPaintExport.blend"
-source_file_path = "{temp_blend}" 
-with bpy.data.libraries.load(source_file_path) as (data_from, data_to):
-    data_to.collections = [name for name in data_from.collections if "{new_collection.name}"== name]  #in name]
-    # data_to.objects = [name for name in data_from.objects if "human" == name]
-    # data_to.collections = [name for name in data_from.collections if "ui" == name]
-# for coll in data_to.collections: context.collection.objects.link(coll)
-# for coll in data_to.collections: bpy.context.scene.collection.children.link(coll)
-# for obj in data_to.objects: context.collection.objects.link(obj)
-    # context.view_layer.objects.active = obj  # select appended objects
-    # obj.select_set(True)
-
-
-hidden_to_restore=[]
-for coll in data_to.collections:     #LINK COLL TO SCENE
-    bpy.context.collection.children.link(coll)
-
-    if {newobjs_toDelete}:           #IF TRUE THEN WE'RE IMPORTING A BIOME SPHERE
-        for oob in coll.all_objects:
-            # print(oob.name,oob.type)            
-            if oob.type!="CURVES" and not oob.name.startswith("Secret Paint Biome"):
-                hidden_to_restore.append(oob) 
-                oob.location=(0,0,0) 
-                oob.scale=(0,0,0)                 #TEMPORARY HIDE FOR ACCURATE THUMBNAIL
-                if oob.asset_data: oob.asset_clear()
-                if oob.use_fake_user: oob.use_fake_user = False
-                # oob.hide_viewport=True
-
-
-
-
-blender_version = bpy.app.version_string
-addon_path=[]
-for mod in addon_utils.modules():
-    if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  # if mod.bl_info.get("name") == "Secret Paint":
-        addon_path = os.path.dirname(mod.__file__)
-        break
-
-# ######### UPDATE NODE ########## # bpy.ops.secret.secretpaint_update_modifier() #secretpaint_update_modifier_f(context, Forced_Update=True)
-nodes_to_switch = []
-cleanup_generator = []
-for node_tree in bpy.data.node_groups:
-    # if not node_tree.library and node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
-    if node_tree.name == "Secret Paint" or node_tree.name.startswith("Secret Paint") and re.search(r"\\.\\d{{3}}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999":  # if node_tree.name.startswith("Secret Paint") and "ASSEMBLY" not in node_tree.name:
-        if not node_tree.library: node_tree.name = "Secret Paint.001"  # new_name = node_tree.name.replace('orenpaint', 'orenpaint OLD')
-        if node_tree not in nodes_to_switch: nodes_to_switch.append(node_tree)
-    # if not node_tree.library and node_tree.name.startswith("Secret Generator"):
-    if node_tree.name == "Secret Generator" or node_tree.name.startswith("Secret Generator") and re.search(r"\\.\\d{{3}}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999": #if node_tree.name.startswith("Secret Generator"):
-        if not node_tree.library: node_tree.name = "Secret Generator.001"  # new_name = node_tree.name.replace('orenpaint', 'orenpaint OLD')
-        if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
-
-
-
-#REAPPEND ORENPAINT NODE
-all_previous_nodes = set(bpy.data.node_groups)
-if blender_version < "4.1": file_path= addon_path + "/Secret Paint 4.0 and older.blend"
-elif blender_version < "4.2.0": file_path= addon_path + "/Secret Paint 4.1.blend"
-elif blender_version < "4.2.1": file_path= addon_path + "/Secret Paint 4.2.0.blend"
-elif blender_version >= "4.2.1": file_path= addon_path + "/Secret Paint.blend"
-inner_path = "NodeTree"
-object_name = "Secret Paint"
-# bpy.ops.wm.append( filepath=os.path.join(file_path, inner_path, object_name), directory=os.path.join(file_path, inner_path), filename=object_name)
-# FOR SOME REASON IT FAILS (critical corruption?????? but it works anyway) #Error: Critical blend-file corruption: Conflicts and/or otherwise invalid data-blocks names
-try: bpy.ops.wm.append(filepath=os.path.join(file_path, inner_path, object_name),directory=os.path.join(file_path, inner_path),filename=object_name)
-except:print("[[[[[[[[[[[[ SECRET PAINT UPDATE FAILED!! CRITICAL CORRUPTION WEIRD")
-
-for lib in bpy.data.libraries: #for some reason, appending anything creates an empty library link, which is error prone
-    # if lib.name == "Secret Paint.blend": bpy.data.libraries.remove(lib, do_unlink=True)
-    if lib.name in ["Secret Paint.blend","Secret Paint 4.0 and older.blend","Secret Paint 4.1.blend","Secret Paint 4.2.0.blend"]: bpy.data.libraries.remove(lib, do_unlink=True)
-
-# FIND orenpaint NODE THAT'S LOCAL AND NOT THE LINKED ONE (for some reason, when linking a biome with orenpaint node, they share the same node.name so you can't reference it with bpy.data.node_groups.get(
-# orenpaintNode = [nod for nod in bpy.data.node_groups if nod not in all_previous_nodes and nod.name.startswith("Secret Paint")]
-for nod in bpy.data.node_groups:
-    if nod not in all_previous_nodes and nod.name.startswith("Secret Paint"):
-        orenpaintNode= nod
-        break
-
-
-
-
-#SWITCH ALL MODIFIERS
-for obj in bpy.data.objects:
-    # if obj.type in ["CURVES","CURVE"] and obj.modifiers and not obj.library:  #can't edit modifiers of linked objects
-    if obj.type in ["CURVES","CURVE"]:
-        for modif in obj.modifiers:
-            # if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")): modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-            # if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint": modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-            if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith(("Secret Paint","orenpaint")) and "ASSEMBLY" not in modif.node_group.name: modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-            # if modif.type == 'NODES' and modif.node_group:
-            #     # print(modif.node_group.name)
-            #     if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\\.\\d{{3}}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode  #bpy.data.node_groups.get("orenpaint")
-
-
-
-# DELETE OLD NODES
-# if nodes_to_switch[:]:
-for nod in nodes_to_switch[:]:
-    # if nod:
-    bpy.data.node_groups.remove(nod, do_unlink=True)
-# if cleanup_generator[:]:
-for nod in cleanup_generator[:]:
-    # if nod:
-    bpy.data.node_groups.remove(nod, do_unlink=True)
-    
-######### UPDATE NODE END ##########
-
-
-
-
-
-for mask in bpy.data.masks: bpy.data.masks.remove(mask, do_unlink=True)  
-for o in bpy.data.collections:
-    if o.asset_data: o.asset_generate_preview()
-for oob in hidden_to_restore: oob.scale=(1,1,1) #RESTORE SIZE 
-# for o in bpy.data.objects:
-#     if o.asset_data: o.asset_generate_preview()
-
-
-# bpy.ops.wm.memory_cleanup()
-bpy.ops.wm.save_mainfile()
-# bpy.ops.wm.quit_blender()
-    '''
-    with open(move_objects_script, 'w') as move_script_file:
-        move_script_file.write(move_objects_script_content)
     command = [
-        "blender",
-        # "C:/Program Files/Blender Foundation/Blender 3.6/blender.exe",
-        # "C:/Program Files/Blender Foundation/Blender 4.0/blender.exe",
-        "-b", finalpath,  #blend_path # blend file as asset import target
-        "--python", move_objects_script
-        # #    f'del "{output_bat_path}"\n'
-        # #    f'del "{move_objects_script}"\n'
-        # f'echo Finished executing Blender script, saving file, and cleaning up files!\n'
-        # f'pause\n'
+        getattr(bpy.app, "binary_path", "") or "blender",
+        "-b",
+        finalpath,
+        "--python-expr",
+        _secret_paint_cli_bootstrap_expression(),
+        "--command",
+        SECRET_PAINT_EXPORT_FINALIZE_CLI_COMMAND,
+        "--request",
+        request_path,
     ]
-    subprocess.run(command)
-    os.remove(move_objects_script)
-    os.remove(temp_blend)  # bpy.ops.file.unpack_all()       # bpy.ops.wm.open_mainfile(filepath=path)
-    # bpy.ops.wm.revert_mainfile(use_scripts=True)  # bpy.ops.file.unpack_all()       # bpy.ops.wm.open_mainfile(filepath=path)
-
-
-
-
-
-
-
-
-
-    #RESTORE the working .blend scene by deleting newly created stuff after export is successfull
+    export_result = {}
+    completed_returncode = 1
+    try:
+        completed_process = subprocess.run(command)
+        completed_returncode = completed_process.returncode
+        if os.path.isfile(result_path):
+            try:
+                with open(result_path, encoding='utf-8') as result_file:
+                    export_result = json.load(result_file)
+            except Exception as exception:
+                export_result = {"ok": False, "error": str(exception)}
+    except Exception as exception:
+        export_result = {"ok": False, "error": str(exception)}
+    for temp_path in (request_path, result_path, temp_blend):
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+    export_finalize_error_message = ""
+    if completed_returncode != 0 or not export_result.get("ok", False):
+        export_finalize_error_message = export_result.get("error") or "Could not finalize the asset export"
     for o in newobjs_toDelete:
-        # print(o.name,o.type)
         if o.type=="MESH":
             bpy.data.meshes.remove(o.data, do_unlink=True)
             continue #can't check next o.type=="CURVES" if the mesh is deleted
         if o.type=="CURVES":
             bpy.data.hair_curves.remove(o.data, do_unlink=True)
             continue
-        # bpy.data.objects.remove(o, do_unlink=True)
-
     bpy.data.collections.remove(new_collection, do_unlink=True)
 
-
-
-
-
-
-
-
-
-    # else: #CREATE .BLEND BY DUPLICATING ACTIVE FILE
-    #     # #METHOD 1 SAVE CURRENT BLEND FILE: respects linked data
-    #     # new_scene = bpy.data.scenes.new("Biome")
-    #     # new_scene.collection.children.link(new_collection)
-    #     # # # Copy scene settings
-    #     # # existing_scene = bpy.data.scenes.get("Existing Scene")
-    #     # # if existing_scene:
-    #     # #     new_scene.frame_start = existing_scene.frame_start
-    #     # #     new_scene.frame_end = existing_scene.frame_end
-    #     # #     new_scene.render.resolution_x = existing_scene.render.resolution_x
-    #     # #     new_scene.render.resolution_y = existing_scene.render.resolution_y
-    #     #     # Add more settings as needed
-    #     # # for obj in bpy.data.objects:
-    #     # #     if obj not in objselection: bpy.data.objects.remove(obj, do_unlink=True)
-    #     # # for obj in objselection:
-    #     # #     new_scene.collection.objects.link(obj)
-    #     # #     #also brush objs found in modifier
-    #     #
-    #     # for scene in bpy.data.scenes:
-    #     #     if scene != new_scene:
-    #     #         bpy.data.scenes.remove(scene)
-    #     # bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
-    #     # bpy.ops.wm.save_as_mainfile(copy=True, filepath=finalpath)
-    #
-    #     # bpy.data.libraries.write(finalpath, datablocks=data,path_remap="ABSOLUTE")
-    #
-    #     # bpy.ops.wm.new_mainfile(filepath="")
-    #     # bpy.ops.wm.save_as_mainfile(filepath="path/to/your/new_file.blend")
-    #     # data_blocks = {}
-    #     # IMPORT LINKED DATA???? this way it's all appended geometry, not linked
-    #     # bpy.data.libraries.write(finalpath, data_blocks, fake_user=True)
-    #     # bpy.data.libraries.write(finalpath, data_blocks = *bpy.data.window_managers, fake_user=False, path_remap="ABSOLUTE")
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # #REGENERATE THUMBNAILS (code works perfectly, but thumbnail generation doesn't work, it works on its own as a separate button operator)
-    # move_objects_script = os.path.dirname(finalpath)
-    # # Save move_objects.py script
-    # move_objects_script_content = '''
-    # import bpy
-    # for o in bpy.data.objects:
-    #     if o.asset_data: o.asset_generate_preview()
-    # for o in bpy.data.collections:
-    #     if o.asset_data: o.asset_generate_preview()
-    # bpy.ops.wm.save_mainfile()
-    # #bpy.ops.wm.quit_blender()
-    # '''
-    # with open(move_objects_script, 'w') as move_script_file:
-    #     move_script_file.write(move_objects_script_content)
-    # command = [
-    #     "blender",
-    #     "-b", finalpath, #blend file that needs new previews
-    #     "--python", move_objects_script
-    #     # #    f'del "{output_bat_path}"\n'
-    #     # #    f'del "{move_objects_script}"\n'
-    #     # f'echo Finished executing Blender script, saving file, and cleaning up files!\n'
-    #     # f'pause\n'
-    # ]
-    # subprocess.run(command)
-    # os.remove(move_objects_script)
-
-
-
-
-
-
-
-
-
-
-
-
-    # #METHOD 2 SAVE NEW BLEND FILE: automatic inclusion of dependencies data, excluded unused data automatically, can import into existing .blend
-    # # data_blocks = {*objselection,
-    # # data_blocks = {*bpy.context.selected_objects,
-    # data_blocks = {new_collection,
-    #                # bpy.data.images['PreviewImageName'],
-    #                # preview,
-    #                # bpy.data.images[new_collection.preview],
-    #                # new_collection.preview,
-    #                # bpy.data.materials[mat.name],
-    #                # *bpy.data.window_managers,
-    #                # *bpy.data.workspaces,
-    #                # *bpy.data.worlds
-    #                # *bpy.data.scenes,
-    #                # *bpy.context.scene.render.engine
-    #                }
-    # #IMPORT LINKED DATA???? this way it's all appended geometry, not linked
-    # #bpy.data.libraries.write(finalpath, data_blocks, fake_user=True)
-    # bpy.data.libraries.write(finalpath, data_blocks, fake_user=True, path_remap="ABSOLUTE")
-    # # remove the created collection and biome sphere
-    # if biome_detected:
-    # #     for ob in bpy.context.selected_objects:
-    # #         bpy.data.objects.remove(ob, do_unlink=True)
-    # #     bpy.data.collections.remove(new_collection, do_unlink=True)
-    # #     bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
-    #     bpy.data.objects.remove(cubeOBJ, do_unlink=True)
-    #     if new_hairpaint:
-    #         for hair in new_hairpaint: bpy.data.objects.remove(hair, do_unlink=True)
-    # bpy.data.collections.remove(new_collection, do_unlink=True)
-    # bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
-    #
-    # if activeobj: bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]  # make active
-    # for x in objselection: bpy.data.objects[x.name].select_set(True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # if should_it_save: bpy.ops.wm.save_mainfile()
-
-    #save collection in the outliner
-
-    # objselection = bpy.context.selected_objects
-    # new_scene = bpy.data.scenes.new("Biome")
-    # # for obj in bpy.data.objects:
-    # #     if obj not in objselection: bpy.data.objects.remove(obj, do_unlink=True)
-    # for obj in objselection:
-    #     # new_scene.objects.link(obj)
-    #     new_scene.collection.objects.link(obj)
-    #     #also brush objs found in modifier
-    #
-    # for scene in bpy.data.scenes:
-    #     if scene != new_scene:
-    #         bpy.data.scenes.remove(scene)
-    #
-    # path= bpy.context.preferences.filepaths.asset_libraries[-1].path + '/Biomes'
-    # if not os.path.exists(path): os.makedirs(path)
-    #
-    # numb = 1
-    # while os.path.exists(path + '/Biome ' + str(numb) + ".blend"): numb += 1
-    # finalpath = path + '/Biome ' + str(numb) + ".blend"
-    #
-    # print(finalpath)
-    # bpy.ops.wm.save_as_mainfile(copy=True, filepath=finalpath)
-    # # bpy.ops.wm.revert_mainfile(use_scripts=True)  # bpy.ops.file.unpack_all()       # bpy.ops.wm.open_mainfile(filepath=path)
-
-
-    #save obj or collection as asset
-
-    # bpy.ops.object.select_all(action='INVERT')
-    # I = bpy.context.selected_objects
-    # for ob in I:
-    #     bpy.data.objects.remove(ob, do_unlink=True)
-    #
-    # bpy.context.window.workspace = bpy.data.workspaces['1monitor'] #doesn't get transfered to the newly saved and created blend file
-    # bpy.data.batch_remove(ids=bpy.data.workspaces['2monitors'], ) #delete useless id data
-    #
-    # if not should_it_save:
-
-
-
-    #FROM EMPTY BLEND FILE INSTEAD OF COPY OF OPENED BLEND FILE
-    # #NEW METHOD FROM OFFICIAL BLENDER
-    # scene doesn't display objects properly (import collections and link everything to scene)
-    # render settings, hdri
-    # import 1 monitor workspace?
-    # write all materials, textures and node groups to a library  #  https://docs.blender.org/api/blender_python_api_2_77_1/bpy.types.BlendData.html#bpy.types.BlendData.libraries
-    # data_blocks = {*bpy.context.selected_objects,
-    #                # *bpy.data.window_managers,
-    #                *bpy.data.workspaces,
-    #                *bpy.data.worlds,
-    #                # *bpy.data.scenes,
-    #                *bpy.context.scene.render.engine
-    #                }
-    # bpy.data.libraries.write("//new_library.blend", data_blocks)
-
+    if export_finalize_error_message:
+        self.report({'ERROR'}, export_finalize_error_message)
+        return {'CANCELLED'}
     self.report({'INFO'}, f"Successfully exported to {finalpath}")
 
     return {'FINISHED'}
@@ -15113,12 +11509,6 @@ class export_obj_to_asset_library(bpy.types.Operator):
     bl_idname = "secret.export_obj_to_asset_library"
     bl_label = "Export Biome to Asset Library"
     bl_options = {'REGISTER', 'UNDO'}
-
-    # def execute(self, context):
-    #     should_it_save=True
-    #     export_to_asset_library_function(should_it_save,self, context)
-    #     return {'FINISHED'}
-
     def invoke(self, context, event):
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -15129,10 +11519,7 @@ class switchtoerasealpha(bpy.types.Operator):   # example of potential simple co
     """In Texture paint mode, press the shortcut to toggle between painting mode and erase mode"""
     bl_idname = "secret.switchtoerasealpha"
     bl_label = "Toggle Erase Alpha /Mix"
-    # bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-
-        # command for sculpt mode, just in case bpy.context.tool_settings.sculpt.brush
         if bpy.context.tool_settings.image_paint.brush.blend == 'ERASE_ALPHA':
             bpy.context.tool_settings.image_paint.brush.blend = 'MIX'
         else:
@@ -15142,8 +11529,6 @@ class switchtoerasealpha(bpy.types.Operator):   # example of potential simple co
 
 def add_collections_to_list(collection,all_collections):
     all_collections.append(collection)  # Add the current collection to the list
-
-    # Recursively add collections within this collection to the list
     for sub_collection in collection.children:
         add_collections_to_list(sub_collection,all_collections)
 def paint_from_library_function(self, context, event, **kwargs):
@@ -15966,13 +12351,7 @@ def paint_from_library_function(self, context, event, **kwargs):
         if activeobj:
             current_mode = bpy.context.object.mode
             ensure_object_mode_for_import(activeobj, "paint_from_library_justimport")
-
-
-
-    # original_selection=bpy.context.selected_objects #to determine if going to paint mode or just importing the asset to the 3d cursor
     objselection = bpy.context.selected_objects
-    # if activeobj not in objselection: objselection.append(activeobj)
-
     if bpy.app.version_string >= "4.0.0":
         current_library_name = context.area.spaces.active.params.asset_library_reference
     elif bpy.app.version_string < "4.0.0":
@@ -15980,14 +12359,9 @@ def paint_from_library_function(self, context, event, **kwargs):
         if current_library_name == "ALL":  # For some reason the relative path stops at the ID container in local file
             self.report({'ERROR'}, "Select an Asset Library in the side panel (can't be set to 'ALL') (fixed in Blender 4.0)")
             return {'FINISHED'}
-
-    #SELECT COLLECTION OF ACTIVE OR put into hidden one (create hidden one if not found)
     original_collection = bpy.context.view_layer.active_layer_collection  # bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
     new_coll_was_created_so_hide_viewport=False
     coll_to_hide = None
-
-    # print("##########@@@@@@@@@@@@#############-----------------",bpy.context.view_layer.active_layer_collection)
-    #CHOOSE COLLECTION DESTINATION BASED ON "HIDE IMPORTED CHECKBOX" (only needed if we're importing AND painting)   -- when just importing,put everything in active collection. when paint importing, use the terrain's collection. when hidden, create in already active collection, or reference existing wherever it is
     if justImport == False:
         if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported: #if context.scene.mypropertieslist.checkboxHideImported: #make hidden collection active, or create it
             all_collections = []
@@ -16017,8 +12391,6 @@ def paint_from_library_function(self, context, event, **kwargs):
                     bpy.context.view_layer.active_layer_collection = Coll_of_Active
 
 
-
-
     print("")
     print("")
     print("")
@@ -16031,10 +12403,6 @@ def paint_from_library_function(self, context, event, **kwargs):
     if bpy.app.version_string >= "4.0.0": sel_assets = context.selected_assets
     elif bpy.app.version_string < "4.0.0": sel_assets = context.selected_asset_files
     for asset_file in sel_assets:
-        # print("--paint from library -- ACTIVE COLLECTION:",bpy.context.view_layer.active_layer_collection)
-        # print(dir(asset_file))  #['__doc__', '__module__', '__slots__', 'bl_rna', 'full_library_path', 'full_path', 'id_type', 'local_id', 'metadata', 'name', 'rna_type']
-
-        #IF LOCAL ASSETS: (already in blend file marked as assets)
         if current_library_name == "LOCAL":  # For some reason the relative path stops at the ID container in local file
 
             if bpy.app.version_string >= "4.0.0":
@@ -16044,18 +12412,10 @@ def paint_from_library_function(self, context, event, **kwargs):
                 library_path = Path(bpy.data.filepath)  # Will be "." if file has never been saved
                 asset_fullpath = library_path / asset_file.relative_path
                 asset_fullpath /= asset_file.local_id.name  # Includes the path to the asset inside the .blend file
-                # asset_name = asset_fullpath.name  # humanmodel
-                # asset_filepath = asset_fullpath  # //fjifg.blend
                 asset_type = asset_fullpath.parent.parent.name  # whole path and then /object or /collection
-
-
-            #PAINT OR SWITCH BRUSH ASSET
             if switch_asset:
                 if asset_type == "Object": paintbrushswitch_f(self, context, activeobj=bpy.data.objects[asset_fullpath.name], objselection=[activeobj], current_mode=current_mode)   #(self, context, event)
                 elif asset_type == "Collection":
-                    # # STOP IF SWITCHING TO A COLLECTION THAT'S NOT PAINT BRUSH FRIENDLY (if it contains subcollections or other weird object you can't use it as brush for secret paint)
-                    # if coll:
-                    #     print("This collection is not usable as Brush for a Paint System.")
                     paintbrushswitch_f(self, context, activeobj=activeobj, objselection=[x for x in bpy.data.collections[asset_fullpath.name].all_objects], current_mode=current_mode)   #(self, context, event)
 
             else: #(if not switching asset, PAINT)
@@ -16080,9 +12440,6 @@ def paint_from_library_function(self, context, event, **kwargs):
                     allow_auto_assembly_on_q=False,
                 )
                 bpy.context.view_layer.active_layer_collection = original_collection
-
-
-        #ELSE IF EXTERNAL ASSET LIBRARY:
         else:
             if bpy.app.version_string >= "4.0.0":
                 asset_filepath = asset_file.full_library_path  # prints this > C:\Users\loren\Assets\3D\objects\forest nature plants cabin evermotion.blend         but if manual mode it needs to be converted into this "C:/Users/loren/Assets/3D/objects/forest nature plants cabin evermotion.blend"
@@ -16101,10 +12458,6 @@ def paint_from_library_function(self, context, event, **kwargs):
             all_previous_materials = set(bpy.data.materials)
             all_previous_collections = set(bpy.data.collections)
             all_previous_shape_keys = set(bpy.data.shape_keys)
-
-
-        ##########################################################################
-
             if bpy.app.version_string >= "4.0.0": import_setting = bpy.context.space_data.params.import_method
             elif bpy.app.version_string < "4.0.0": import_setting = bpy.context.space_data.params.import_type
 
@@ -16124,20 +12477,6 @@ def paint_from_library_function(self, context, event, **kwargs):
                                       directory=os.path.join(asset_filepath, asset_type), filename=asset_name,
                                       instance_collections=False, active_collection=True, do_reuse_local_id=True)
             except: print("---- ERROR IMPORTT")
-
-
-            # #RESTORE ORIGINAL SELECTION (importing objects changes selection)
-            # for x in bpy.context.selected_objects: x.select_set(False)
-            # for x in objselection: x.select_set(True)
-            # if activeobj: bpy.context.view_layer.objects.active = activeobj
-
-
-
-
-            # orenpaint_update_modifier_f(context, Forced_Update=True)
-
-
-
             imported_linked_objects = [obj for obj in bpy.data.objects if obj not in all_previous_objects and obj.library]
             imported_linked_collections = [coll for coll in bpy.data.collections if coll not in all_previous_collections and coll.library]
             imported_linked_materials = [mat for mat in bpy.data.materials if mat not in all_previous_materials and mat.library]
@@ -16170,36 +12509,10 @@ def paint_from_library_function(self, context, event, **kwargs):
             if not new_obs:
                 print("----ERROR no new_obs")
                 return{'FINISHED'} #with append-reuse: importing same collection doesn't work
-
-
-            # #MARK COLLECTION AS ASSET (have to for loop twice because the first time it gets cancelled and transformed into lib override, so I have to find it again)
-            # all_collections=[]
-            # for top_level_collection in bpy.context.scene.collection.children:
-            #     add_collections_to_list(top_level_collection,all_collections)
-            # all_with_new_collections = all_collections
-            # for coll in all_with_new_collections:#bpy.data.collections: #bpy.context.view_layer.layer_collection.children:  #bpy.context.scene.collection.children
-            #     if coll not in all_previous_collections:
-            #         coll.asset_mark()
-            #         coll.asset_generate_preview()
-
-
-            # #TEMPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP
-            # print("------------------", [x.name for x in new_obs])
-            # for ob in new_obs:
-            #     ob.make_local()
-            # print("------------------",[x.name for x in new_obs])
-            # for ob in new_obs:
-            #     if ob.name not in bpy.context.view_layer.objects:
-            #         print("# Not in View layer", ob.name)
-            #
-            # return{'FINISHED'}
-
-            #LOCALIZE MATERIALS ON THE IMPORTED LOCAL OBJECTS ONLY.
             editable_new_obs = [obj for obj in new_obs if not obj.library]
             all_materials = []
             imported_material_cache = {}
             for ob in editable_new_obs:
-                # print("Â§Â§Â§Â§Â§Â§Â§Â§Â§Â§ PROCESSING: ",ob)
                 for mat_slot in ob.material_slots:
                     if mat_slot.material:
                         mat = _secret_paint_safe_material_for_assignment(mat_slot.material, imported_material_cache)
@@ -16215,105 +12528,6 @@ def paint_from_library_function(self, context, event, **kwargs):
             for matery in all_materials:
                 if matery.library or matery.override_library:
                     make_import_local(matery, f"material {matery.name}")
-            # for ob in new_obs:
-                #REMOVE DUPLICATES
-                # if ob.name in bpy.context.view_layer.objects:
-                #     print("# Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã© INNNNNNNNN", ob.name)
-                # if ob.name not in bpy.context.view_layer.objects: print("# Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã©Ã© Not in View layer", ob.name)
-                # else: print("# @@@@@@@  INNN", ob.name)
-                    # new_obs.remove(ob)
-                    # bpy.data.objects.remove(ob,do_unlink=True)
-
-                # ob.make_local()
-                # # if ob.data.library:
-                # ob['Secret Origin'] = ob.data.library
-                # if ob.type in ["CURVES", "CURVE","LIGHT"]: ob.data.make_local()  # LOCALIZE HAIR CURVES and CURVE    ob.data = ob.data.copy()
-                # secret_material_list=[]
-                # for mat_slot in ob.material_slots:
-                #     loop = 0
-                #     if mat_slot.material:
-                #         originalmat = mat_slot.material
-                #         print("@@@@@@ MATERIAL:", originalmat, "matslot: ", mat_slot)
-                #
-                #         #CHECK IF THIS LINKED MATERIAL WAS MADE LOCAL BEFORE, if so: reference the localized material
-                #         found_materiall=[]
-                #         for obk in bpy.data.objects:
-                #
-                #         #     if "Secret Origin" in obk and "Secret Materials" in obk and obk['Secret Origin'] == ob.data.library:
-                #         #         for matx in obk['Secret Materials']:
-                #         #             if matx[0]==originalmat.name: found_materiall = bpy.data.materials[matx[1]]
-                #         #             if found_materiall: break
-                #         #     if found_materiall: break
-                #
-                #             for prop_name, _ in ob.items():
-                #                 if prop_name.startswith("Secret Materials") and _[0] == originalmat and obk['Secret Origin'] == ob.data.library:
-                #                     if _[0]==originalmat: found_materiall = _[1]
-                #                 if found_materiall: break
-                #             if found_materiall: break
-                #
-                #         #ASSIGN THE PREVIOUSLY LOCALIZED MATERIAL OR LOCALIZE IT NOW
-                #         mat_slot.link = 'OBJECT'
-                #         if found_materiall:
-                #             try:mat_slot.material = found_materiall
-                #             except:
-                #                 print("------######## ERROR111")
-                #                 # print("NOT MATERIALLL", ob,mat_slot.material.name, mat_slot )
-                #         else:
-                #             try:mat_slot.material = originalmat
-                #             except:
-                #                 print("------####### ERROR22222222")
-                #                 # print("NOT MATERIALLL222", ob,mat_slot.material.name, mat_slot )
-                #             originalmat.make_local()
-                #         loop += 1
-                #         ob['Secret Materials ' + str(loop)] = (originalmat,mat_slot.material)
-                #         # ob['Secret Materials'+str(mat_slot.material)]=mat_slot.material
-                #         # secret_material_list.append((originalmat, mat_slot.material))  #secret_material_list.append((originalmat.name, mat_slot.material.name))
-                #
-                # # print("Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°",secret_material_list)
-                # # ob['Secret Materials'] = secret_material_list  #[(mat, newmat) for mat_slot in ob.material_slots if mat_slot.material]
-
-
-                # if ob.data.library:
-                #     ob.make_local()
-                #     ob['Secret Origin'] = ob.data.library
-                #     if ob.type in ["CURVES", "CURVE","LIGHT"] and ob.data.library: ob.data.make_local()  # LOCALIZE HAIR CURVES and CURVE    ob.data = ob.data.copy()
-                #     secret_material_list=[]
-                #     for mat_slot in ob.material_slots:
-                #         if mat_slot.material:
-                #             originalmat = mat_slot.material
-                #
-                #             #CHECK IF THIS LINKED MATERIAL WAS MADE LOCAL BEFORE, if so: reference the localized material
-                #             found_materiall=[]
-                #             for obk in bpy.data.objects:
-                #                 if "Secret Origin" in obk and "Secret Materials" in obk and obk['Secret Origin'] == ob.data.library:
-                #                     for matx in obk['Secret Materials']:
-                #                         if matx[0]==originalmat.name: found_materiall = bpy.data.materials[matx[1]]
-                #                         if found_materiall: break
-                #                 if found_materiall: break
-                #
-                #             #ASSIGN THE PREVIOUSLY LOCALIZED MATERIAL OR LOCALIZE IT NOW
-                #             mat_slot.link = 'OBJECT'
-                #             if found_materiall: mat_slot.material = found_materiall
-                #             else:
-                #                 mat_slot.material = originalmat
-                #                 originalmat.make_local()
-                #             secret_material_list.append((originalmat.name, mat_slot.material.name))
-                #
-                #     ob['Secret Materials'] = secret_material_list  #[(mat, newmat) for mat_slot in ob.material_slots if mat_slot.material]
-
-
-
-
-
-
-
-
-
-
-            # # UPDATE ORENPAINT (force it if there's an orenpaint.001: when appending biomes, it imports the node with orenpaint.001)
-            # secretpaint_update_modifier_f(context, check_for_dupli_nodes=True, Forced_Update=True)  # forcing update because it might be the first
-
-            #LOCALIZE ALL NODE TREES
             new_nodes = [node for node in bpy.data.node_groups if node not in all_previous_nodes]
             for node in new_nodes:
                 if node.library or node.override_library:
@@ -16348,7 +12562,6 @@ def paint_from_library_function(self, context, event, **kwargs):
                         print(f"---####### REMOVE LINKED SHAPE KEY ERROR {shape_key.name}: {ex}")
 
             debug_print_linked_shape_key_owners(imported_linked_shape_keys, "post_import_cleanup")
-
 
 
             movable_import_roots = imported_root_objects(new_obs)
@@ -16386,17 +12599,10 @@ def paint_from_library_function(self, context, event, **kwargs):
                 reference_objects_for_move = visible_import_roots[:] if visible_import_roots else new_obs[:]
             reference_bounds = imported_object_bounds(reference_objects_for_move)
             relocation_delta = Vector((0.0, 0.0, 0.0))
-
-
-            #DECIDE WETHER TO PAINT OR JUST IMPORT OR SWITCH ASSET
-            # # if len(original_selection) == 0 and current_mode == "OBJECT" or justImport:
             activated_scatter = False
             if justImport:
                 if reference_bounds:
                     relocation_delta = bpy.context.scene.cursor.location - reference_bounds["center"]
-
-
-            # if activeobj.type == "MESH" and current_mode == "OBJECT" \
             elif activeobj is not None and (
                 activeobj.type == "MESH" and current_mode == "OBJECT"
                 or activeobj.type == "CURVES" and current_mode == "OBJECT"
@@ -16417,36 +12623,11 @@ def paint_from_library_function(self, context, event, **kwargs):
                         target_bounds["center"].y - reference_bounds["center"].y,
                         target_bounds["min"].z - reference_bounds["min"].z,
                     ))
-
-
-            # #LINK HIDDEN OBJECTS TO THE NEWEST COLLECTION
-            # main_new_collection = None
-            # for coll in all_with_new_collections[:]:  # bpy.data.collections: #bpy.context.view_layer.layer_collection.children:  #bpy.context.scene.collection.children
-            #     if coll not in all_previous_collections: main_new_collection = coll
-            # for obj in new_obs:
-            #     if obj.name not in bpy.context.view_layer.objects: bpy.data.collections[main_new_collection.name].objects.link(obj)
-
-
-            #MOVE TO CURSOR
-            # selected_objects = bpy.context.selected_objects
             for obj in movable_import_roots:
                 obj.location += relocation_delta
-                # if not obj.padrent:
                 if False:
-                    # print("Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°Â°",obj.name)
-                    # if obj.name.startswith("Rename this rig"): print("MOOOOOOVE", obj.name, obj.location)
                     obj.location += target_location - Vector(center) #ONLY MOVE OBJS THAT HAVE NO PARENT                    # print("JUST MOOVEEEEEED",obj.name)
                     obs_without_parent_for_recenter_coll_origin.append(obj)
-
-                    # if obj.name.startswith("Rename this rig"): print("AFTEEEEEER", obj.name, obj.location)
-
-            # #RECENTER COLLECTION INSTANCES
-            # orengrouprecentercollectionobj_function(context, objselection=obs_without_parent_for_recenter_coll_origin)       #new_obs
-            # # #INSTANCE COLL
-            # # instancecollfromactiveobj_f(self,context, activeobj=new_obs[0])
-
-
-            #LIST ALL BIOME SURFACES (if two of the imported objs are orencurves and share same parent: biome detected, select only those
             biome_to_use_as_paint=[]
             terrains_with_hair=[]
             for obj in new_obs:
@@ -16455,10 +12636,7 @@ def paint_from_library_function(self, context, event, **kwargs):
                         for modif in obj.modifiers:
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                                 if obj.parent and obj.parent not in terrains_with_hair: terrains_with_hair.append(obj.parent)  #and obj.parent.library == None
-
-            #FIND BIOME WITH THE MOST HAIR OUT OF ALL FOUND BIOMES
             if len(terrains_with_hair) >=1:
-                # for x in bpy.context.selected_objects: x.select_set(False) #objselection
                 biome_to_use_as_paint = None
                 for terrain in terrains_with_hair:
 
@@ -16469,35 +12647,9 @@ def paint_from_library_function(self, context, event, **kwargs):
                                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
                                         if hairChild not in current_biome: current_biome.append(hairChild)
                     if current_biome and biome_to_use_as_paint and len(current_biome) > len(biome_to_use_as_paint) or biome_to_use_as_paint==None: biome_to_use_as_paint = current_biome
-
-                # print("KKKK")
-                # for hair in terrains_with_hair[0].children:
-                #     # bpy.data.objects[hair.name].select_set(True)
-                #     biome_to_use_as_paint.append(hair)
-
-            # USE THE SINGLE OBJECTS !!!!! if the object marked as asset has a parent (for example an empty as common pivot) then the painting function will get mulitple selected objects and try to scatter the collection, so when importing object asset types from asset browser only specity the one that doesn't have any parents
-            # else: biome_to_use_as_paint = new_obs
             elif asset_type == "Collection": biome_to_use_as_paint = new_obs
             elif asset_type == "Object": biome_to_use_as_paint = [obs_without_parent_for_recenter_coll_origin[0]]
-            # return{'FINISHED'}
-
-
-
-            # UPDATE ORENPAINT (force it if there's an orenpaint.001: when appending biomes, it imports the node with orenpaint.001)
-            # print("UPDAAAAAAAAAAAT IMPORTED")
             secretpaint_update_modifier_f(context,upadte_provenance="def paint_from_library_function(self, context, event, **kwargs)")  # forcing update because it might be the first    #check_for_dupli_nodes=True
-
-            # print (biome_to_use_as_paint)
-            # print (activeobj)
-            # print(activated_scatter)
-
-            # for obj in biome_to_use_as_paint:obj.select_set(True)
-            # for obj in biome_to_use_as_paint:
-            #     try:obj.select_set(True)
-            #     except:pass
-
-
-            # #PAINT else don't paint, then select the imported objects
             importpainting_multiple_assets = True if len(sel_assets) >=2 else False
             if targetless_world_paint_import:
                 remember_asset_browser_world_paint_source(biome_to_use_as_paint if biome_to_use_as_paint else new_obs)
@@ -16515,16 +12667,10 @@ def paint_from_library_function(self, context, event, **kwargs):
                     defer_enter_paint_mode=defer_world_paint_start,
                     allow_auto_assembly_on_q=False,
                 )
-                # return{'FINISHED'}
-
-
             elif switch_asset:
                 if asset_type == "Object":
                     paintbrushswitch_f(self, context, activeobj=biome_to_use_as_paint[0], objselection=[activeobj], current_mode=current_mode)   #(self, context, event)
                 elif asset_type == "Collection":
-                    # # STOP IF SWITCHING TO A COLLECTION THAT'S NOT PAINT BRUSH FRIENDLY (if it contains subcollections or other weird object you can't use it as brush for secret paint)
-                    # if coll:
-                    #     print("This collection is not usable as Brush for a Paint System.")
                     paintbrushswitch_f(self, context, activeobj=activeobj, objselection=biome_to_use_as_paint, current_mode=current_mode)   #(self, context, event)
 
             elif justImport:   # SELECT NEWLY IMPORTED   #else
@@ -16533,33 +12679,10 @@ def paint_from_library_function(self, context, event, **kwargs):
                         obj.select_set(True)
                         bpy.context.view_layer.objects.active = obj
                     except:pass
-
-
-
-            # if activated_scatter:
-            #     if copy_hair_settings: #reselect original hair to copy settings
-            #         bpy.context.view_layer.objects.active = activeobj
-            #         activeobj.select_set(True)
-            #     else: #reselect plane
-            #         bpy.context.view_layer.objects.active = bpy.data.objects[terrainobj.name]
-            #         bpy.data.objects[terrainobj.name].select_set(True)
-            #     orenpaint_function(self, context, event)
-            # else: bpy.context.view_layer.objects.active = bpy.data.objects[activeobj.name]
-
-
     if coll_to_hide: coll_to_hide.hide_viewport = FoundHiddenCollection_status #restore status, because it was activated in order to append assets inside of it
     if new_coll_was_created_so_hide_viewport: #hide the newly created collection at the end so that before I can append assets inside of it
         new_coll.hide_viewport = True
         new_coll.hide_render = True
-
-    #ORIG COLLECTION
-    # bpy.context.view_layer.active_layer_collection = original_collection
-
-
-        # #UPDATE ORENPAINT (force it if there's an orenpaint.001: when appending biomes, it imports the node with orenpaint.001)
-        # secretpaint_update_modifier_f(context, check_for_dupli_nodes=True,Forced_Update=True) #forcing update because it might be the first
-
-
     if targetless_world_paint_import:
         if asset_browser_world_paint_source is None:
             self.report({'WARNING'}, "Imported asset has no object that can be used as a paint source")
@@ -16578,16 +12701,10 @@ class paint_from_library(bpy.types.Operator):
     bl_idname = "secret.paint_from_library"
     bl_label = "Import Asset and Paint"
     bl_options = {'REGISTER', 'UNDO'}
-    # @classmethod
-    # def poll(cls, context):
-    #     return context.selected_asset_files
     def invoke(self, context, event):
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
     def modal(self, context, event):  # reference:  orenscatter_modal_operator(bpy.types.Operator)
-        # if event.shift: paint_from_library_function(self, context, event, switch_asset = True)
-        # elif event.alt: paint_from_library_function(self, context, event, justImport = True)
-        # else: paint_from_library_function(self, context, event)
         paint_from_library_function(self, context, event)
         return {'FINISHED'}
 class paint_from_library_switch(bpy.types.Operator):
@@ -16595,9 +12712,6 @@ class paint_from_library_switch(bpy.types.Operator):
     bl_idname = "secret.paint_from_library_switch"
     bl_label = "Import Asset and Switch"
     bl_options = {'REGISTER', 'UNDO'}
-    # @classmethod
-    # def poll(cls, context):
-    #     return context.selected_asset_files
     def invoke(self, context, event):
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -16609,11 +12723,6 @@ class paint_from_library_justimport(bpy.types.Operator):
     bl_idname = "secret.paint_from_library_justimport"
     bl_label = "Import Asset"
     bl_options = {'REGISTER', 'UNDO'}
-
-    # @classmethod
-    # def poll(cls, context):
-    #     return context.selected_asset_files
-
     def invoke(self, context, event):
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -16622,15 +12731,10 @@ class paint_from_library_justimport(bpy.types.Operator):
         paint_from_library_function(self, context, event, justImport = True)
         return {'FINISHED'}
 def checkboxImportWithoutPainting_f(self, context):
-    # self.layout.operator("secret.paint_from_library", icon= 'DECORATE_KEYFRAME', text="Paint")
     layout = self.layout
     row = layout.row(align=True)
-    # layout.prop(context.scene.mypropertieslist, "checkboxImportWithoutPainting", text="", icon= 'BRUSH_DATA')
-    # layout.operator("secret.importselected_assetfrombrowser", icon='BRUSH_DATA', text="Paint")
-    # layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
     row.operator("secret.paint_from_library", icon='BRUSH_DATA', text="Paint")
     row.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
-    # layout.prop(context.scene.mypropertieslist, "checkboxTransferMaterialWithBiome", text="", icon= 'MATERIAL')
 def shared_material_f(self,context):
 
 
@@ -16639,16 +12743,8 @@ def shared_material_f(self,context):
     if common_name not in bpy.data.node_groups:
 
         all_nodes_before_import =[node_tree for node_tree in bpy.data.node_groups]
-        # all_nodes_before_import =set(node_tree for node_tree in bpy.data.node_groups)
         activeobj = bpy.context.active_object  # bpy.data.objects["armature"]     bpy.context.object["armature"]     <bpy_struct, Object("left") at 0x000001C2D10E5608>
         objselection = bpy.context.selected_objects  # bpy.context.selected_objects[0]   #bpy.context.scene.objects
-        # USER = Path(resource_path('USER'))
-        # src = USER / "scripts/addons" / "Secret Paint"
-        # file_path = src / "Secret Paint.blend"
-        # for mod in addon_utils.modules():
-        #     if mod.bl_info.get("name") == "Secret Paint":
-        #         file_path = os.path.dirname(mod.__file__) + "\Secret Paint.blend"
-        #         break
         file_path = _secret_paint_source_blend_path()
         inner_path = "NodeTree"
         object_name = "Shared"
@@ -16657,80 +12753,10 @@ def shared_material_f(self,context):
             directory=os.path.join(file_path, inner_path),
             filename=object_name)
         all_nodes_after_import = [node_tree for node_tree in bpy.data.node_groups]
-        # new_node= [all_nodes_after_import-all_nodes_before_import]
         new_node = [x for x in all_nodes_after_import if x not in all_nodes_before_import]
-        # new_node= list(all_nodes_after_import-all_nodes_before_import)
         new_node[0].name = common_name
         bpy.context.view_layer.objects.active = activeobj
         for x in objselection: x.select_set(True)
-
-        #CREATE NODE GROUP FROM SCRATCH
-        # node_group = bpy.data.node_groups.new(name=common_name, type='ShaderNodeTree')
-        #
-        # ShaderNodeHueSaturation = node_group.nodes.new(type='ShaderNodeHueSaturation')
-        # ShaderNodeHueSaturation.location = -200, 100
-        #
-        # ShaderNodeMixRGB1 = node_group.nodes.new(type='ShaderNodeMixRGB')
-        # ShaderNodeMixRGB1.location = 0, 100
-        # ShaderNodeMixRGB1.inputs[0].default_value = 1
-        # ShaderNodeMixRGB1.blend_type = 'OVERLAY'
-        # # ShaderNodeMixRGB1.hide_toggle
-        # ShaderNodeRGB = node_group.nodes.new(type='ShaderNodeRGB')
-        # ShaderNodeRGB.location = 0, 320
-        # reroute_node = node_group.nodes.new(type='NodeReroute')
-        # reroute_node.location = 200, 220
-        #
-        #
-        # # # Add the HSV node to the node group
-        # # hsv_node = node_group.nodes.new(type='ShaderNodeHueSaturation')
-        # # hsv_node.location = (0, 0)  # Adjust the location as needed within the group
-        #
-        # # Add the HSV node to the node group
-        # roughness_range = node_group.nodes.new(type='ShaderNodeMapRange')
-        # roughness_range.location = (0, -150)  # Adjust the location as needed within the group
-        # roughness_range.label="Roughness Map Range"
-        #
-        # # Connect the input and output of the node group
-        # input_node = node_group.nodes.new(type='NodeGroupInput')
-        # input_node.location = (-600, 0)  # You can adjust the location as needed
-        # output_node = node_group.nodes.new(type='NodeGroupOutput')
-        # output_node.location = (+300, 0)  # You can adjust the location as needed
-        #
-        # # Link the input and output sockets (updated socket names)
-        # # node_group.inputs.new("NodeSocketColor", "Color")
-        # # active_material.links.new(input_node.outputs[0], hsv_node.inputs["Color"])
-        #
-        # # node_group.inputs.new('NodeSocketColor', "Color")
-        # # node_group.links.new(input_node.outputs["Color"], hsv_node.inputs["Color"])
-        # # node_group.outputs.new('NodeSocketColor', "Base Color")
-        # # node_group.links.new(hsv_node.outputs["Color"],output_node.inputs["Base Color"])
-        # node_group.inputs.new('NodeSocketColor', "Color")
-        # node_group.links.new(input_node.outputs["Color"], ShaderNodeHueSaturation.inputs["Color"])
-        # node_group.outputs.new('NodeSocketColor', "Base Color")
-        # node_group.links.new(ShaderNodeMixRGB1.outputs["Color"],output_node.inputs["Base Color"])
-        #
-        # node_group.inputs.new('NodeSocketFloat', "Roughness")
-        # node_group.links.new(input_node.outputs["Roughness"], roughness_range.inputs["Value"])
-        # node_group.outputs.new('NodeSocketFloat', "Roughness")
-        # node_group.links.new(roughness_range.outputs["Result"],output_node.inputs["Roughness"])
-        #
-        #
-        # # links.new(nodediffuse.outputs["Color"], ShaderNodeHueSaturation.inputs["Color"])
-        # node_group.links.new(ShaderNodeHueSaturation.outputs["Color"], ShaderNodeMixRGB1.inputs["Color1"])
-        # node_group.links.new(ShaderNodeRGB.outputs["Color"], reroute_node.inputs[0])
-        # node_group.links.new(reroute_node.outputs[0], ShaderNodeMixRGB1.inputs["Color2"])
-        # # node_group.links.new(ShaderNodeMixRGB1.outputs["Color"], node_principled.inputs["Base Color"])
-
-
-
-
-
-
-
-
-
-
-    # FOLLOW THE STATUS OF THE ACTIVE OBJECT, TOGGLE FOR ALL SELECTED OBJECTS
     Remove_Enabled = False
     try: nodeys = bpy.context.active_object.active_material.node_tree.nodes
     except:
@@ -16738,20 +12764,13 @@ def shared_material_f(self,context):
         return {'FINISHED'}
     for nod in nodeys:
         if nod.type=="GROUP" and nod.node_tree and nod.node_tree == bpy.data.node_groups.get(common_name): Remove_Enabled = True
-
-    #ADD /UPDATE /TOGGLE REMOVE
     for obj in bpy.context.selected_objects:
         for mat_slot in obj.material_slots:
             if mat_slot.material:
                 active_material=mat_slot.material
 
                 for node in active_material.node_tree.nodes:
-                    # node.select = False
                     if node.type == 'BSDF_PRINCIPLED':
-
-
-
-                        #BASE COLOR
                         if node.inputs["Base Color"].links and node.inputs["Base Color"].links[0].from_node.type == "GROUP" and node.inputs["Base Color"].links[0].from_node.node_tree.name.startswith("Shared"):
                             if Remove_Enabled: #FOUND, SO TOGGLE REMOVE
                                 output_sock = []
@@ -16778,7 +12797,6 @@ def shared_material_f(self,context):
                         elif not Remove_Enabled: #INSERT INBETWEEN EXISTING NODE CONNECTED TO PRINCIPLEDbsdf
                             common_material_group = active_material.node_tree.nodes.new('ShaderNodeGroup')
                             common_material_group.hide = True
-                            # common_material_group.select = True
                             common_material_group.node_tree = bpy.data.node_groups.get(common_name)  # Replace "Common Material" with your actual node group name
                             common_material_group.location = (node.location.x - 160, node.location.y - 115) #(existing_node.location.x + (node.location.x - existing_node.location.x) / 2, existing_node.location.y)
                             existing_link = node.inputs["Base Color"].links[0]
@@ -16791,9 +12809,6 @@ def shared_material_f(self,context):
                             else: active_material.node_tree.links.new(existing_node.outputs[existing_link.from_socket.name], common_material_group.inputs["Color"])
                             for output in output_sockets: # Reconnect input sockets to output sockets
                                 active_material.node_tree.links.new(common_material_group.outputs["Base Color"], output)
-
-
-                        #ROUGHNESS
                         if node.inputs["Roughness"].links and node.inputs["Roughness"].links[0].from_node.type == "GROUP" and node.inputs["Roughness"].links[0].from_node.node_tree.name.startswith("Shared"):
                             if Remove_Enabled: #FOUND, SO TOGGLE REMOVE
                                 output_sock = []
@@ -16820,7 +12835,6 @@ def shared_material_f(self,context):
                         elif not Remove_Enabled: #INSERT INBETWEEN EXISTING NODE CONNECTED TO PRINCIPLEDbsdf
                             common_material_group = active_material.node_tree.nodes.new('ShaderNodeGroup')
                             common_material_group.hide = True
-                            # common_material_group.select = True
                             common_material_group.node_tree = bpy.data.node_groups.get(common_name)  # Replace "Common Material" with your actual node group name
                             common_material_group.location = (node.location.x - 160, node.location.y - 280) #(existing_node.location.x + (node.location.x - existing_node.location.x) / 2, existing_node.location.y)
                             existing_link = node.inputs["Roughness"].links[0]
@@ -16832,13 +12846,7 @@ def shared_material_f(self,context):
                             active_material.node_tree.links.new(existing_node.outputs[existing_link.from_socket.name], common_material_group.inputs["Roughness"])
                             for output in output_sockets: # Reconnect input sockets to output sockets
                                 active_material.node_tree.links.new(common_material_group.outputs["Roughness"], output)
-
-
-                        # #EMISSIVE
-
-
                     elif node.type == 'OUTPUT_MATERIAL':
-                        #SHADER
                         if node.inputs["Surface"].links and node.inputs["Surface"].links[0].from_node.type == "GROUP" and node.inputs["Surface"].links[0].from_node.node_tree.name.startswith("Shared"):
                             if Remove_Enabled: #FOUND, SO TOGGLE REMOVE
                                 output_sock = []
@@ -16860,12 +12868,10 @@ def shared_material_f(self,context):
                             common_material_group.node_tree = bpy.data.node_groups.get(common_name)
                             common_material_group.location = (node.location.x - 160, node.location.y -38)
                             active_material.node_tree.links.new(common_material_group.outputs["Material Output"], node.inputs["Surface"])
-                            # common_material_group.inputs["Color"].default_value = node.inputs["Base Color"].default_value
                             common_material_group.select = True
                         elif not Remove_Enabled: #INSERT INBETWEEN EXISTING NODE CONNECTED TO PRINCIPLEDbsdf
                             common_material_group = active_material.node_tree.nodes.new('ShaderNodeGroup')
                             common_material_group.hide = True
-                            # common_material_group.select = True
                             common_material_group.node_tree = bpy.data.node_groups.get(common_name)  # Replace "Common Material" with your actual node group name
                             common_material_group.location = (node.location.x - 160, node.location.y -38) #(existing_node.location.x + (node.location.x - existing_node.location.x) / 2, existing_node.location.y)
                             existing_link = node.inputs["Surface"].links[0]
@@ -16877,7 +12883,6 @@ def shared_material_f(self,context):
                             active_material.node_tree.links.new(existing_node.outputs[existing_link.from_socket.name], common_material_group.inputs["Shader"])
                             for output in output_sockets: # Reconnect input sockets to output sockets
                                 active_material.node_tree.links.new(common_material_group.outputs["Material Output"], output)
-
 
 
     return {'FINISHED'}
@@ -16896,10 +12901,6 @@ class circular_array(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         secretpaint_function(self, context,circulararray=True) # activeobj=bpy.context.active_object, objselection=[bpy.context.active_object])
-        # bpy.ops.curve.primitive_bezier_circle_add(radius=1, enter_editmode=False, align='WORLD', location=bpy.context.scene.cursor.location, scale=(1, 1, 1))
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_65"][0] = 1.5708
-        # bpy.context.object.modifiers["GeometryNodes"]["Input_65"][1] = 1.5708
-        # bpy.context.object.location=bpy.context.object.location
         return {'FINISHED'}
 class straight_array(bpy.types.Operator):
     """Quick Shortcut to create an instanced array with the selected object"""
@@ -16908,7 +12909,6 @@ class straight_array(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         secretpaint_function(self, context,straightarray=True) # activeobj=bpy.context.active_object, objselection=[bpy.context.active_object])
-        # bpy.ops.curve.primitive_nurbs_path_add(radius=1, enter_editmode=False, align='WORLD', location=bpy.context.scene.cursor.location, scale=(1, 1, 1))
         return {'FINISHED'}
 def context14438(self, context):
     activeobj = bpy.context.active_object
@@ -16926,13 +12926,8 @@ def context14438(self, context):
                         except AttributeError:
                             self.report({'ERROR'}, "There is no material to copy.") #actual pop up in mouse position
                             return {"CANCELLED"}
-
-                        # bpy.ops.object.make_links_data(type='MATERIAL')
                         safe_materials = _secret_paint_collect_safe_materials_from_object(activeobj, material_cache)
                         _secret_paint_replace_curve_materials_from_sources(hair, safe_materials)
-                                # hair.data.materials.append(None)
-                                # hair.material_slots[i].material = mat_slot.material
-
                         bpy.context.view_layer.objects.active = hair
 
                         hair.modifiers[0]["Input_39"] = True
@@ -16970,13 +12965,8 @@ def curveseparate_function(context):
     activeobj = bpy.context.active_object
     activeobj.select_set(True)
     objselection = bpy.context.selected_objects
-    # if activeobj not in objselection: objselection.append(activeobj)
-
     saveMode = bpy.context.object.mode
     material_cache = {}
-
-
-
 
 
     if bpy.context.object.mode == "OBJECT":
@@ -16996,12 +12986,8 @@ def curveseparate_function(context):
                 for uvmap in newobj.parent.data.uv_layers:  #.data.surface   #bpy.context.object.data.uv_layers['UVMap.001'].active = True
                     if uvmap.active_render: newobj.data.surface_uv_map = uvmap.name
                 bpy.context.view_layer.objects.active = newobj
-
-                #link materials
                 for material in _secret_paint_collect_safe_materials_from_object(obj, material_cache):
                     _secret_paint_append_material_once(newobj.data.materials, material)
-
-            # for x in bpy.context.selected_objects: x.select_set(False) #objselection
             bpy.ops.object.mode_set(mode="SCULPT_CURVES")
 
         elif activeobj.type == "CURVE":
@@ -17017,18 +13003,13 @@ def curveseparate_function(context):
                 bpy.data.collections[Coll_of_Active.name].objects.link(newobj)  # LINK TO COLLECTION
                 newobj.data = bpy.data.curves.new("Secret Paint", "CURVE")
                 bpy.context.view_layer.objects.active = newobj
-
-                #link materials
                 for material in _secret_paint_collect_safe_materials_from_object(obj, material_cache):
                     _secret_paint_append_material_once(newobj.data.materials, material)
-
-            # for x in bpy.context.selected_objects: x.select_set(False) #objselection
             bpy.ops.object.mode_set(mode="EDIT")
 
     else:
         if activeobj.type=="CURVES":
             bpy.ops.object.mode_set(mode="OBJECT")
-            # bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'})
             bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False})
             newCurve = bpy.context.active_object
             bpy.ops.object.mode_set(mode="EDIT")
@@ -17036,7 +13017,6 @@ def curveseparate_function(context):
             bpy.ops.curves.select_all(action='INVERT')
             bpy.ops.transform.resize(value=(0, 0, 0), orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False,
                                      snap_target='CENTER', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-            # bpy.ops.curves.delete()
             bpy.ops.curves.select_all(action='SELECT')
 
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -17046,45 +13026,13 @@ def curveseparate_function(context):
             bpy.ops.curves.select_linked()
             bpy.ops.transform.resize(value=(0, 0, 0), orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False,
                                      snap_target='CENTER', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-            # bpy.ops.curves.delete()
             bpy.ops.curves.select_all(action='SELECT')
 
             bpy.ops.object.mode_set(mode="OBJECT")
             bpy.ops.object.select_all(action='DESELECT')
-            # bpy.data.objects[newCurve.name].select_set(True)
             bpy.context.view_layer.objects.active = bpy.data.objects[newCurve.name]
 
             bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-            # bpy.ops.object.mode_set(mode=saveMode)
-
-
-
-
-            # bpy.ops.object.mode_set(mode="EDIT")
-            # bpy.ops.curves.select_linked()
-            # bpy.ops.object.mode_set(mode="OBJECT")
-            # bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False})
-            # newCurve = bpy.context.active_object
-            # bpy.ops.object.mode_set(mode="EDIT")
-            # bpy.ops.curves.select_all(action='INVERT')
-            # # bpy.ops.transform.resize(value=(0, 0, 0), orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False,
-            # #                          snap_target='CENTER', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-            # bpy.ops.curves.delete()
-            # bpy.ops.object.mode_set(mode="OBJECT")
-            # newCurve.select_set(False)
-            # bpy.context.view_layer.objects.active = activeobj.name
-            # bpy.ops.object.mode_set(mode="EDIT")
-            # bpy.ops.curves.delete()
-            # bpy.ops.curves.select_all(action='SELECT')
-            # bpy.ops.object.mode_set(mode="OBJECT")
-            # bpy.context.view_layer.objects.active = newCurve
-            # # newCurve.select_set(True)
-            # bpy.ops.object.mode_set(mode="EDIT")
-            # bpy.ops.curves.select_all(action='SELECT')
-            # bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-            # for x in bpy.context.selected_objects: x.select_set(False) #objselection
-            # print("-----------------",)
-
             return newCurve
 
         elif activeobj.type == "CURVE":
@@ -17111,7 +13059,6 @@ class curveseparate(bpy.types.Operator):
         return {'FINISHED'}
 
 
-
 def get_all_children(parent,all_children,context):
     for children in parent.children:
         if children.visible_get(): all_children.append(children)  # if children.name in bpy.context.view_layer.objects: all_children.append(children)  #children.type not in ["ARMATURE"]
@@ -17124,22 +13071,7 @@ def get_all_DownwardsDependencies(activeobj, final_assemblies_to_process, all_as
             if obj[0] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[0])
             get_all_DownwardsDependencies(obj[0], final_assemblies_to_process, all_assemblies_and_their_parent, context)
     return final_assemblies_to_process
-# def get_all_UpwardsDependencies(activeobj, final_assemblies_to_process, all_assemblies_and_their_parent, context):
-#     for obj in all_assemblies_and_their_parent:
-#         if obj[0] == activeobj:
-#             if obj[1] not in final_assemblies_to_process: final_assemblies_to_process.append(obj[1])
-#             # print(f"{obj[0].name} is the activeobj,{obj[1].name} is it's parent that's being appended to FINAL and reprocessed, here's final list so far {[x.name for x in final_assemblies_to_process]}")
-#             get_all_UpwardsDependencies(obj[1], final_assemblies_to_process, all_assemblies_and_their_parent, context)
-#     return final_assemblies_to_process
-
-# def get_first_parent_Upwards(activeobj,first_parent, all_assemblies_and_their_parent, context):
-#     for obj in all_assemblies_and_their_parent:
-#         if obj[0] == activeobj:
-#             first_parent = obj[1]
-#             first_parent=get_first_parent_Upwards(obj[1], first_parent,all_assemblies_and_their_parent, context)
-#     return first_parent
 def get_first_parent_Upwards(activeobj, context):
-    # parent_of_current_object = activeobj.modifiers[0]["Socket_1"] if activeobj.modifiers and activeobj.modifiers[0].name.startswith("Secret Assembly") and activeobj.modifiers[0].type=="NODES" and activeobj.modifiers[0].node_group and "ASSEMBLY" in activeobj.modifiers[0].node_group.name else None
     parent_of_current_object = secret_assembly_parent_object(activeobj)
     if parent_of_current_object != None: return get_first_parent_Upwards(parent_of_current_object, context)
     else: return activeobj
@@ -17219,8 +13151,6 @@ def assembly_1(self,context,**kwargs):
         if quiet == False:
             self.report({'ERROR'}, "Select the Parent Object. Its children will be automatically included in the Assembly")
         return{'FINISHED'}
-
-    #when box selecting many objs, just pick the common parent
     parent_with_most_children = bpy.context.selected_objects[0]
     for ob in bpy.context.selected_objects:
         ob_childrens = [children for children in ob.children if children in bpy.context.selected_objects]
@@ -17228,8 +13158,6 @@ def assembly_1(self,context,**kwargs):
         if not ob.parent and len(ob_childrens) > len(parent_with_most_children_children) \
         or ob.parent and ob.parent not in bpy.context.selected_objects and len(ob.children) > len(parent_with_most_children.children):
             parent_with_most_children = ob
-    #IF THERE WAS NO COMMON PARENT, PROCESS ACTIVE OBJECT
-    # activeobj = original_activeobj = parent_with_most_children
     common_parent_has_children_in_the_selected_objects = False
     for children in parent_with_most_children.children: #if the parent has no children in the selected objects, there was no common parent so PROCESS ACTIVE OBJECT
         if children in bpy.context.selected_objects:
@@ -17237,8 +13165,6 @@ def assembly_1(self,context,**kwargs):
             break
     if common_parent_has_children_in_the_selected_objects: activeobj = original_activeobj = parent_with_most_children
     else: activeobj = original_activeobj
-
-    #all selected objects should be parented to the active object
     for ob in bpy.context.selected_objects:
         if ob != activeobj:
             if not ob.parent \
@@ -17290,10 +13216,6 @@ def assembly_2(self,context,**kwargs):
     all_materials_of_parent_and_children=[]
     material_cache = {}
     processed_assembly_obj = None
-
-
-
-    #UPDATE THE ASSEMBLY INSTEAD OF CREATING A NEW ONE    (IF ORIGINALACTIVEOBJ IS ASSEMBLY WITHOUT CHILDREN (and is not referenced by constraints),  (by simply selecting the parent object and using same script)
     activeobj_referenced_by_constraint = False
     for ob in bpy.data.objects:
         if ob.constraints and not activeobj_referenced_by_constraint:
@@ -17305,16 +13227,8 @@ def assembly_2(self,context,**kwargs):
         resolved_parent = secret_assembly_parent_object(activeobj)
         if resolved_parent:
             activeobj = resolved_parent
-
-
-
-
-    #LIST MATERIALS OF ACTIVEOBJ BEING PROCESSED
     for material in _secret_paint_collect_safe_materials_from_object(activeobj, material_cache):
         if material not in all_materials_of_parent_and_children: all_materials_of_parent_and_children.append(material)
-
-
-    #LIST ALL ASSEMBLIES THAT ARE USING ACTIVEOBJ (they have to reference the activeobj as parent in the modifier)
     all_modif_to_update =[]
     for obj in bpy.data.objects:
         if obj.type == "MESH" and obj.modifiers:
@@ -17328,40 +13242,22 @@ def assembly_2(self,context,**kwargs):
                                 processed_assembly_obj = obj
                             there_are_assemblies_to_update = True
                             break #no need to liip through other inputs #avoid looping through other inputs of the modifier since it just swapped node tree with different sockets
-
-
-
-    #PROCEED OLY IF AN ASSEMBLY WAS FOUND OR WE'RE CREATING A NEW ASSEMBLY FOR THE ORIGINAL ACTIVEOBJ
     if there_are_assemblies_to_update or processing_original_activeobj:
-
-
-        #ALL ASSEMBLIES WITH THE SAME PARENT SHOULD ALSO HAVE THE SAME DATA (needed for accurate material slots)
         if all_modif_to_update and len(all_modif_to_update) != all_modif_to_update[0][0].data.users: #if the number of mesh users is not the same as the number of modifiers to update, is because there's another assembly with the same data, so create a duplicate
             new_mesh_data = all_modif_to_update[0][0].data.copy()
             for obbb in all_modif_to_update:
                 obbb[0].data = new_mesh_data
-
-
-        #NEW NODE GROUP + ASSIGN, delete old one
         node_group = bpy.data.node_groups[activeobj.name + "ASSEMBLY"] if activeobj.name + "ASSEMBLY" in bpy.data.node_groups else None
         if node_group and node_group.users==0: bpy.data.node_groups.remove(node_group) #remove it if found and has no users
         node_group = bpy.data.node_groups.new("GeometryNodeGroup", 'GeometryNodeTree')
         node_group.name = activeobj.name + "ASSEMBLY"
         for modif in all_modif_to_update: modif[1].node_group = node_group #ASSIGN NODE TREE
-
-
-
-        #ONLY CREATE A NEW ASSEMBLY IF THE ACTIVEOBJ IS THE ORIGINAL_ACTIVEOBJ AND THERE ARE NO EXISTING ASSEMBLIES TO UPDATE,   then proceed to fill THE NEW NODE TREE anyway
         if processing_original_activeobj and there_are_assemblies_to_update==False:
-
-            # FIND COLLECTION OF ACTIVE TO CREATE NEW ASSEMBLY INSIDE OF IT
             Coll_of_Active = []
             original_collection = bpy.context.view_layer.active_layer_collection  # bpy.context.view_layer.active_layer_collection = layerColl  #SELECT COLLECTION
             for i in activeobj.users_collection:
                 Coll_of_Active = recurLayerCollection(bpy.context.view_layer.layer_collection, i.name)
                 bpy.context.view_layer.active_layer_collection = Coll_of_Active
-
-            # Create a new mesh object
             mesh = bpy.data.meshes.new("Secret Assembly")  # create a new mesh
             obj = bpy.data.objects.new(activeobj.name + "ASSEMBLY", mesh)  # create a new object with the mesh
             obj.location = activeobj.matrix_world.to_translation()
@@ -17373,20 +13269,13 @@ def assembly_2(self,context,**kwargs):
                 bpy.context.view_layer.objects.active = obj
             modifier = obj.modifiers.new(name="Secret Assembly", type='NODES')  # create a Geometry Nodes modifier
             modifier.node_group = node_group  # set the Geometry Nodes modifier to use the new node group
-            # obj["Secret Assembly"] = activeobj #CUSTOM PROPERTY
-
-            #restore previous active collection
             bpy.context.view_layer.active_layer_collection = original_collection
-
-        #CREATE NODE TREE WITH INPUTS AND OUTPUTS AND PARENT INFO
         input = node_group.nodes.new('NodeGroupInput')
         input.location = (-500,0)
         node_group.interface.clear()
         if bpy.app.version_string >= "4.0.0":
             node_group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
             node_group.interface.new_socket(name='Realize Instances', in_out='INPUT', socket_type='NodeSocketBool')
-            # tempx = node_group.interface.new_socket(name='Realize Instances Depth', in_out='INPUT', socket_type='NodeSocketInt')
-            # tempx.min_value = 0  # node_group.interface.items_tree[2].min_value = 0
             node_group.interface.new_socket(name='Parent', in_out='INPUT', socket_type='NodeSocketObject')
         elif bpy.app.version_string < "4.0.0":
             node_group.outputs.new(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
@@ -17402,14 +13291,6 @@ def assembly_2(self,context,**kwargs):
         realize_instances_node = node_group.nodes.new(type='GeometryNodeRealizeInstances')
         realize_instances_node.location = (+1000,0)
         realize_instances_node.inputs[2].default_value = False
-        # realize_instances_node.inputs[3].default_value = 1
-
-        # node_group.links.new(JoinGeometry.outputs[0], output.inputs[0])
-
-
-
-
-        #CREATE EACH NODE FOR PARENTS AND CHILDREN
         parent_info_node = node_group.nodes.new(type='GeometryNodeObjectInfo')
         parent_info_node.location = (-300,0)
         parent_info_node.inputs[0].default_value = activeobj #parent
@@ -17429,8 +13310,6 @@ def assembly_2(self,context,**kwargs):
 
 
         get_all_children(activeobj,all_children,context)
-
-        #INCLUDE ALL CONSTRAINTS THAT REFERENCE THE CHILD OR PARENT
         for ob in bpy.data.objects:
             if ob.constraints: # if ob.constraints and ob.contraints[0].type in ["CLAMP_TO","DAMPED_TRACK","LOCKED_TRACK","STRETCH_TO","TRACK_TO","COPY_LOCATION","COPY_ROTATION","COPY_TRANSFORMS","TRANSFORMATION","OBJECT_SOLVER","CHILD_OF","FOLLOW_PATH","PIVOT","SHRINKWRAP"]: pass
                 for con in ob.constraints:
@@ -17439,8 +13318,6 @@ def assembly_2(self,context,**kwargs):
 
         childloop = 2
         for children in all_children:
-
-            #LIST ALL MATERIALS
             for material in _secret_paint_collect_safe_materials_from_object(children, material_cache):
                 if material not in all_materials_of_parent_and_children: all_materials_of_parent_and_children.append(material)
 
@@ -17460,16 +13337,10 @@ def assembly_2(self,context,**kwargs):
             VectorMath1 = node_group.nodes.new('ShaderNodeVectorMath')
             VectorMath1.operation = 'SUBTRACT'
             VectorMath1.location = (-100, -300 *childloop)
-            # VectorMath2 = node_group.nodes.new('ShaderNodeVectorMath')
-            # VectorMath2.operation = 'SUBTRACT'
-            # VectorMath2.location = (-100, (-300 *childloop)-100)
-
             node_group.links.new(input.outputs[childloop+1], children_info_node.inputs[0])
             node_group.links.new(children_info_node.outputs[1], VectorMath1.inputs[0])
             node_group.links.new(VectorMath1.outputs[0], CombineTransform.inputs[0])
             node_group.links.new(children_info_node.outputs[2], CombineTransform.inputs[1])  #node_group.links.new(VectorMath2.outputs[0], CombineTransform.inputs[1])
-            #node_group.links.new(children_info_node.outputs[2], VectorMath2.inputs[0])
-            # node_group.links.new(parent_info_node.outputs[2], VectorMath2.inputs[1])
             node_group.links.new(children_info_node.outputs[3], CombineTransform.inputs[2])
             node_group.links.new(children_info_node.outputs[4], SetInstanceTransform.inputs[0])
             node_group.links.new(CombineTransform.outputs[0], SetInstanceTransform.inputs[2])
@@ -17477,24 +13348,14 @@ def assembly_2(self,context,**kwargs):
             node_group.links.new(parent_info_node.outputs[1], VectorMath1.inputs[1])
 
             childloop += 1
-
-
-
-
-        #ASSIGN MODIFIER INPUTS AND MATERIALS
         node_group_inputs = node_group.interface.items_tree if bpy.app.version_string >= "4.0.0" else node_group.inputs
         for obj in bpy.data.objects:
             if obj.type == "MESH" and obj.modifiers:
                 for modif in obj.modifiers:
                     if modif.type == 'NODES' and modif.node_group and modif.node_group == node_group:
-                        #CLEAR AND REASSIGN NEW MATERIALS
                         obj.data.materials.clear() #clear first
                         for mat in all_materials_of_parent_and_children:
                             _secret_paint_append_material_once(obj.data.materials, mat)
-                        # for mat_slot in obj.material_slots: #MAKE SLOTS OBJECT DEPENDENT, SO THAT WHEN LINKED DUPLICATE FOR DIFFERENT VERSION THEY CAN STILL HAVE DIFFERENT MATS
-                        #     mat = mat_slot.material
-                        #     mat_slot.link = 'OBJECT'
-                        #     mat_slot.material = mat
                         child_loop = 0
                         for input in node_group_inputs:
                             if getattr(input, "socket_type", None) == "NodeSocketObject" and input.name == "Parent":
@@ -17524,149 +13385,15 @@ class assembly(bpy.types.Operator):
     bl_idname = "secret.assembly"
     bl_label = "Secret Assembly"
     bl_options = {'REGISTER', 'UNDO'}
-    # def execute(self, context):
     def invoke(self, context, event):
         if blender_version < "4.2.0":
             self.report({'ERROR'}, "Secret Paint Assemblies are only available from Blender 4.2 due to a lack of nodes")
         elif event.alt: convert_and_join_f(self,context)
         else: assembly_1(self,context)
         return {'FINISHED'}
-
-
-# def export_unreal_f(self,context,export_textures):
-#     new_objects_to_delete =[]
-#     # if export_textures: export_t = "JPEG"
-#     # else: export_t = "NONE"
-#     # blend_file_path = bpy.data.filepath
-#     # directory = os.path.dirname(blend_file_path)
-#
-#     blend_file_path = bpy.data.filepath
-#     directory = os.path.dirname(blend_file_path)
-#     subfolder = os.path.join(directory, 'UE5 Export')
-#     if not os.path.exists(subfolder):
-#         os.makedirs(subfolder)
-#
-#     # try:
-#     # except:self.report({'ERROR'}, "Save this project before exporting. The GLTF will be exported next to the Blend file")
-#
-#     activeobj = bpy.context.active_object  #   bpy.data.objects["armature"]     bpy.context.object["armature"]     <bpy_struct, Object("left") at 0x000001C2D10E5608>
-#     objselection = bpy.context.selected_objects  #bpy.context.selected_objects[0]   #bpy.context.scene.objects
-#
-#
-#     all_previous_objects = set(bpy.context.scene.objects)
-#
-#
-# ############################################### v
-#
-#     for ob in objselection:
-#         for x in bpy.context.selected_objects: x.select_set(False)
-#
-#         # realize assembly> delete assemblies > secret paint bezier
-#         all_children = []
-#         get_all_children(activeobj, all_children, context)
-#         for child in all_children:
-#             if child.type in ["MESH","CURVE"]: child.select_set(True)
-#         ob.select_set(True)
-#         bpy.context.view_layer.objects.active = ob
-#
-#         Main_Parent = bpy.data.objects.new("Main Parent", None)
-#         # Main_Parent = bpy.data.objects.new(activeobj.data.name, bpy.data.meshes.new(activeobj.data.name))
-#         Main_Parent.location = ob.location  # set location to scene cursor
-#         context.collection.objects.link(Main_Parent)
-#
-#         bpy.ops.object.duplicates_make_real()
-#
-#         new_obs = list(set(bpy.context.scene.objects) - all_previous_objects)
-#
-#         #CLEAR ALL ASSEMBLIES AND SECRET PAINT EXTRA DATA
-#         secret_paint_and_assemblies_to_delete =[]
-#         for objj in new_obs[:]:
-#             for modif in objj.modifiers:
-#                 if modif.type == "NODES" and modif.node_group and "ASSEMBLY" in modif.node_group.name\
-#                 or objj.type == "CURVE" and modif.type=="NODES" and modif.node_group and modif.node_group.name.startswith("Secret Paint")\
-#                 or objj.type == "CURVE" and modif.type=="NODES" and modif.node_group and modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999":
-#                     secret_paint_and_assemblies_to_delete.append(objj)
-#                     new_obs.remove(objj)
-#
-#             if objj!=Main_Parent:
-#                 objj.parent = Main_Parent
-#                 objj.matrix_parent_inverse = Main_Parent.matrix_world.inverted()
-#
-#         saved_parent= ob.parent
-#         ob.parent = Main_Parent
-#         ob.matrix_parent_inverse = Main_Parent.matrix_world.inverted()
-#
-#
-#         for obk in secret_paint_and_assemblies_to_delete: bpy.data.objects.remove(obk, do_unlink=True)
-#
-#         #MODIFIERS + MATERIAL links to DATA (or unreal engine will split into different objects, same with modifiers)
-#         # multi_user_obs_with_modifiers=[]
-#         for x in bpy.context.selected_objects: x.select_set(False)
-#         loop = 1
-#         for obkk in all_children:
-#             # if ob.modifiers and ob.data not in multi_user_obs_with_modifiers: multi_user_obs_with_modifiers.append(ob)
-#             if obkk.type in ["MESH","CURVE"]:
-#                 obkk.select_set(True)
-#                 if loop == 1: bpy.context.view_layer.objects.active = obkk
-#                 for mat_slot in obkk.material_slots: mat_slot.link = "DATA"
-#             loop=+1
-#         loop = 1
-#         for obkk in new_obs:
-#             # if ob.modifiers and ob.data not in multi_user_obs_with_modifiers: multi_user_obs_with_modifiers.append(ob)
-#             if obkk.type in ["MESH","CURVE"]:
-#                 obkk.select_set(True)
-#                 if loop == 1: bpy.context.view_layer.objects.active = obkk
-#                 for mat_slot in obkk.material_slots: mat_slot.link = "DATA"
-#             loop=+1
-#
-#         # bpy.ops.object.convert(target='MESH')
-#
-#
-#         # select main parent and all children > export fbx,
-#         Main_Parent.location = (0,0,0)
-#         # Main_Parent.scale = (100,100,100)
-#
-#         bpy.context.view_layer.objects.active = Main_Parent
-#         Main_Parent.select_set(True)
-#         ob.select_set(True)
-#         # return{'FINISHED'}
-#
-#         bpy.ops.export_scene.fbx(filepath=subfolder + "\\" + ob.name + ".fbx", check_existing=True, filter_glob='*.fbx', use_selection=True, use_visible=False, use_active_collection=False, collection='',
-#         global_scale=1.0,
-#         apply_unit_scale=True,
-#         apply_scale_options='FBX_SCALE_NONE',
-#         use_space_transform=True,
-#         bake_space_transform=True,
-#         object_types={'ARMATURE', 'CAMERA', 'EMPTY', 'LIGHT', 'MESH', 'OTHER'},
-#         use_mesh_modifiers=False,
-#         use_mesh_modifiers_render=False,
-#         mesh_smooth_type='OFF', colors_type='SRGB', prioritize_active_color=False, use_subsurf=False, use_mesh_edges=False, use_tspace=False, use_triangles=False, use_custom_props=False, add_leaf_bones=False,
-#         primary_bone_axis='Y',
-#         secondary_bone_axis='X', use_armature_deform_only=False, armature_nodetype='NULL',
-#         bake_anim=False, bake_anim_use_all_bones=True, bake_anim_use_nla_strips=True, bake_anim_use_all_actions=True, bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=1.0, path_mode='AUTO', embed_textures=False, batch_mode='OFF', use_batch_own_dir=True, use_metadata=True,
-#         axis_forward='Y',
-#         axis_up='Z')
-#
-#
-#         # restore status: delete all new objs
-#         if saved_parent:
-#             ob.parent = saved_parent
-#             ob.matrix_parent_inverse = saved_parent.matrix_world.inverted()
-#         for ob in new_obs: bpy.data.objects.remove(ob, do_unlink=True)
-#         for x in objselection: x.select_set(True)
-#         if activeobj: bpy.context.view_layer.objects.active = activeobj
-#         self.report({'INFO'}, "Exported selected Assemblies to FBX next to this .blend file")
-#     return {'FINISHED'}
 def export_unreal_f(self,context,export_textures):
-
-    # try:
     blend_file_path = bpy.data.filepath
     directory = os.path.dirname(blend_file_path)
-    # subfolder = os.path.join(directory, 'UE5 Export')
-    # if not os.path.exists(subfolder):
-    #     os.makedirs(subfolder)
-
-    #filepath=subfolder + "\\" + os.path.basename(blend_file_path) + ".usdc",
     bpy.ops.wm.usd_export(
     filepath=directory + "\\" + os.path.basename(blend_file_path) + ".usdc",
     selected_objects_only=True,
@@ -17689,9 +13416,6 @@ def export_unreal_f(self,context,export_textures):
     export_global_forward_selection='NEGAT'
     'IVE_Z',
     export_global_up_selection='Y',
-    # export_textures=False,  # Removed - not supported in Blender 5.0
-    # export_textures_mode='NEW',
-    # overwrite_textures=False,  # Removed - not supported in Blender 5.0
     relative_paths=True,
     xform_op_mode='TOS',
     root_prim_path="/root",
@@ -17704,16 +13428,12 @@ def export_unreal_f(self,context,export_textures):
     export_lights=False,
     export_cameras=True,
     export_curves=True,
-    # export_points=True,
     export_volumes=True,
     triangulate_meshes=False,
     quad_method='SHORTEST_DIAGONAL',
     ngon_method='BEAUTY',
     usdz_downscale_size='KEEP',
     usdz_downscale_custom_size=128)
-
-    # except:
-    # self.report({'ERROR'}, "Save this project before exporting. The objects will be exported next to the Blend file")
     return{'FINISHED'}
 
     self.report({'INFO'}, "Exported Selected Objects as USD")
@@ -18027,8 +13747,6 @@ def secret_paint_toggle_viewport_bookmark(context, report=None):
     _apply_viewport_bookmark(region_3d, target_bookmark)
     context.area.tag_redraw()
     return {'FINISHED'}
-
-# Keep the target-surface feature dormant without removing its implementation.
 SECRET_PAINT_WORLD_TARGET_SURFACE_ENABLED = False
 SECRET_PAINT_WORLD_RANDOM_Z_ENABLED = False
 SECRET_PAINT_WORLD_ALIGN_TO_NORMAL_ENABLED = False
@@ -18109,7 +13827,6 @@ def secret_paint_object_mode_pie_draw(self, context):
         return
 
     pie = self.layout.menu_pie()
-    # Blender compacts the built-in available modes; slot seven is bottom-left.
     native_mode_count = _secret_paint_object_mode_pie_builtin_mode_count(activeobj)
     for _slot in range(native_mode_count, 6):
         pie.separator()
@@ -18151,8 +13868,6 @@ SHARED_SECRET_PAINT_CLASSES = [
     toggle_display_bounds,
     subpanelutils,
     subpanelexportbiome,
-    # Temporarily disabled; keep the operator class above for future re-enable.
-    # secretpaint_update_modifier,
     orenscatterinstancesmodifiers,
     SelectObjectOperator,
     secret_paint_panel_select_object,
@@ -18178,8 +13893,6 @@ SHARED_SECRET_PAINT_CLASSES = [
     panel_modified_click,
     panel_keyboard_reorder,
     panel_keyboard_delete,
-    # biomegroupreorder,
-    # biomegroupreorder2,
     SelectBiomeOperator,
     ToggleVisibilityOperatorRenderBiome,
     toggle_display_bounds_biome,
@@ -18187,16 +13900,11 @@ SHARED_SECRET_PAINT_CLASSES = [
     vertexgrouppaint_biome,
     biome_delete,
     assembly,
-    # Temporarily disabled; keep the operator class above for future re-enable.
-    # export_unreal,
     *_secret_paint_world_paint_classes(),
 ]
 
 
 def _persist_world_paint_preference(_self, context):
-    # Blender already dirties add-on preferences when an RNA value changes.
-    # Saving synchronously from an update callback can serialize transient
-    # keymap state while a modal interaction is still running.
     return None
 
 

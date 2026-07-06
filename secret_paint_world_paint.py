@@ -466,9 +466,6 @@ def _native_brush_debug_value(value):
 
 
 def _active_workspace_tool_id(context):
-    # Blender 5.1 can warn when the Sculpt Curves workspace slot still stores an
-    # Object Mode tool such as builtin.select_box. Avoid that warning-prone query;
-    # paint mode can sync from the active curves brush instead.
     if (getattr(context, "mode", "") or "") == 'SCULPT_CURVES':
         return ""
     try:
@@ -2384,8 +2381,6 @@ def _force_object_mode_after_world_paint(context=None):
 
 
 def _force_object_select_tool_after_world_paint(context=None):
-    # Do not query or set workspace tools during paint-mode teardown.
-    # Blender 5.1 can emit stale active-tool warnings while unwinding from Sculpt Curves.
     return False
 
 
@@ -5077,10 +5072,7 @@ def _screen_distance_to_curve_object(context, obj, mouse_coord):
     if any_projected:
         return best_distance
 
-    try:
-        origin_screen = _project_world_to_screen(context, obj.matrix_world.translation)
-    except Exception:
-        origin_screen = None
+    origin_screen = _project_world_to_screen(context, _safe_object_world_translation(obj))
     if origin_screen is None:
         return float("inf")
     return math.hypot(mouse_coord[0] - origin_screen[0], mouse_coord[1] - origin_screen[1])
@@ -5161,16 +5153,19 @@ def _target_info_display_type_blocked(target_info, *, allow_wire_bounds_surfaces
 def _copy_target_info(target_info):
     if not target_info:
         return None
+    if _target_info_contains_removed_references(target_info):
+        return None
 
     copied = dict(target_info)
     for key in ("location", "normal", "_depth_anchor"):
         value = copied.get(key)
         if value is None:
             continue
-        try:
-            copied[key] = value.copy()
-        except Exception:
-            pass
+        copied_value = _safe_copy_target_vector(value)
+        if copied_value is None:
+            copied.pop(key, None)
+        else:
+            copied[key] = copied_value
     return copied
 
 
@@ -5308,12 +5303,15 @@ def _scene_locked_terrain_target_info_from_data(context, data, *, clear_missing=
         proxy = _ensure_proxy_surface(context, target_owner)
         if proxy is None:
             return None
+        location = _safe_object_world_translation(target_owner)
+        if location is None:
+            return None
         target_info = {
             "kind": WORLD_TARGET_KIND_SECRET_INSTANCE,
             "target_owner": target_owner,
             "surface_obj": proxy,
             "hover_object": target_owner,
-            "location": target_owner.matrix_world.translation,
+            "location": location,
             "normal": Vector((0.0, 0.0, 1.0)),
         }
     else:
@@ -5327,12 +5325,15 @@ def _scene_locked_terrain_target_info_from_data(context, data, *, clear_missing=
         target_owner = bpy.data.objects.get(owner_name) or surface_obj
         if _safe_object_type(surface_obj) != "MESH":
             return None
+        location = _safe_object_world_translation(surface_obj)
+        if location is None:
+            return None
         target_info = {
             "kind": WORLD_TARGET_KIND_MESH,
             "target_owner": target_owner,
             "surface_obj": surface_obj,
             "hover_object": surface_obj,
-            "location": surface_obj.matrix_world.translation,
+            "location": location,
             "normal": Vector((0.0, 0.0, 1.0)),
         }
 
@@ -5399,12 +5400,15 @@ def _target_info_from_lock_object(context, obj):
 
     if surface_obj is None:
         return None
+    location = _safe_object_world_translation(surface_obj)
+    if location is None:
+        return None
     return {
         "kind": WORLD_TARGET_KIND_MESH,
         "target_owner": surface_obj,
         "surface_obj": surface_obj,
         "hover_object": surface_obj,
-        "location": surface_obj.matrix_world.translation,
+        "location": location,
         "normal": Vector((0.0, 0.0, 1.0)),
         "_ignore_display_type_block": True,
     }
@@ -5473,7 +5477,9 @@ def _preferred_lock_target_infos(context):
                 return locked_targets
         target_info = getattr(operator, "hover_target", None) or getattr(operator, "preview_target", None)
         if target_info is not None:
-            return [_copy_target_info(target_info)]
+            copied_target = _copy_target_info(target_info)
+            if copied_target is not None:
+                return [copied_target]
 
     if selected_targets:
         return selected_targets
@@ -5750,9 +5756,6 @@ def _raycast_locked_target(context, mouse_coord, locked_target, source_data=None
         allow_wire_bounds_surfaces=locked_allows_wire_bounds,
     ):
         return None
-
-    # Surface lock should test the locked terrain itself, so other Secret Paint
-    # systems or scene objects under the cursor do not block the stroke.
     direct_target = _raycast_target_info_surface(context, mouse_coord, locked_target)
     if direct_target is not None:
         return _stabilize_target_info(context, direct_target)
@@ -5955,6 +5958,8 @@ def _raycast_target_info_surface(context, mouse_coord, target_info):
         return None
     location, normal = hit
     result = _copy_target_info(target_info)
+    if result is None:
+        return None
     result["location"] = location
     result["normal"] = normal
     return result
@@ -6415,12 +6420,7 @@ def _brush_radius_linked_systems(system_obj):
 
 
 def _brush_depth_location_from_system(system_obj):
-    if system_obj is None:
-        return None
-    try:
-        return system_obj.matrix_world.translation.copy()
-    except Exception:
-        return None
+    return _safe_object_world_translation(system_obj)
 
 
 def _screen_brush_units_per_pixel(context, depth_location, mouse_coord=None):
@@ -7160,10 +7160,9 @@ def _target_depth_anchor(target_info, *fallback_targets):
 
     anchor = target_info.get("_depth_anchor")
     if anchor is not None:
-        try:
-            return anchor.copy()
-        except Exception:
-            return anchor
+        anchor_copy = _safe_copy_target_vector(anchor)
+        if anchor_copy is not None:
+            return anchor_copy
 
     target_key = _target_key(target_info)
     for fallback_target in fallback_targets:
@@ -7172,36 +7171,25 @@ def _target_depth_anchor(target_info, *fallback_targets):
         anchor = fallback_target.get("_depth_anchor")
         if anchor is None:
             continue
-        try:
-            anchor_copy = anchor.copy()
-        except Exception:
-            anchor_copy = anchor
+        anchor_copy = _safe_copy_target_vector(anchor)
+        if anchor_copy is None:
+            continue
         target_info["_depth_anchor"] = anchor_copy
-        try:
-            return anchor_copy.copy()
-        except Exception:
-            return anchor_copy
+        return anchor_copy.copy()
 
     location = target_info.get("location")
     if location is not None:
-        try:
-            anchor = location.copy()
-        except Exception:
-            anchor = location
-        target_info["_depth_anchor"] = anchor
-        try:
+        anchor = _safe_copy_target_vector(location)
+        if anchor is not None:
+            target_info["_depth_anchor"] = anchor
             return anchor.copy()
-        except Exception:
-            return anchor
 
     surface_obj = target_info.get("surface_obj") or target_info.get("target_owner")
     if surface_obj is not None:
-        try:
-            anchor = surface_obj.matrix_world.translation.copy()
+        anchor = _safe_object_world_translation(surface_obj)
+        if anchor is not None:
             target_info["_depth_anchor"] = anchor
             return anchor.copy()
-        except Exception:
-            pass
 
     return None
 
@@ -7673,6 +7661,46 @@ def _safe_object_type(obj):
         return ""
 
 
+def _safe_object_world_translation(obj):
+    if obj is None:
+        return None
+    name = _safe_rna_name(obj)
+    if not name:
+        return None
+    try:
+        if bpy.data.objects.get(name) is not obj:
+            return None
+    except (ReferenceError, RuntimeError):
+        return None
+    except Exception:
+        pass
+    try:
+        translation = obj.matrix_world.translation
+        return Vector((float(translation[0]), float(translation[1]), float(translation[2])))
+    except (ReferenceError, RuntimeError):
+        return None
+    except Exception:
+        return None
+
+
+def _safe_copy_target_vector(value):
+    if value is None:
+        return None
+    try:
+        if getattr(value, "is_wrapped", False):
+            return None
+    except (ReferenceError, RuntimeError):
+        return None
+    except Exception:
+        pass
+    try:
+        return Vector((float(value[0]), float(value[1]), float(value[2])))
+    except (ReferenceError, RuntimeError):
+        return None
+    except Exception:
+        return None
+
+
 def _target_key(target_info):
     if not target_info:
         return ""
@@ -7929,12 +7957,15 @@ def _target_info_from_system(context, system_obj, *, allow_wire_bounds_surfaces=
         proxy = _ensure_proxy_surface(context, target_owner)
         if proxy is None:
             return None
+        location = _safe_object_world_translation(target_owner)
+        if location is None:
+            return None
         target_info = {
             "kind": WORLD_TARGET_KIND_SECRET_INSTANCE,
             "target_owner": target_owner,
             "surface_obj": proxy,
             "hover_object": target_owner,
-            "location": target_owner.matrix_world.translation,
+            "location": location,
             "normal": Vector((0.0, 0.0, 1.0)),
         }
         if ignore_display_type_block:
@@ -7949,12 +7980,15 @@ def _target_info_from_system(context, system_obj, *, allow_wire_bounds_surfaces=
         allow_wire_bounds_surfaces=allow_blocked_display,
     ):
         return None
+    location = _safe_object_world_translation(surface_obj)
+    if location is None:
+        return None
     target_info = {
         "kind": WORLD_TARGET_KIND_MESH,
         "target_owner": surface_obj,
         "surface_obj": surface_obj,
         "hover_object": surface_obj,
-        "location": surface_obj.matrix_world.translation,
+        "location": location,
         "normal": Vector((0.0, 0.0, 1.0)),
     }
     if ignore_display_type_block:
@@ -9083,8 +9117,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         return self._is_density_right_delete_event(event) and getattr(event, "value", "") in WORLD_PRIMARY_PAINT_ACTIVE_VALUES
 
     def _is_density_right_delete_release_event(self, event):
-        # Blender may report the mouse-up half of RMB strokes as CLICK,
-        # EVT_TWEAK_R, or through type_prev/value_prev.
         right_mouse_types = {'RIGHTMOUSE', 'EVT_TWEAK_R'}
         event_type = getattr(event, "type", "")
         event_value = getattr(event, "value", "")
@@ -10560,9 +10592,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                 )
             return None
         shared.secret_paint_ensure_default_curves_brush_falloff(brush)
-        # Keep routine sync from shrinking a larger live native size. Custom
-        # size edits still pass through the deferred radius path below.
-
         old_brush_size = getattr(brush, "size", None) if hasattr(brush, "size") else None
         old_unprojected_size = getattr(brush, "unprojected_size", None) if hasattr(brush, "unprojected_size") else None
         old_lock_mode = getattr(brush, "use_locked_size", "") if hasattr(brush, "use_locked_size") else ""
@@ -11497,10 +11526,9 @@ class secret_world_paint_mode(bpy.types.Operator):
         if target_info is not None:
             location = target_info.get("location")
             if location is not None:
-                try:
-                    return location.copy()
-                except Exception:
-                    return location
+                copied_location = _safe_copy_target_vector(location)
+                if copied_location is not None:
+                    return copied_location
 
         return self._brush_depth_location(system_obj=system_obj, target_info=target_info)
 
@@ -14220,7 +14248,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             tool=self.tool_id,
             shift_delete=shift_delete_preview,
         ):
-            # Idle native UI may reuse a matching terrain system, but creation belongs to paint strokes.
             native_session_started = self._begin_native_density_session(context, create_system=False)
 
         if not native_session_started:
@@ -14596,7 +14623,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         normal = self.hover_target.get("normal")
         if location is None or normal is None:
             return None
-        return {"location": location.copy(), "normal": normal.copy()}
+        location_copy = _safe_copy_target_vector(location)
+        normal_copy = _safe_copy_target_vector(normal)
+        if location_copy is None or normal_copy is None:
+            return None
+        return {"location": location_copy, "normal": normal_copy}
 
     def _sample_brush_hits(self, context, center_world, normal_world, count, *, existing_locations=None, min_spacing=0.0, min_gap_distance=0.0, candidate_radius=None):
         if not self.hover_target or count <= 0:
@@ -17887,8 +17918,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
             if _start_base_paint_from_stopped_modal(context, event):
                 return {'CANCELLED'}
-            # Panel exit stops this instance before Blender retires its modal
-            # handler. Let the next shortcut continue through keymap handling.
             return {'CANCELLED', 'PASS_THROUGH'}
         if (
             (getattr(context, "mode", "") or "") == 'OBJECT'
@@ -17910,9 +17939,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                     return {'CANCELLED'}
             return {'CANCELLED', 'PASS_THROUGH'}
         event_type = getattr(event, "type", "")
-        # Passive idle mouse events can return early below. Blender often reports
-        # a native brush release through type_prev/value_prev on that follow-up
-        # event, so update this state before any pass-through return.
         primary_down_before_event = bool(getattr(self, "_primary_paint_button_down", False))
         self._sync_primary_paint_button_state(event)
         primary_released_by_event_history = (
@@ -18824,8 +18850,6 @@ def _draw_secret_paint_mode_header(self, context):
 
     layout.separator(factor=0.8)
     prop_row = layout.row(align=True)
-    # Disabled in the compact world-paint toolbar for now; keep the property/runtime path for future re-enable.
-    # prop_row.prop(context.window_manager, "secret_paint_world_asset_scale", text="Scale", slider=True)
     prop_row.prop(context.window_manager, "secret_paint_world_brush_radius", text="Size (F)", slider=True)
     if operator.tool_id == WORLD_TOOL_DENSITY:
         density_prop = (

@@ -1,26 +1,7 @@
-# Copyright (C) 2024 orencloud
-
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-# ##### END GPL LICENSE BLOCK #####
-
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 0, 0),
+    "version": (2, 0, 1),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -32,59 +13,21 @@ bl_info = {
 import hashlib
 import importlib
 import json
+import math
+import os
 import random
-
-
-from mathutils import Vector
-
-
-
+import re
+import time
 from pathlib import Path
 
-
 import addon_utils
-
-
-
-import math
-
-
-
-
-
-
-
-
-
-
-import bpy, os
-
-
-
-import mathutils
-
-
-import time
-
-
-
-
-
-
-
-import bpy.types
-from bpy.props import StringProperty
-
-import subprocess
-
-
-
-
-
-
-
 import bmesh
-import re
+import bpy
+import bpy.types
+import mathutils
+from bpy.props import StringProperty
+from mathutils import Vector
+
 blender_version = bpy.app.version_string
 
 
@@ -115,12 +58,6 @@ def _secret_paint_bl_info():
     }
 
 
-
-
-
-
-
-
 addon_path = Path(__file__).resolve().parent
 addon_is_an_extension = "extensions" in addon_path.parts
 secret_paint_install_count = 0
@@ -144,14 +81,13 @@ if auto_updater_status == True:
 
 from .secret_paint_shared import *
 
+
 class MyPropertiesClass(bpy.types.PropertyGroup):
 
     dropdownpanel: bpy.props.BoolProperty(default=False, update=update_collapsed_list)
     shared_material_index : bpy.props.IntProperty(name= "Shared Material Index", description="Choose which Shared node group get assigned to the selected objects", soft_min= 1, soft_max= 32, default= 1)
     checkboxImportWithoutPainting: bpy.props.BoolProperty(name="Import And Paint",description="When transfering a Biome to another mesh, also transfer the material of the target mesh",default=True)
     checkboxTransferMaterialWithBiome: bpy.props.BoolProperty(name="Terrain material with Biome",description="When transfering a Biome to another mesh, also transfer the material of the target mesh",default=False)
-
-
 
 
 addon_keymaps = []
@@ -866,9 +802,6 @@ def _same_keymap_item_reference(kmi_a, kmi_b):
 
 
 def _refresh_blender_keyconfigs(context):
-    # Avoid Blender's global keyconfig reconciliation here. In saved user
-    # preferences it can drop unrelated custom shortcuts for operators that are
-    # unavailable in the current session.
     return None
 
 
@@ -1324,7 +1257,6 @@ def _reset_shortcut_indexes_to_defaults(context, addon_keymap_indexes):
 
 
 def _sync_user_override_from_addon_keymap_edit(context, km_add, kmi_add):
-    # Compatibility hook only; automatic repair must not write user keymaps.
     return False
 
 
@@ -1509,14 +1441,11 @@ def _adopt_external_user_shortcuts(context):
     return adopted
 
 
-
 def _remove_legacy_pick_source_space_shortcuts(context):
-    # Legacy migration hook kept inert to avoid silent user-keymap edits.
     return 0
 
 
 def _remove_wrong_space_file_browser_main_shortcuts(context):
-    # Legacy migration hook kept inert to avoid silent user-keymap edits.
     return 0
 
 
@@ -1880,7 +1809,6 @@ def _matching_user_items_without_properties(km_user, km_add, kmi_add):
 
 
 def _restore_mass_disabled_secret_paint_shortcuts(context):
-    # Keep migration hooks inert: automatic user-keymap edits can corrupt preferences.
     return 0
 
 
@@ -1936,7 +1864,6 @@ def _keymap_item_has_invalid_enum_property(kmi, prop_name):
 
 
 def _repair_stale_blender_enum_user_keymaps(context):
-    # Never repair Blender-native keymaps from this add-on.
     return 0
 
 
@@ -2217,9 +2144,6 @@ def _secret_paint_keymap_preferences_sync_timer():
 
 def _request_secret_paint_keymap_preferences_sync():
     global _secret_paint_keymap_preferences_sync_until
-    # Shortcut controls sync immediately from Preferences. Avoid deferred keymap
-    # writes because Blender 5.1 can crash if keyconfigs are touched during
-    # native curve-sculpt modal/radial-control event handling.
     _secret_paint_keymap_preferences_sync_until = 0.0
 
 
@@ -3225,8 +3149,6 @@ class secret_keymap_capture_shortcut(bpy.types.Operator):
             'WINDOW_DEACTIVATE',
         }:
             return {'RUNNING_MODAL'}
-
-        # Ignore the mouse release from clicking the Set Shortcut button.
         if event_type == 'LEFTMOUSE' and event_value == 'RELEASE':
             return {'RUNNING_MODAL'}
 
@@ -3415,12 +3337,6 @@ class secret_keymap_reset_all(bpy.types.Operator):
             _clear_secret_paint_world_keymap_caches()
         self.report({'INFO'}, f"Reset {changed} Secret Paint shortcut override(s)")
         return {'FINISHED'}
-
-
-
-# bpy.context.preferences.addons[__package__].preferences.checkboxKeepManualWhenTransferBiome
-# layout.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxKeepManualWhenTransferBiome")
-# row.prop(bpy.context.preferences.addons[__package__].preferences, "mocapfilename", expand=True)
 import rna_keymap_ui
 class secret_menu(bpy.types.AddonPreferences):
     bl_idname = __package__
@@ -3471,7 +3387,7 @@ class secret_menu(bpy.types.AddonPreferences):
         row = layout.row()
         row = layout.row()
         row = layout.row()
-        
+
 
         kc = context.window_manager.keyconfigs.addon
 
@@ -3552,18 +3468,6 @@ class secret_menu(bpy.types.AddonPreferences):
             old_km_name = km_add.name
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 classes = [
 
     secret_menu,
@@ -3593,20 +3497,13 @@ def _unregister_temp_disabled_secret_paint_classes():
             pass
 
 
-
-
-
 def register():
 
-    
-    
-    
-    
-    
+
     bl_info = _secret_paint_bl_info()
     if addon_updater_ops is not None: addon_updater_ops.register(bl_info)
+    register_secret_paint_cli_commands()
 
-    
 
     unregister_secret_paint_disabled_world_paint_operator_stubs()
     _unregister_temp_disabled_secret_paint_classes()
@@ -3615,14 +3512,11 @@ def register():
     register_secret_paint_panel_drag_property()
 
 
-
     bpy.types.Scene.mypropertieslist = bpy.props.PointerProperty(type= MyPropertiesClass)
 
     bpy.types.FILEBROWSER_HT_header.append(checkboxImportWithoutPainting_f)
     register_secret_paint_world_paint_runtime()
     register_secret_paint_object_mode_pie()
-
-    
 
 
     wm = bpy.context.window_manager
@@ -3764,12 +3658,6 @@ def register():
     addon_keymaps.append((km, kmi))
 
 
-
-
-
-
-
-
     km = addon_keymap("Object Mode")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
@@ -3785,10 +3673,6 @@ def register():
     km = addon_keymap("Curve")
     kmi = km.keymap_items.new("secret.paintbrushswitch", "Q", "PRESS", shift=True)
     addon_keymaps.append((km, kmi))
-
-
-
-
 
 
     km = addon_keymap("Object Mode")
@@ -3812,9 +3696,8 @@ def register():
     _register_secret_paint_keymap_maintenance_timer()
 
 
-
-
 def unregister():
+    unregister_secret_paint_cli_commands()
     if addon_updater_ops is not None: addon_updater_ops.unregister()
     _unregister_secret_paint_keymap_maintenance_timer()
     unregister_secret_paint_world_paint_runtime()
@@ -3829,7 +3712,6 @@ def unregister():
 
     bpy.types.FILEBROWSER_HT_header.remove(checkboxImportWithoutPainting_f)
 
-    
 
     for km, kmi in addon_keymaps:
         if not _keymap_item_is_alive(km, kmi):
