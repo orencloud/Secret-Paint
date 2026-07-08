@@ -131,7 +131,7 @@ WORLD_ADJUST_OPERATOR_IDS = {
     "SIZE": "secret.world_paint_adjust_size",
     "STRENGTH": "secret.world_paint_adjust_strength",
 }
-WORLD_PAINT_STATUS_TEXT = "Secret Paint Mode: LMB paint, RMB remove, paint key picks source, F size, Alt+F density"
+WORLD_PAINT_STATUS_TEXT = "Secret Paint Mode: LMB paint, RMB remove, paint key picks source, F size, Alt+F density/strength"
 WORLD_TOOL_FROM_WORKSPACE = {
     workspace_tool_id: tool_id
     for tool_id, workspace_tool_id in WORLD_WORKSPACE_TOOL_IDS.items()
@@ -295,6 +295,11 @@ WORLD_NATIVE_TOOL_BRUSH_TYPES = {
     WORLD_TOOL_SELECT: "SELECTION_PAINT",
     WORLD_TOOL_COMB: "COMB",
     WORLD_TOOL_SCALE: "GROW_SHRINK",
+}
+WORLD_NATIVE_STRENGTH_TOOL_IDS = {
+    WORLD_TOOL_SLIDE,
+    WORLD_TOOL_COMB,
+    WORLD_TOOL_SCALE,
 }
 WORLD_NATIVE_TOOL_BY_BRUSH_TYPE = {
     brush_type: tool_id
@@ -2961,6 +2966,21 @@ def _modal_idle_for_viewport_bookmark(operator):
 def _addon_preferences(context):
     addon = context.preferences.addons.get(shared.__package__)
     return addon.preferences if addon else None
+
+
+def _world_paint_interpolate_preference(context):
+    preferences = _addon_preferences(context)
+    return bool(getattr(preferences, "world_paint_interpolate", True)) if preferences is not None else True
+
+
+def _store_world_paint_interpolate_preference(context, enabled):
+    preferences = _addon_preferences(context)
+    if preferences is None or not hasattr(preferences, "world_paint_interpolate"):
+        return
+    try:
+        preferences.world_paint_interpolate = bool(enabled)
+    except Exception:
+        pass
 
 
 def _secret_modifier(obj):
@@ -6206,6 +6226,10 @@ def _delete_visible_empty_manual_paint_systems(context, system_names):
     scene = getattr(context, "scene", None)
     if scene is None:
         return 0
+    try:
+        context.view_layer.update()
+    except Exception:
+        pass
 
     protected_names = set(_WORLD_STATE.get("bezier_handoff_object_names", set()) or set())
     candidates = []
@@ -8038,6 +8062,22 @@ def _density_spacing_value(value, fallback=0.1):
     return max(WORLD_DENSITY_SPACING_EPSILON, value)
 
 
+def _brush_strength_value(value, fallback=1.0):
+    try:
+        value = float(value)
+    except Exception:
+        try:
+            value = float(fallback)
+        except Exception:
+            value = 1.0
+    if not math.isfinite(value):
+        try:
+            value = float(fallback)
+        except Exception:
+            value = 1.0
+    return min(1.0, max(0.0, value))
+
+
 def _density_target_count(radius, spacing):
     spacing = _density_spacing_value(spacing)
     return max(1, int(round((math.pi * (radius ** 2)) / (spacing ** 2))))
@@ -8551,6 +8591,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self.brush_radius = 0.5
         self.brush_radius_setting = 0.5
         self.density_spacing = 0.1
+        self.brush_strength = 1.0
         self.adjust_mode = ""
         self.adjust_origin_x = None
         self.adjust_base_value = 0.0
@@ -9458,7 +9499,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                     if self._native_density_stroke_erase:
                         status_text = "Secret Paint Mode: native delete brush active. Release Shift to return to Density"
                     else:
-                        status_text = "Secret Paint Mode: native density brush active. LMB paint, RMB or Shift remove, F size, Alt+F density, paint key picks source"
+                        status_text = "Secret Paint Mode: native density brush active. LMB paint, RMB or Shift remove, F size, Alt+F density/strength, paint key picks source"
                 else:
                     tool_label = WORLD_TOOL_LABELS.get(self.tool_id, "Brush")
                     status_text = f"Secret Paint Mode: native {tool_label} brush active. LMB paint, paint key picks source, F size"
@@ -10004,6 +10045,117 @@ class secret_world_paint_mode(bpy.types.Operator):
             ) or changed
         stored_changed = _store_system_density_spacing(active_system, spacing)
         changed = stored_changed or changed
+        return changed
+
+    def _tool_uses_brush_strength_adjust(self, tool_id=None):
+        return (self.tool_id if tool_id is None else tool_id) in WORLD_NATIVE_STRENGTH_TOOL_IDS
+
+    def _active_strength_brush(self, context, *, ensure=True):
+        if not self._tool_uses_brush_strength_adjust():
+            return None
+        brush_type = self._active_native_brush_type()
+        if not brush_type:
+            return None
+        brush_container = _tool_settings_brush_container(context)
+        active_brush = getattr(brush_container, "brush", None) if brush_container is not None else None
+        if shared.secret_paint_is_curves_brush_type(active_brush, brush_type) and hasattr(active_brush, "strength"):
+            return active_brush
+        if not ensure:
+            return None
+        brush = self._native_density_brush(context)
+        if shared.secret_paint_is_curves_brush_type(brush, brush_type) and hasattr(brush, "strength"):
+            return brush
+        return None
+
+    def _read_active_brush_strength(self, context, *, ensure=False, brush=None):
+        if not self._tool_uses_brush_strength_adjust():
+            return None
+        brush = brush if brush is not None else self._active_strength_brush(context, ensure=ensure)
+        if brush is None or not hasattr(brush, "strength"):
+            return None
+        try:
+            return _brush_strength_value(getattr(brush, "strength"), fallback=self.brush_strength)
+        except Exception:
+            return None
+
+    def _sync_brush_strength_from_native_brush(self, context, *, ensure=False, brush=None):
+        strength = self._read_active_brush_strength(context, ensure=ensure, brush=brush)
+        if strength is None:
+            return False
+        changed = abs(strength - getattr(self, "brush_strength", 1.0)) >= WORLD_DENSITY_SPACING_EPSILON
+        self.brush_strength = strength
+        window_manager = getattr(context, "window_manager", None)
+        if window_manager is not None and hasattr(window_manager, "secret_paint_world_brush_strength"):
+            was_syncing = bool(getattr(self, "_syncing_brush_props", False))
+            self._syncing_brush_props = True
+            try:
+                window_manager.secret_paint_world_brush_strength = strength
+            finally:
+                self._syncing_brush_props = was_syncing
+        return changed
+
+    def _apply_brush_strength_to_brush_candidates(self, context, *brushes, strength=None):
+        if not self._tool_uses_brush_strength_adjust():
+            return False
+        brush_type = self._active_native_brush_type()
+        if not brush_type:
+            return False
+        strength = _brush_strength_value(
+            self.brush_strength if strength is None else strength,
+            fallback=self.brush_strength,
+        )
+        self.brush_strength = strength
+        changed = False
+        seen = set()
+        for brush in brushes:
+            if brush is None or not shared.secret_paint_is_curves_brush_type(brush, brush_type):
+                continue
+            try:
+                pointer = brush.as_pointer()
+            except Exception:
+                pointer = id(brush)
+            if pointer in seen:
+                continue
+            seen.add(pointer)
+            if not hasattr(brush, "strength"):
+                continue
+            changed = _world_set_attr_if_different(
+                brush,
+                "strength",
+                strength,
+                epsilon=WORLD_DENSITY_SPACING_EPSILON,
+            ) or changed
+        return changed
+
+    def _set_active_brush_strength(self, context, value):
+        if not self._tool_uses_brush_strength_adjust():
+            return False
+        strength = _brush_strength_value(value, fallback=self.brush_strength)
+        brush_type = self._active_native_brush_type()
+        brush_container = _tool_settings_brush_container(context)
+        active_brush = getattr(brush_container, "brush", None) if brush_container is not None else None
+        preset_brush = None
+        try:
+            preset_brush = shared.secret_paint_ensure_sp_curves_brush_asset(
+                brush_type,
+                context,
+                self._current_system(),
+                configure=False,
+                override_settings=False,
+                size=None,
+            )
+        except Exception:
+            preset_brush = None
+        native_brush = self._native_density_brush(context)
+        changed = self._apply_brush_strength_to_brush_candidates(
+            context,
+            active_brush,
+            preset_brush,
+            native_brush,
+            strength=strength,
+        )
+        self._sync_brush_controls(context, force=True)
+        _tag_redraw_view3d_areas(context)
         return changed
 
     def _schedule_density_spacing_native_brush_sync(self, system_obj=None, *, first_interval=0.01, attempts=3):
@@ -10632,7 +10784,10 @@ class secret_world_paint_mode(bpy.types.Operator):
                 desired_unprojected_size,
                 epsilon=WORLD_DENSITY_SPACING_EPSILON,
             )
-        _world_set_attr_if_different(brush, "strength", 1.0, epsilon=WORLD_DENSITY_SPACING_EPSILON)
+        if brush_type == 'DENSITY':
+            _world_set_attr_if_different(brush, "strength", 1.0, epsilon=WORLD_DENSITY_SPACING_EPSILON)
+        elif self._tool_uses_brush_strength_adjust():
+            self._sync_brush_strength_from_native_brush(context, brush=brush)
         curves_paint_settings = _tool_settings_brush_container(context)
         unified_settings = getattr(curves_paint_settings, "unified_paint_settings", None) if curves_paint_settings is not None else None
         if unified_settings is not None and not preserve_native_size_for_adjust:
@@ -10670,7 +10825,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                     brush_type,
                     context,
                     system_obj,
-                    override_settings=True,
+                    override_settings=not self._tool_uses_brush_strength_adjust(),
                     size=None,
                 )
             except Exception:
@@ -11861,6 +12016,10 @@ class secret_world_paint_mode(bpy.types.Operator):
             context.window_manager.secret_paint_world_density_spacing = self.density_spacing
             if hasattr(context.window_manager, "secret_paint_world_density_spacing_coarse"):
                 context.window_manager.secret_paint_world_density_spacing_coarse = self.density_spacing
+            if hasattr(context.window_manager, "secret_paint_world_brush_strength"):
+                if self._tool_uses_brush_strength_adjust():
+                    self._sync_brush_strength_from_native_brush(context, ensure=False)
+                context.window_manager.secret_paint_world_brush_strength = self.brush_strength
             shared.secret_paint_brush_size_trace_log(
                 "world.sync_brush_controls",
                 context,
@@ -11868,6 +12027,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                 force=force,
                 wm_radius=self.brush_radius_setting,
                 wm_density=self.density_spacing,
+                wm_strength=self.brush_strength,
             )
         finally:
             self._syncing_brush_props = False
@@ -11991,14 +12151,10 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._session_created_system_names.add(system_obj.name)
         except Exception:
             self._session_created_system_names = {system_obj.name}
-
-        target_key = _world_target_key_from_parts(target_kind, surface_obj, target_owner)
-        initial_key = getattr(self, "_session_initial_target_key", "")
-        if initial_key and target_key and target_key != initial_key:
-            try:
-                self._session_empty_auto_delete_system_names.add(system_obj.name)
-            except Exception:
-                self._session_empty_auto_delete_system_names = {system_obj.name}
+        try:
+            self._session_empty_auto_delete_system_names.add(system_obj.name)
+        except Exception:
+            self._session_empty_auto_delete_system_names = {system_obj.name}
 
     def _set_active_system(self, context, system_obj):
         if system_obj is None:
@@ -12268,7 +12424,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             status_label = _world_source_label_info(source_data)[0]
         try:
             context.workspace.status_text_set(
-                text=f"Secret Paint Mode: {status_label} source picked. LMB paint, RMB remove, paint key picks source, F size, Alt+F density"
+                text=f"Secret Paint Mode: {status_label} source picked. LMB paint, RMB remove, paint key picks source, F size, Alt+F density/strength"
             )
         except Exception:
             pass
@@ -12416,6 +12572,59 @@ class secret_world_paint_mode(bpy.types.Operator):
             return origin_object
         return origin_object if _safe_rna_name(origin_object) else picked_obj
 
+    def _object_source_immediate_target(self, context):
+        if self.surface_lock:
+            if not self._locked_target_infos():
+                self._restore_scene_locked_target(context)
+            locked_targets = self._locked_target_infos()
+            if locked_targets:
+                copied = _copy_target_info(self.locked_target or locked_targets[0])
+                if copied is not None:
+                    return copied
+
+        for target_info in (self.hover_target, self.preview_target):
+            copied = _copy_target_info(target_info)
+            if copied is not None:
+                return copied
+
+        for system_name in (
+            getattr(self, "active_system_name", ""),
+            getattr(self, "_native_density_active_system_name", ""),
+        ):
+            if not system_name:
+                continue
+            target_info = _target_info_from_system(
+                context,
+                bpy.data.objects.get(system_name),
+                allow_wire_bounds_surfaces=self.allow_wire_bounds_surfaces,
+                ignore_display_type_block=self.surface_lock,
+            )
+            copied = _copy_target_info(target_info)
+            if copied is not None:
+                return copied
+        return None
+
+    def _activate_object_source_target_system(self, context, target_info):
+        target_info = _copy_target_info(target_info)
+        if target_info is None:
+            return False
+        self._activate_hover_target(context, target_info)
+        system_obj = self._ensure_current_system(context, create=True)
+        if system_obj is None:
+            return False
+        if self._density_uses_native_ui() and self.tool_id != WORLD_TOOL_BEZIER:
+            self._defer_native_idle_session = not WORLD_KEEP_NATIVE_SESSION_WHILE_IDLE
+            if WORLD_KEEP_NATIVE_SESSION_WHILE_IDLE:
+                self._ensure_idle_native_density_session(context)
+            else:
+                self._sync_tool_ui_mode(context)
+        else:
+            self._configure_tool(context)
+        self._sync_brush_controls(context)
+        self._sync_scale_slider(context)
+        _tag_redraw_view3d_areas(context)
+        return True
+
     def _commit_source_pick(self, context, source_data, picked_obj, event=None, *, preview=True):
         if not source_data:
             return False
@@ -12423,6 +12632,12 @@ class secret_world_paint_mode(bpy.types.Operator):
         current_source_key = _source_data_key(self.source_data)
         next_source_key = _source_data_key(source_data)
         source_is_system_source = self._source_data_is_system_source(source_data)
+        object_source = (
+            source_data.get("origin_kind") == "OBJECT"
+            and not source_is_system_source
+            and not _source_data_should_start_bezier_tool(source_data)
+        )
+        immediate_target = self._object_source_immediate_target(context) if object_source else None
         switched = False
         if current_source_key != next_source_key:
             current_source = _source_data_snapshot(self.source_data)
@@ -12430,12 +12645,14 @@ class secret_world_paint_mode(bpy.types.Operator):
                 context,
                 source_data,
                 status_label=_safe_rna_name(picked_obj),
-                reset_target_state=source_data.get("origin_kind") == "OBJECT" and not source_is_system_source,
+                reset_target_state=object_source and immediate_target is None,
             )
             if switched and source_is_system_source:
                 self._activate_picked_source_system(context, source_data)
-            elif switched and source_data.get("origin_kind") == "OBJECT":
-                if not (self.surface_lock and self._surface_lock_retarget_pending):
+            elif switched and object_source:
+                if immediate_target is not None:
+                    self._activate_object_source_target_system(context, immediate_target)
+                elif not (self.surface_lock and self._surface_lock_retarget_pending):
                     if event is not None and hasattr(event, "mouse_region_x") and hasattr(event, "mouse_region_y"):
                         self._update_hover_target(context, event, commit=True)
                     else:
@@ -12448,7 +12665,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             switched = True
             if source_is_system_source:
                 self._activate_picked_source_system(context, source_data)
-            elif source_data.get("origin_kind") == "OBJECT" and self.surface_lock:
+            elif object_source and immediate_target is not None:
+                self._activate_object_source_target_system(context, immediate_target)
+            elif object_source and self.surface_lock:
                 if not self._locked_target_infos():
                     self._restore_scene_locked_target(context)
                 if self._locked_target_infos():
@@ -12704,7 +12923,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         try:
             source_label = _world_source_label_info(refreshed_source)[0]
             context.workspace.status_text_set(
-                text=f"Secret Paint Mode: {active_system.name} switched to {source_label}. LMB paint, RMB remove, paint key picks source, F size, Alt+F density"
+                text=f"Secret Paint Mode: {active_system.name} switched to {source_label}. LMB paint, RMB remove, paint key picks source, F size, Alt+F density/strength"
             )
         except Exception:
             pass
@@ -12902,6 +13121,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             if self._density_uses_native_ui():
                 self._sync_interpolate_from_native_brush(context, ensure=True)
             self.interpolate = not self.interpolate
+            _store_world_paint_interpolate_preference(context, self.interpolate)
             if self._density_uses_native_ui():
                 self._apply_interpolate_to_native_brush(context, enabled=self.interpolate)
         elif flag_id == "RANDOM_Z":
@@ -13008,6 +13228,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         if (
             action_kind == "ADJUST"
             and action_value == "STRENGTH"
+            and not self._tool_uses_brush_strength_adjust()
             and self._native_density_adjust_keymap_passthrough_enabled()
             and self._native_density_radial_adjust_passthrough_enabled()
         ):
@@ -13089,6 +13310,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         if getattr(event, "value", "") != 'PRESS':
             return False
         if not self._event_is_in_world_paint_view(context, event):
+            return False
+        if self._tool_uses_brush_strength_adjust():
             return False
         if not self._native_density_radial_adjust_passthrough_enabled():
             return False
@@ -16472,6 +16695,43 @@ class secret_world_paint_mode(bpy.types.Operator):
             ignore_value=True,
         )
 
+    def _is_brush_strength_adjust_active(self):
+        return (
+            self.adjust_mode == "STRENGTH"
+            and self._tool_uses_brush_strength_adjust()
+            and not getattr(self, "_native_density_adjust_passthrough", False)
+        )
+
+    def _is_brush_strength_adjust_shortcut_release_event(self, context, event):
+        if not self._is_brush_strength_adjust_active() or getattr(event, "value", "") != 'RELEASE':
+            return False
+        if _event_matches_current_adjust_shortcut(context, event, "STRENGTH", ignore_value=True):
+            return True
+        event_type = getattr(event, "type", "")
+        for spec in _adjust_shortcut_key_specs(context, "STRENGTH"):
+            if event_type == spec.get("key_type", ""):
+                return True
+            modifier_name = WORLD_MODIFIER_KEY_TYPES.get(event_type)
+            if modifier_name and modifier_name in (spec.get("modifiers", ()) or ()):
+                return True
+        return False
+
+    def _handle_brush_strength_adjust_confirm_event(self, context, event):
+        if not self._is_brush_strength_adjust_active():
+            return False
+        event_type = getattr(event, "type", "")
+        event_value = getattr(event, "value", "")
+        if (
+            bool(getattr(self, "_native_density_adjust_confirm_on_release", False))
+            and self._is_brush_strength_adjust_shortcut_release_event(context, event)
+        ):
+            self._confirm_adjust_from_event(context, event)
+            return True
+        if event_type in {'LEFTMOUSE', 'ACTIONMOUSE', 'SELECTMOUSE'} and event_value in {'PRESS', 'CLICK'}:
+            self._confirm_adjust_from_event(context, event)
+            return True
+        return False
+
     def _schedule_native_adjust_finish(self, delay=0.08):
         def _finish_adjust():
             operator = _world_operator()
@@ -17140,6 +17400,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         if (
             self._density_uses_native_ui()
             and not WORLD_CUSTOM_ADJUST_UI_ENABLED
+            and not (adjust_mode == "STRENGTH" and self._tool_uses_brush_strength_adjust())
         ):
             return self._begin_native_adjust(
                 context,
@@ -17178,6 +17439,9 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._last_brush_control_sync_time = 0.0
         if adjust_mode == "SIZE":
             self.adjust_base_value = self.brush_radius_setting
+        elif adjust_mode == "STRENGTH" and self._tool_uses_brush_strength_adjust():
+            strength = self._read_active_brush_strength(context, ensure=True)
+            self.adjust_base_value = self.brush_strength if strength is None else strength
         else:
             self.adjust_base_value = self.density_spacing
         if self._density_uses_native_ui():
@@ -17206,6 +17470,14 @@ class secret_world_paint_mode(bpy.types.Operator):
                 mouse_coord=self.hover_mouse_region,
             )
             self._mark_deferred_brush_settings_dirty(radius=True, native_sync=True)
+        elif self.adjust_mode == "STRENGTH" and self._tool_uses_brush_strength_adjust():
+            next_strength = _brush_strength_value(
+                self.adjust_base_value + delta * 0.2,
+                fallback=self.brush_strength,
+            )
+            if abs(next_strength - self.brush_strength) < WORLD_DENSITY_SPACING_EPSILON:
+                return True
+            self._set_active_brush_strength(context, next_strength)
         else:
             next_density_spacing = _density_spacing_value(
                 self.adjust_base_value + delta * 0.2,
@@ -17796,6 +18068,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self.always_use_2d_world_paint_brush_ui = bool(
             preferences and getattr(preferences, "always_use_2d_world_paint_brush_ui", False)
         )
+        self.interpolate = _world_paint_interpolate_preference(context)
         if not self._density_uses_native_ui():
             try:
                 shared.secret_paint_ensure_sp_curves_brush_assets(
@@ -17885,6 +18158,16 @@ class secret_world_paint_mode(bpy.types.Operator):
                 self.locked_targets = []
                 self.last_hover_key = ""
             self.active_system_name = ""
+            if (
+                self.source_data.get("origin_kind") == "OBJECT"
+                and not self._source_data_is_system_source(self.source_data)
+                and self.surface_lock
+                and self._locked_target_infos()
+            ):
+                self._activate_object_source_target_system(
+                    context,
+                    self.locked_target or self._locked_target_infos()[0],
+                )
 
         if not self._density_uses_native_ui():
             self._sync_effective_brush_radius(context)
@@ -18139,6 +18422,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         native_adjust_result = self._handle_native_adjust_passthrough_event(context, event)
         if native_adjust_result is not None:
             return native_adjust_result
+        if self._handle_brush_strength_adjust_confirm_event(context, event):
+            return {'RUNNING_MODAL'}
 
         bezier_tool_active = self.tool_id == WORLD_TOOL_BEZIER
 
@@ -18773,6 +19058,13 @@ def _world_density_spacing_coarse_update(self, context):
     _world_density_spacing_update_value(self, context, self.secret_paint_world_density_spacing_coarse)
 
 
+def _world_brush_strength_update(self, context):
+    operator = _world_operator()
+    if operator is None or getattr(operator, "_syncing_brush_props", False):
+        return
+    operator._set_active_brush_strength(context, self.secret_paint_world_brush_strength)
+
+
 def _draw_world_falloff_shape_controls(layout, context, operator):
     brush = operator._active_falloff_brush(context, ensure=False)
     if brush is None:
@@ -18858,6 +19150,9 @@ def _draw_secret_paint_mode_header(self, context):
             else "secret_paint_world_density_spacing"
         )
         prop_row.prop(context.window_manager, density_prop, text="Density (Alt+F)", slider=True)
+    elif operator._tool_uses_brush_strength_adjust():
+        operator._sync_brush_strength_from_native_brush(context, ensure=False)
+        prop_row.prop(context.window_manager, "secret_paint_world_brush_strength", text="Strength (Alt+F)", slider=True)
     prop_row.separator(factor=0.8)
     _draw_world_falloff_shape_controls(prop_row, context, operator)
 
@@ -19449,6 +19744,17 @@ def register_secret_paint_world_paint_runtime():
             precision=1,
             update=_world_density_spacing_coarse_update,
         )
+    if not hasattr(bpy.types.WindowManager, "secret_paint_world_brush_strength"):
+        bpy.types.WindowManager.secret_paint_world_brush_strength = bpy.props.FloatProperty(
+            name="Strength",
+            default=1.0,
+            min=0.0,
+            max=1.0,
+            soft_min=0.0,
+            soft_max=1.0,
+            precision=3,
+            update=_world_brush_strength_update,
+        )
     _remove_stable_ids_load_handlers()
     if _stable_ids_on_depsgraph_update_post not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(_stable_ids_on_depsgraph_update_post)
@@ -19496,3 +19802,5 @@ def unregister_secret_paint_world_paint_runtime():
         del bpy.types.WindowManager.secret_paint_world_density_spacing
     if hasattr(bpy.types.WindowManager, "secret_paint_world_density_spacing_coarse"):
         del bpy.types.WindowManager.secret_paint_world_density_spacing_coarse
+    if hasattr(bpy.types.WindowManager, "secret_paint_world_brush_strength"):
+        del bpy.types.WindowManager.secret_paint_world_brush_strength

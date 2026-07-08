@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 0, 1),
+    "version": (2, 0, 2),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -359,33 +359,7 @@ def _property_signature_value(value):
 
 
 def _operator_properties_signature(properties):
-    if properties is None:
-        return ()
-
-    try:
-        rna_properties = properties.bl_rna.properties
-    except Exception:
-        return ()
-
-    signature = []
-    for prop in rna_properties:
-        try:
-            identifier = prop.identifier
-        except Exception:
-            continue
-        if identifier in {"rna_type", "confirm_on_release", "release_confirm"}:
-            continue
-        try:
-            if not properties.is_property_set(identifier):
-                continue
-        except Exception:
-            continue
-        try:
-            value = getattr(properties, identifier)
-        except Exception:
-            continue
-        signature.append((identifier, _property_signature_value(value)))
-    return tuple(signature)
+    return ()
 
 
 def _kmi_operator_identity(km, kmi):
@@ -442,17 +416,13 @@ def _operator_property_identifiers(properties):
     if properties is None:
         return set()
 
-    try:
-        rna_properties = properties.bl_rna.properties
-    except Exception:
-        return set()
-
     identifiers = set()
-    for prop in rna_properties:
+    for property_name in SECRET_PAINT_KEYMAP_CONTROL_PROPERTY_NAMES:
         try:
-            identifiers.add(prop.identifier)
+            getattr(properties, property_name)
         except Exception:
             continue
+        identifiers.add(property_name)
     return identifiers
 
 
@@ -2741,13 +2711,6 @@ def _keymap_item_shortcut_label(kmi):
 
 
 def _keymap_item_control_property_label(kmi, property_name):
-    try:
-        prop = getattr(kmi.properties.bl_rna.properties, property_name)
-        label = getattr(prop, "name", "")
-        if label:
-            return label
-    except Exception:
-        pass
     return _keymap_property_label(property_name)
 
 
@@ -2969,41 +2932,7 @@ def _draw_keymap_control_properties(layout, kmi, addon_keymap_index):
 
 
 def _draw_keymap_operator_properties(layout, kmi, addon_keymap_index):
-    try:
-        properties = getattr(kmi, "properties", None)
-    except Exception:
-        properties = None
-    if properties is None:
-        return False
-
-    handled = False
-    try:
-        rna_properties = properties.bl_rna.properties
-    except Exception:
-        rna_properties = ()
-
-    for prop in rna_properties:
-        try:
-            identifier = prop.identifier
-        except Exception:
-            continue
-        if identifier == "rna_type" or identifier in SECRET_PAINT_KEYMAP_CONTROL_PROPERTY_NAMES:
-            continue
-        try:
-            if hasattr(properties, "is_property_set") and not properties.is_property_set(identifier):
-                continue
-        except Exception:
-            continue
-        try:
-            row = layout.row(align=True)
-            row.prop(properties, identifier)
-            handled = True
-        except Exception:
-            pass
-
-    if _draw_keymap_control_properties(layout, kmi, addon_keymap_index):
-        handled = True
-    return handled
+    return _draw_keymap_control_properties(layout, kmi, addon_keymap_index)
 
 
 def _draw_secret_paint_keymap_item(col, context, kc, km, kmi, addon_keymap_index=-1, display_name=None):

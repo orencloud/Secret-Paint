@@ -2270,6 +2270,11 @@ SECRET_PAINT_ID_CACHE_CURVES = ".secret_paint_last_id_curve_count"
 SECRET_PAINT_ID_CACHE_POINTS = ".secret_paint_last_id_point_count"
 SECRET_PAINT_STABLE_ID_ATTRIBUTE = "secret_stable_curve_id"
 SECRET_PAINT_STABLE_ROOT_POSITION_ATTRIBUTE = "secret_stable_root_position"
+SECRET_PAINT_CONVERSION_DUMMY_ATTRIBUTE = "secret_paint_conversion_dummy"
+SECRET_PAINT_CONVERSION_DUMMY_POINT_ATTRIBUTE = "secret_paint_conversion_dummy_point"
+SECRET_PAINT_CONVERSION_DUMMY_STABLE_ID = -2147483647
+SECRET_PAINT_CONVERSION_DUMMY_ROOT = (12345.678, -12345.678, 12345.678)
+SECRET_PAINT_CONVERSION_DUMMY_LENGTH = 0.01
 SECRET_PAINT_STABLE_IDS_MIGRATED_PROP = ".secret_paint_stable_ids_migrated"
 SECRET_PAINT_STABLE_IDS_MIGRATED_CURVE_COUNT_PROP = ".secret_paint_stable_ids_migrated_curve_count"
 SECRET_PAINT_MANUAL_LEGACY_IDS_PROP = ".secret_paint_manual_legacy_ids"
@@ -3451,6 +3456,228 @@ def _secret_paint_apply_stable_curve_values(curves_data, stable_curve_values, sy
     return final_values
 
 
+def _secret_paint_ensure_attribute(curves_data, attribute_name, data_type, domain):
+    if curves_data is None:
+        return None
+    try:
+        attribute = curves_data.attributes.get(attribute_name)
+    except Exception:
+        return None
+    if attribute is not None:
+        try:
+            if attribute.domain != domain or attribute.data_type != data_type:
+                curves_data.attributes.remove(attribute)
+                attribute = None
+        except Exception:
+            attribute = None
+    if attribute is None:
+        try:
+            attribute = curves_data.attributes.new(attribute_name, data_type, domain)
+        except Exception:
+            return None
+    return attribute
+
+
+def _secret_paint_attribute_indices(curves_data, attribute_name, expected_value=True):
+    try:
+        attribute = curves_data.attributes.get(attribute_name)
+    except Exception:
+        return []
+    if attribute is None:
+        return []
+
+    try:
+        domain = attribute.domain
+    except Exception:
+        domain = ""
+
+    values = _secret_paint_attribute_array(attribute, width=1)
+    curve_count = len(curves_data.curves) if hasattr(curves_data, "curves") else 0
+    if curve_count <= 0:
+        return []
+
+    if domain == 'CURVE':
+        return [
+            curve_index
+            for curve_index in range(min(curve_count, len(values)))
+            if bool(values[curve_index]) == bool(expected_value)
+        ]
+
+    if domain == 'POINT':
+        offsets = _secret_paint_curve_offsets(curves_data)
+        indices = []
+        for curve_index in range(curve_count):
+            start = offsets[curve_index]
+            end = offsets[curve_index + 1]
+            if any(bool(values[point_index]) == bool(expected_value) for point_index in range(start, min(end, len(values)))):
+                indices.append(curve_index)
+        return indices
+
+    return []
+
+
+def _secret_paint_conversion_dummy_root_indices(curves_data, tolerance=0.0001):
+    root_values = _secret_paint_curve_root_position_values(curves_data)
+    curve_count = len(curves_data.curves) if hasattr(curves_data, "curves") else 0
+    if curve_count <= 0 or len(root_values) < curve_count * 3:
+        return []
+
+    expected_root = SECRET_PAINT_CONVERSION_DUMMY_ROOT
+    indices = []
+    for curve_index in range(curve_count):
+        value_index = curve_index * 3
+        if all(
+            abs(float(root_values[value_index + axis]) - float(expected_root[axis])) <= tolerance
+            for axis in range(3)
+        ):
+            indices.append(curve_index)
+    return indices
+
+
+def _secret_paint_remove_curve_indices(curves_data, curve_indices):
+    if curves_data is None or not curve_indices:
+        return 0
+    curve_count = len(curves_data.curves) if hasattr(curves_data, "curves") else 0
+    unique_indices = sorted({int(index) for index in curve_indices if 0 <= int(index) < curve_count})
+    if not unique_indices:
+        return 0
+
+    try:
+        curves_data.remove_curves(indices=unique_indices)
+    except TypeError:
+        try:
+            curves_data.remove_curves(unique_indices)
+        except Exception:
+            return 0
+    except Exception:
+        return 0
+    return len(unique_indices)
+
+
+def _secret_paint_add_temporary_conversion_curve(obj):
+    curves_data = getattr(obj, "data", None) if obj is not None else None
+    if not _secret_paint_curve_data_is_editable(curves_data):
+        return False
+    if not hasattr(curves_data, "add_curves") or not hasattr(curves_data, "curves"):
+        return False
+
+    curve_count_before = len(curves_data.curves)
+    try:
+        curves_data.add_curves([2])
+    except Exception:
+        return False
+
+    curve_count_after = len(curves_data.curves)
+    if curve_count_after <= curve_count_before:
+        return False
+
+    point_count = len(curves_data.points) if hasattr(curves_data, "points") else 0
+    offsets = _secret_paint_curve_offsets(curves_data)
+    start = offsets[curve_count_before]
+    end = offsets[curve_count_before + 1]
+
+    marker_attr = _secret_paint_ensure_attribute(
+        curves_data,
+        SECRET_PAINT_CONVERSION_DUMMY_ATTRIBUTE,
+        'BOOLEAN',
+        'CURVE',
+    )
+    if marker_attr is not None:
+        marker_values = _secret_paint_attribute_array(marker_attr, width=1)
+        if len(marker_values) < curve_count_after:
+            marker_values.extend([False] * (curve_count_after - len(marker_values)))
+        marker_values[curve_count_before] = True
+        _secret_paint_set_attribute_array(marker_attr, marker_values, width=1)
+
+    point_marker_attr = _secret_paint_ensure_attribute(
+        curves_data,
+        SECRET_PAINT_CONVERSION_DUMMY_POINT_ATTRIBUTE,
+        'BOOLEAN',
+        'POINT',
+    )
+    if point_marker_attr is not None:
+        point_marker_values = _secret_paint_attribute_array(point_marker_attr, width=1)
+        if len(point_marker_values) < point_count:
+            point_marker_values.extend([False] * (point_count - len(point_marker_values)))
+        for point_index in range(start, min(end, len(point_marker_values))):
+            point_marker_values[point_index] = True
+        _secret_paint_set_attribute_array(point_marker_attr, point_marker_values, width=1)
+
+    stable_attr = _secret_paint_ensure_attribute(
+        curves_data,
+        SECRET_PAINT_STABLE_ID_ATTRIBUTE,
+        'INT',
+        'CURVE',
+    )
+    if stable_attr is not None:
+        stable_values = _secret_paint_attribute_array(stable_attr, width=1)
+        if len(stable_values) < curve_count_after:
+            stable_values.extend([0] * (curve_count_after - len(stable_values)))
+        stable_values[curve_count_before] = SECRET_PAINT_CONVERSION_DUMMY_STABLE_ID
+        _secret_paint_set_attribute_array(stable_attr, stable_values, width=1)
+
+    position_data = getattr(curves_data, "position_data", None)
+    if position_data is not None and point_count > 0:
+        positions = _secret_paint_attribute_array(position_data, width=3)
+        needed_values = point_count * 3
+        if len(positions) < needed_values:
+            positions.extend([0.0] * (needed_values - len(positions)))
+        root = SECRET_PAINT_CONVERSION_DUMMY_ROOT
+        tip = (
+            root[0],
+            root[1],
+            root[2] + SECRET_PAINT_CONVERSION_DUMMY_LENGTH,
+        )
+        if start < point_count:
+            positions[start * 3:start * 3 + 3] = root
+        if start + 1 < point_count:
+            positions[(start + 1) * 3:(start + 1) * 3 + 3] = tip
+        _secret_paint_set_attribute_array(position_data, positions, width=3)
+
+    try:
+        curves_data.update_tag()
+    except Exception:
+        pass
+    return True
+
+
+def _secret_paint_remove_temporary_conversion_curves(obj):
+    curves_data = getattr(obj, "data", None) if obj is not None else None
+    if curves_data is None or not hasattr(curves_data, "curves"):
+        return 0
+
+    curve_indices = set(_secret_paint_attribute_indices(
+        curves_data,
+        SECRET_PAINT_CONVERSION_DUMMY_ATTRIBUTE,
+        True,
+    ))
+    curve_indices.update(_secret_paint_attribute_indices(
+        curves_data,
+        SECRET_PAINT_CONVERSION_DUMMY_POINT_ATTRIBUTE,
+        True,
+    ))
+
+    stable_values = _secret_paint_curve_seed_values_from_attribute(
+        curves_data,
+        SECRET_PAINT_STABLE_ID_ATTRIBUTE,
+    )
+    curve_indices.update(
+        curve_index
+        for curve_index, stable_id in enumerate(stable_values)
+        if int(stable_id) == SECRET_PAINT_CONVERSION_DUMMY_STABLE_ID
+    )
+    curve_indices.update(_secret_paint_conversion_dummy_root_indices(curves_data))
+
+    removed_count = _secret_paint_remove_curve_indices(curves_data, curve_indices)
+    _secret_paint_remove_attribute_if_present(curves_data, SECRET_PAINT_CONVERSION_DUMMY_ATTRIBUTE)
+    _secret_paint_remove_attribute_if_present(curves_data, SECRET_PAINT_CONVERSION_DUMMY_POINT_ATTRIBUTE)
+    try:
+        curves_data.update_tag()
+    except Exception:
+        pass
+    return removed_count
+
+
 def _secret_paint_remove_attribute_if_present(curves_data, attribute_name):
     if curves_data is None:
         return
@@ -3635,6 +3862,28 @@ def _secret_paint_instance_transform_delta(reference_records, candidate_records)
             max(abs(value - candidate) for value, candidate in zip(reference_matrix, candidate_matrix)),
         )
     return max_delta
+
+
+def _secret_paint_evaluated_instances_present(context, obj):
+    try:
+        obj.update_tag()
+        obj.data.update_tag()
+        context.view_layer.update()
+        depsgraph = context.evaluated_depsgraph_get()
+    except Exception:
+        return False
+
+    try:
+        instances = depsgraph.object_instances
+    except Exception:
+        return False
+    for instance in instances:
+        if not getattr(instance, "is_instance", False) or instance.parent is None:
+            continue
+        parent = getattr(instance.parent, "original", instance.parent)
+        if parent == obj:
+            return True
+    return False
 
 
 def _secret_paint_baked_manual_uses_legacy_ids(context, obj, modifier):
@@ -4251,15 +4500,17 @@ class orencurvepanel(bpy.types.Panel):
                 icon=icon,
             )
             select_button.object_name = sibling_name
-            if not row_entry["procedural_enabled"]: row.alert = True
+            procedural_enabled = _secret_paint_system_is_procedural(sibling)
+
+            if not procedural_enabled: row.alert = True
             else: row.alert = False
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_APPLY_PROP, icon='CURVES_DATA')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
 
-            if not row_entry["procedural_enabled"]: row.alert = False
+            if not procedural_enabled: row.alert = False
             else: row.alert = True
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_PROCEDURAL_PROP, icon='SHADERFX')  # BRUSH_DATA  #OUTLINER_OB_CURVES #BRUSHES_ALL
 
-            if row_entry["vertex_attribute_name"] and row_entry["procedural_enabled"]: row.alert = True
+            if row_entry["vertex_attribute_name"] and procedural_enabled: row.alert = True
             else: row.alert = False
             action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_VERTEX_PROP, icon='MOD_VERTEX_WEIGHT' if row_entry["vertex_use_attribute"] else 'GROUP_VERTEX')
 
@@ -4677,6 +4928,9 @@ def apply_paint(self,context, **kwargs):
         apply_ids_reason = "not_requested"
         extracted_procedural_curves = False
         temporary_conversion_node_tree = None
+        conversion_dummy_curve_added = False
+        conversion_dummy_curve_removed = 0
+        procedural_instances_present = False
         was_procedural_before_apply = bool(obj.modifiers[0]["Input_69"])
         use_legacy_procedural_ids = _secret_paint_modifier_legacy_procedural_ids(obj.modifiers[0])
         procedural_ids_before_apply = []
@@ -4749,10 +5003,12 @@ def apply_paint(self,context, **kwargs):
                     _secret_paint_evaluated_curve_root_position_values(context, obj),
                     raw_curve_count,
                 )
+            if eval_curve_count == raw_curve_count:
+                procedural_instances_present = _secret_paint_evaluated_instances_present(context, obj)
             can_convert_existing_curves = (
-                raw_curve_count > 0 and raw_matches_evaluated
+                raw_curve_count > 0 and raw_matches_evaluated and not procedural_instances_present
             ) or (
-                raw_curve_count == 0 and eval_curve_count == 0
+                raw_curve_count == 0 and eval_curve_count == 0 and not procedural_instances_present
             )
             if can_convert_existing_curves:
                 stable_curve_values = []
@@ -4811,7 +5067,7 @@ def apply_paint(self,context, **kwargs):
                         "apply_paint.convert_existing_procedural_curves",
                         prepare_modifier_start,
                         label=obj.name,
-                        detail=f"curves={curve_count}; eval_curves={eval_curve_count}; stable_attr_seed_count={stable_attr_seed_count}; legacy_ids={use_legacy_procedural_ids}",
+                        detail=f"curves={curve_count}; eval_curves={eval_curve_count}; instances_present={procedural_instances_present}; stable_attr_seed_count={stable_attr_seed_count}; legacy_ids={use_legacy_procedural_ids}",
                     )
                 _secret_paint_snap_curves_to_surface_if_armature(obj, pickup_trace=pickup_trace)
                 if pickup_trace:
@@ -4827,6 +5083,9 @@ def apply_paint(self,context, **kwargs):
 
         elif applyIDs == False:
             if was_procedural_before_apply:
+                raw_curve_count_for_conversion, _raw_point_count_for_conversion = _secret_paint_get_curves_counts(obj.data)
+                if raw_curve_count_for_conversion == 0:
+                    conversion_dummy_curve_added = _secret_paint_add_temporary_conversion_curve(obj)
                 node_to_use = _secret_paint_create_procedural_curve_extract_node_group(
                     obj.modifiers[0],
                 )
@@ -4906,12 +5165,14 @@ def apply_paint(self,context, **kwargs):
                     bpy.data.node_groups.remove(temporary_conversion_node_tree, do_unlink=True)
             except Exception:
                 pass
+        if conversion_dummy_curve_added:
+            conversion_dummy_curve_removed = _secret_paint_remove_temporary_conversion_curves(obj)
         if pickup_trace:
             pickup_trace.action(
                 "apply_paint.modifier_apply",
                 modifier_apply_start,
                 label=obj.name,
-                detail=f"shared_data={shared_data_before_apply}; applied={successfully_applied_so_reimport_materials}; reason={apply_ids_reason}",
+                detail=f"shared_data={shared_data_before_apply}; applied={successfully_applied_so_reimport_materials}; reason={apply_ids_reason}; conversion_dummy_added={conversion_dummy_curve_added}; conversion_dummy_removed={conversion_dummy_curve_removed}",
             )
         if successfully_applied_so_reimport_materials:
             restore_materials_start = time.perf_counter()
@@ -5086,6 +5347,8 @@ def apply_paint(self,context, **kwargs):
 
     if pickup_trace:
         pickup_trace.action("apply_paint.total", apply_paint_start, detail=f"hair={len(all_selected_hair)}; apply_ids={applyIDs}")
+    _clear_side_panel_count_cache(reason="apply_paint")
+    _secret_paint_tag_redraw_view3d_areas(context)
     return{'FINISHED'}
 class orenscatterinstancesmodifiers(bpy.types.Operator):
     """Convert Procedural Distribution into Manual Paint (or press Q with the paint system selected)"""
@@ -13993,6 +14256,12 @@ def shared_secret_paint_preference_annotations(*, hidden_assets_collection_name=
             default=False,
             update=_persist_world_paint_preference,
         ),
+        "world_paint_interpolate": bpy.props.BoolProperty(
+            name="World Paint Interpolate",
+            description="Remember whether the world paint Interpolate button is enabled when entering paint mode",
+            default=True,
+            update=_persist_world_paint_preference,
+        ),
     }
 
 
@@ -14008,6 +14277,7 @@ def draw_shared_secret_paint_preferences(layout, preferences):
         "paint_only_current_surface",
         "allow_world_paint_wire_bounds_surfaces",
         "always_use_2d_world_paint_brush_ui",
+        "world_paint_interpolate",
         "trigger_viewport_mask",
         "trigger_auto_uvs",
     ):
