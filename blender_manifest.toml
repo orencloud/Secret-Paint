@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 
 
 id = "secret_paint"
-version = "2.0.2"
+version = "2.0.3"
 name = "Secret Paint"
 tagline = "Select an object, select a surface, paint"
 maintainer = "orencloud"
@@ -29,7 +29,7 @@ license = [
   'SPDX:GPL-3.0-or-later',
 ]
 
-copyright = ["2022-2024 orencloud"]
+copyright = ["2022-2026 orencloud"]
 
 
 
