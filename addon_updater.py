@@ -10,7 +10,6 @@ import traceback
 import platform
 import ssl
 import urllib.request
-import urllib
 import os
 import json
 import zipfile

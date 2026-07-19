@@ -1,12 +1,9 @@
-import ctypes
 import datetime
 import json
 import math
 import os
-import platform
 import random
 import re
-import shutil
 import subprocess
 import time
 import traceback
@@ -15,22 +12,13 @@ from importlib import import_module
 from pathlib import Path
 
 import addon_utils
-import blf
 import bmesh
 import bpy
-import bpy.types
-import bpy_extras
-import gpu
-import mathutils
-import numpy
 from bpy.app.handlers import persistent
-from bpy.props import FloatVectorProperty, StringProperty
-from bpy.types import Header, Menu, Operator, Panel, UIList
+from bpy.props import StringProperty
 from bpy.utils import resource_path
-from bpy_extras import asset_utils, view3d_utils
-from gpu_extras.batch import batch_for_shader
-from mathutils import Matrix, Vector
-from mathutils.bvhtree import BVHTree
+from bpy_extras import view3d_utils
+from mathutils import Vector
 
 blender_version = bpy.app.version_string
 
@@ -213,8 +201,6 @@ def _secret_paint_trace_operator_state(operator):
         "_native_density_pending_adjust_mode",
         "_native_density_adjust_sync_token",
         "_native_size_adjust_commit_token",
-        "_native_density_adjust_release_watch_running",
-        "_native_density_adjust_release_watch_saw_shortcut_down",
         "_native_density_adjust_finalizing",
         "_native_density_stroke_erase",
         "_density_right_delete_button_down",
@@ -1321,7 +1307,7 @@ def secret_paint_enable_sculpt_curves_cage(context=None):
     _set_secret_paint_sculpt_curves_cage_visibility(True, context=context)
 
 
-def _secret_paint_q_debug_log(label, context=None, *, keymaps=True, reset=False, **fields):
+def _secret_paint_q_debug_log(label, context=None, *, reset=False, **fields):
     return None
 
 
@@ -1341,17 +1327,6 @@ def _secret_paint_panel_exit_paint_mode(context):
                 was_paint_mode = True
                 _secret_paint_q_debug_log("panel_exit.finish_operator", context)
                 operator.finish_world_paint(context)
-            else:
-                sanitize_exit_tool = getattr(world_paint_module, "_sanitize_sculpt_curves_tool_before_world_exit", None)
-                if sanitize_exit_tool is not None:
-                    _secret_paint_q_debug_log("panel_exit.sanitize_only", context)
-                    sanitize_exit_tool(context)
-        restore_shortcuts = getattr(world_paint_module, "_set_world_paint_shortcuts_enabled", None)
-        if restore_shortcuts is not None:
-            restore_shortcuts(context, True)
-        restore_base_paint_shortcuts = getattr(world_paint_module, "restore_base_paint_shortcuts_for_exit", None)
-        if restore_base_paint_shortcuts is not None:
-            restore_base_paint_shortcuts(context)
     except Exception:
         pass
 
@@ -1519,11 +1494,6 @@ def _secret_paint_preview_world_paint_entry_source(context, source_obj, *, hold=
     context = context if context is not None else bpy.context
     try:
         world_paint_module = _secret_paint_world_paint_module()
-        try:
-            if event is not None:
-                world_paint_module.remember_base_paint_shortcut_release(context, event)
-        except Exception:
-            pass
         override = _secret_paint_view3d_override(context)
         if override:
             with context.temp_override(**override):
@@ -4426,6 +4396,7 @@ class orencurvepanel(bpy.types.Panel):
         ) #GP_MULTIFRAME_EDITING
         paint_op.exit_paint_mode = paint_mode_active
         paint_op.use_selected_source = paint_mode_active
+        paint_op.use_cursor_source = False
         layout.separator()
         def configure_side_panel_row(outer_row, *, scale_y):
             outer_row.scale_y = scale_y
@@ -6553,15 +6524,6 @@ def _secret_paint_panel_modifier_value(obj, socket_name, default=None):
         return default
 
 
-def _secret_paint_panel_modifier_key_down(virtual_key):
-    if platform.system() != "Windows":
-        return False
-    try:
-        return bool(ctypes.windll.user32.GetAsyncKeyState(virtual_key) & 0x8000)
-    except Exception:
-        return False
-
-
 def _secret_paint_panel_object_is_in_view_layer(obj):
     if obj is None:
         return False
@@ -6588,8 +6550,6 @@ def _secret_paint_panel_apply_prop_get(self):
 
 def _secret_paint_panel_run_deferred_apply():
     global _SECRET_PAINT_PANEL_DEFERRED_APPLY_TIMER_RUNNING
-    if _secret_paint_panel_modifier_key_down(0x01):
-        return 0.05
     try:
         while _SECRET_PAINT_PANEL_DEFERRED_APPLY_NAMES:
             object_name = _SECRET_PAINT_PANEL_DEFERRED_APPLY_NAMES.pop(0)
@@ -6664,8 +6624,6 @@ def _secret_paint_panel_apply_procedural_value(value, object_names):
 
 def _secret_paint_panel_run_deferred_procedural():
     global _SECRET_PAINT_PANEL_DEFERRED_PROCEDURAL_TIMER_RUNNING
-    if _secret_paint_panel_modifier_key_down(0x01):
-        return 0.05
     try:
         pending_values = dict(_SECRET_PAINT_PANEL_DEFERRED_PROCEDURAL_VALUES)
         _SECRET_PAINT_PANEL_DEFERRED_PROCEDURAL_VALUES.clear()
@@ -6707,8 +6665,6 @@ def _secret_paint_panel_vertex_prop_get(self):
 
 def _secret_paint_panel_run_deferred_vertex():
     global _SECRET_PAINT_PANEL_DEFERRED_VERTEX_TIMER_RUNNING
-    if _secret_paint_panel_modifier_key_down(0x01):
-        return 0.05
     context = bpy.context
     try:
         pending_requests = list(_SECRET_PAINT_PANEL_DEFERRED_VERTEX_REQUESTS)
@@ -6773,7 +6729,7 @@ def _secret_paint_panel_vertex_prop_set(self, value):
     _secret_paint_panel_defer_vertex_action(
         bpy.context,
         self,
-        remove_vgroup=_secret_paint_panel_modifier_key_down(0x12),
+        remove_vgroup=False,
     )
 
 
@@ -6803,13 +6759,6 @@ def _secret_paint_panel_render_targets(context, buttonobj):
 
 def _secret_paint_panel_render_prop_set(self, value):
     context = bpy.context
-    if _secret_paint_panel_modifier_key_down(0x12):
-        _secret_paint_panel_render_modified_click(context, self, alt=True)
-        return
-    if _secret_paint_panel_modifier_key_down(0x10):
-        _secret_paint_panel_render_modified_click(context, self, shift=True)
-        return
-
     targets, hair_in_bgroup = _secret_paint_panel_render_targets(context, self)
 
     for obj in targets:
@@ -6924,13 +6873,6 @@ def _secret_paint_panel_mask_prop_get(self):
 
 def _secret_paint_panel_mask_prop_set(self, value):
     context = bpy.context
-    if _secret_paint_panel_modifier_key_down(0x12):
-        _secret_paint_panel_mask_modified_click(context, self, alt=True)
-        return
-    if _secret_paint_panel_modifier_key_down(0x10):
-        _secret_paint_panel_mask_modified_click(context, self, shift=True)
-        return
-
     _secret_paint_panel_update_action_dependencies(context, "secret_paint_panel_viewport_mask")
     for obj in _secret_paint_panel_button_target_objects(context, self):
         if _secret_paint_panel_mask_prop_get(obj) == bool(value):
@@ -7170,300 +7112,6 @@ class panel_modified_click(bpy.types.Operator):
         else:
             return {'PASS_THROUGH'}
         return {'FINISHED'}
-
-
-def _secret_paint_keymap_item_modifier_value(kmi, modifier_name):
-    try:
-        value = getattr(kmi, modifier_name)
-    except Exception:
-        return False
-    return bool(value) if value != -1 else False
-
-
-def _secret_paint_panel_preferred_key_spec(specs, *, preferred_type=""):
-    if not specs:
-        return []
-
-    def has_no_modifiers(spec):
-        return (
-            len(spec) >= 7
-            and not bool(spec[2])
-            and not bool(spec[3])
-            and not bool(spec[4])
-            and not bool(spec[5])
-            and (spec[6] or "NONE") == "NONE"
-        )
-
-    if preferred_type:
-        for spec in specs:
-            if spec[0] == preferred_type and has_no_modifiers(spec):
-                return [spec]
-        for spec in specs:
-            if spec[0] == preferred_type:
-                return [spec]
-
-    for spec in specs:
-        if has_no_modifiers(spec):
-            return [spec]
-    return [specs[0]]
-
-
-def _secret_paint_panel_translate_key_specs():
-    wm = getattr(bpy.context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None) if wm else None
-    keymap_names = ("Object Mode", "3D View")
-    mouse_event_types = {
-        "LEFTMOUSE", "MIDDLEMOUSE", "RIGHTMOUSE",
-        "BUTTON4MOUSE", "BUTTON5MOUSE", "BUTTON6MOUSE", "BUTTON7MOUSE",
-        "MOUSEMOVE", "INBETWEEN_MOUSEMOVE",
-        "WHEELUPMOUSE", "WHEELDOWNMOUSE", "WHEELINMOUSE", "WHEELOUTMOUSE",
-        "WHEELLEFTMOUSE", "WHEELRIGHTMOUSE",
-        "TRACKPADPAN", "TRACKPADZOOM", "MOUSEROTATE", "MOUSESMARTZOOM",
-    }
-    skip_property_names = {"translate_origin", "texture_space"}
-
-    def keyconfig_specs(kconf):
-        if kconf is None:
-            return []
-        specs = []
-        seen = set()
-        for keymap_name in keymap_names:
-            km = kconf.keymaps.get(keymap_name)
-            if km is None:
-                continue
-            for kmi in km.keymap_items:
-                if getattr(kmi, "idname", "") != "transform.translate":
-                    continue
-                if not getattr(kmi, "active", False):
-                    continue
-                if getattr(kmi, "value", "") != "PRESS":
-                    continue
-                event_type = getattr(kmi, "type", "")
-                if event_type in mouse_event_types:
-                    continue
-
-                skip_item = False
-                properties = getattr(kmi, "properties", None)
-                for property_name in skip_property_names:
-                    try:
-                        if bool(getattr(properties, property_name)):
-                            skip_item = True
-                            break
-                    except Exception:
-                        pass
-                if skip_item:
-                    continue
-
-                spec = (
-                    event_type,
-                    "PRESS",
-                    _secret_paint_keymap_item_modifier_value(kmi, "shift"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "ctrl"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "alt"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "oskey"),
-                    getattr(kmi, "key_modifier", "NONE") or "NONE",
-                )
-                if spec in seen:
-                    continue
-                seen.add(spec)
-                specs.append(spec)
-        return specs
-
-    if keyconfigs is not None:
-        user_specs = keyconfig_specs(getattr(keyconfigs, "user", None))
-        if user_specs:
-            return _secret_paint_panel_preferred_key_spec(user_specs)
-
-        active_specs = keyconfig_specs(getattr(keyconfigs, "active", None))
-        if active_specs:
-            return _secret_paint_panel_preferred_key_spec(active_specs)
-
-        default_specs = keyconfig_specs(getattr(keyconfigs, "default", None))
-        if default_specs:
-            return _secret_paint_panel_preferred_key_spec(default_specs)
-
-    return [("G", "PRESS", False, False, False, False, "NONE")]
-
-
-def _secret_paint_panel_delete_key_specs():
-    wm = getattr(bpy.context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None) if wm else None
-    mouse_event_types = {
-        "LEFTMOUSE", "MIDDLEMOUSE", "RIGHTMOUSE",
-        "BUTTON4MOUSE", "BUTTON5MOUSE", "BUTTON6MOUSE", "BUTTON7MOUSE",
-        "MOUSEMOVE", "INBETWEEN_MOUSEMOVE",
-        "WHEELUPMOUSE", "WHEELDOWNMOUSE", "WHEELINMOUSE", "WHEELOUTMOUSE",
-        "WHEELLEFTMOUSE", "WHEELRIGHTMOUSE",
-        "TRACKPADPAN", "TRACKPADZOOM", "MOUSEROTATE", "MOUSESMARTZOOM",
-    }
-
-    def keyconfig_specs(kconf):
-        if kconf is None:
-            return []
-        specs = []
-        seen = set()
-        for keymap_name in ("Object Mode", "3D View"):
-            km = kconf.keymaps.get(keymap_name)
-            if km is None:
-                continue
-            for kmi in km.keymap_items:
-                if getattr(kmi, "idname", "") != "object.delete":
-                    continue
-                if not getattr(kmi, "active", False):
-                    continue
-                event_type = getattr(kmi, "type", "")
-                if event_type in mouse_event_types:
-                    continue
-                spec = (
-                    event_type,
-                    getattr(kmi, "value", "PRESS") or "PRESS",
-                    _secret_paint_keymap_item_modifier_value(kmi, "shift"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "ctrl"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "alt"),
-                    _secret_paint_keymap_item_modifier_value(kmi, "oskey"),
-                    getattr(kmi, "key_modifier", "NONE") or "NONE",
-                )
-                if spec not in seen:
-                    seen.add(spec)
-                    specs.append(spec)
-        return specs
-
-    if keyconfigs is not None:
-        user_specs = keyconfig_specs(getattr(keyconfigs, "user", None))
-        if user_specs:
-            return _secret_paint_panel_preferred_key_spec(user_specs, preferred_type="X")
-
-        active_specs = keyconfig_specs(getattr(keyconfigs, "active", None))
-        if active_specs:
-            return _secret_paint_panel_preferred_key_spec(active_specs, preferred_type="X")
-
-        default_specs = keyconfig_specs(getattr(keyconfigs, "default", None))
-        if default_specs:
-            return _secret_paint_panel_preferred_key_spec(default_specs, preferred_type="X")
-
-    return [("X", "PRESS", False, False, False, False, "NONE")]
-
-
-def _secret_paint_panel_shortcut_item_spec(kmi):
-    return (
-        getattr(kmi, "type", ""),
-        getattr(kmi, "value", "PRESS") or "PRESS",
-        _secret_paint_keymap_item_modifier_value(kmi, "shift"),
-        _secret_paint_keymap_item_modifier_value(kmi, "ctrl"),
-        _secret_paint_keymap_item_modifier_value(kmi, "alt"),
-        _secret_paint_keymap_item_modifier_value(kmi, "oskey"),
-        getattr(kmi, "key_modifier", "NONE") or "NONE",
-    )
-
-
-def _secret_paint_panel_shortcut_target_id(km):
-    if (
-        getattr(km, "name", "") == "3D View"
-        and getattr(km, "space_type", "") == 'VIEW_3D'
-        and getattr(km, "region_type", "") == 'UI'
-    ):
-        return "VIEW3D_UI"
-    if getattr(km, "name", "") == "User Interface":
-        return "USER_INTERFACE"
-    return ""
-
-
-def _secret_paint_panel_registered_shortcut_specs(addon_keymaps, operator_id):
-    registered_specs = []
-    for km, kmi in addon_keymaps:
-        try:
-            if getattr(kmi, "idname", "") != operator_id:
-                continue
-        except (ReferenceError, RuntimeError):
-            continue
-        target_id = _secret_paint_panel_shortcut_target_id(km)
-        if target_id:
-            registered_specs.append((target_id, _secret_paint_panel_shortcut_item_spec(kmi)))
-    return registered_specs
-
-
-def _secret_paint_panel_desired_shortcut_specs(source_specs):
-    return [
-        ("USER_INTERFACE", spec)
-        for spec in source_specs
-    ]
-
-
-def _secret_paint_panel_add_keyboard_shortcuts(addon_keymaps, keymaps, operator_id, source_specs):
-    for event_type, event_value, shift, ctrl, alt, oskey, key_modifier in source_specs:
-        km = keymaps.new("User Interface")
-        kmi = km.keymap_items.new(
-            operator_id,
-            event_type,
-            event_value,
-            shift=shift,
-            ctrl=ctrl,
-            alt=alt,
-            oskey=oskey,
-            key_modifier=key_modifier,
-            head=True,
-        )
-        addon_keymaps.append((km, kmi))
-
-
-def sync_secret_paint_panel_drag_keymap(addon_keymaps, keymaps):
-    source_specs_by_operator = {
-        "secret.panel_keyboard_reorder": _secret_paint_panel_translate_key_specs(),
-        "secret.panel_keyboard_delete": _secret_paint_panel_delete_key_specs(),
-    }
-    changed_operator_ids = {
-        operator_id
-        for operator_id, source_specs in source_specs_by_operator.items()
-        if _secret_paint_panel_registered_shortcut_specs(addon_keymaps, operator_id)
-        != _secret_paint_panel_desired_shortcut_specs(source_specs)
-    }
-    if not changed_operator_ids:
-        return False
-
-    for index in range(len(addon_keymaps) - 1, -1, -1):
-        km, kmi = addon_keymaps[index]
-        try:
-            operator_id = getattr(kmi, "idname", "")
-        except (ReferenceError, RuntimeError):
-            operator_id = ""
-        if operator_id not in changed_operator_ids:
-            continue
-        try:
-            km.keymap_items.remove(kmi)
-        except Exception:
-            pass
-        del addon_keymaps[index]
-
-    for operator_id in ("secret.panel_keyboard_reorder", "secret.panel_keyboard_delete"):
-        if operator_id in changed_operator_ids:
-            _secret_paint_panel_add_keyboard_shortcuts(
-                addon_keymaps,
-                keymaps,
-                operator_id,
-                source_specs_by_operator[operator_id],
-            )
-    return True
-
-
-def register_secret_paint_panel_drag_keymap(addon_keymaps, keymaps):
-    sync_secret_paint_panel_drag_keymap(addon_keymaps, keymaps)
-
-    if platform.system() != "Windows":
-        for shift, alt in ((True, False), (False, True), (True, True)):
-            for keymap_name, keymap_kwargs in (
-                ("3D View", {"space_type": 'VIEW_3D', "region_type": 'UI'}),
-                ("User Interface", {}),
-            ):
-                km = keymaps.new(keymap_name, **keymap_kwargs)
-                kmi = km.keymap_items.new(
-                    "secret.panel_modified_click",
-                    "LEFTMOUSE",
-                    "PRESS",
-                    shift=shift,
-                    alt=alt,
-                    head=True,
-                )
-                addon_keymaps.append((km, kmi))
 
 
 class panel_keyboard_reorder(bpy.types.Operator):
@@ -9734,6 +9382,7 @@ class orenscatter(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     exit_paint_mode: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
     use_selected_source: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+    use_cursor_source: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
     def execute(self, context):
         use_selected_source = bool(getattr(self, "use_selected_source", False))
         _secret_paint_q_debug_log(
@@ -9754,51 +9403,12 @@ class orenscatter(bpy.types.Operator):
         raw_use_selected_source = bool(getattr(self, "use_selected_source", False))
         exit_paint_mode = raw_exit_paint_mode
         use_selected_source = raw_use_selected_source
+        use_cursor_source = bool(getattr(self, "use_cursor_source", False))
         secret_paint_world_paint_module = None
-        base_paint_shortcut_event = False
-        retired_stale_object_mode_operator = False
-        keyboard_shortcut_event = False
         try:
             from . import secret_paint_world_paint as secret_paint_world_paint_module
-            if event is not None:
-                base_paint_shortcut_event = bool(
-                    secret_paint_world_paint_module.is_base_paint_shortcut_event(context, event)
-                )
         except Exception:
             secret_paint_world_paint_module = None
-            base_paint_shortcut_event = False
-        if event is not None:
-            event_type = getattr(event, "type", "")
-            keyboard_shortcut_event = bool(
-                event_type
-                and getattr(event, "value", "") in {'PRESS', 'CLICK', 'CLICK_DRAG'}
-                and event_type not in {
-                    'LEFTMOUSE', 'RIGHTMOUSE', 'MIDDLEMOUSE',
-                    'ACTIONMOUSE', 'SELECTMOUSE', 'EVT_TWEAK_L',
-                    'EVT_TWEAK_M', 'EVT_TWEAK_R', 'MOUSEMOVE',
-                    'INBETWEEN_MOUSEMOVE', 'WHEELUPMOUSE',
-                    'WHEELDOWNMOUSE', 'WHEELINMOUSE', 'WHEELOUTMOUSE',
-                    'WINDOW_ACTIVATE', 'WINDOW_DEACTIVATE',
-                    'WINDOW_ENTER', 'WINDOW_LEAVE', 'TIMER', 'NONE',
-                }
-            )
-        if (base_paint_shortcut_event or keyboard_shortcut_event) and raw_exit_paint_mode:
-            exit_paint_mode = False
-            use_selected_source = False
-            try:
-                self.exit_paint_mode = False
-                self.use_selected_source = False
-            except Exception:
-                pass
-            _secret_paint_q_debug_log(
-                "secret.paint.invoke.clear_stale_panel_props_for_shortcut",
-                context,
-                raw_exit_paint_mode=raw_exit_paint_mode,
-                raw_use_selected_source=raw_use_selected_source,
-                event_type=getattr(event, "type", ""),
-                event_value=getattr(event, "value", ""),
-                keyboard_shortcut_event=keyboard_shortcut_event,
-            )
         _secret_paint_q_debug_log(
             "secret.paint.invoke.enter",
             context,
@@ -9826,99 +9436,32 @@ class orenscatter(bpy.types.Operator):
                 use_selected_source=use_selected_source,
             )
             if running_operator is not None:
-                running_in_object_mode = (getattr(context, "mode", "") or "") == 'OBJECT'
-                if running_in_object_mode:
-                    _secret_paint_q_debug_log(
-                        "secret.paint.invoke.finish_stale_object_mode_operator",
-                        context,
-                        use_selected_source=use_selected_source,
-                    )
-                    running_operator.finish_world_paint(context)
-                    try:
-                        restore_base_paint_shortcuts = getattr(
-                            secret_paint_world_paint_module,
-                            "restore_base_paint_shortcuts_for_exit",
-                            None,
-                        )
-                        if restore_base_paint_shortcuts is not None:
-                            restore_base_paint_shortcuts(context)
-                    except Exception:
-                        pass
-                    if use_selected_source:
-                        return {'FINISHED'}
-                    retired_stale_object_mode_operator = True
-                    running_operator = None
-                else:
-                    _secret_paint_q_debug_log(
-                        "secret.paint.invoke.running_operator_not_stale",
-                        context,
-                        use_selected_source=use_selected_source,
-                    )
+                _secret_paint_q_debug_log(
+                    "secret.paint.invoke.running_operator_active",
+                    context,
+                    use_selected_source=use_selected_source,
+                )
             if running_operator is not None:
                 if use_selected_source:
                     _secret_paint_q_debug_log("secret.paint.invoke.finish_running_use_selected", context)
                     running_operator.finish_world_paint(context)
-                    try:
-                        restore_base_paint_shortcuts = getattr(
-                            secret_paint_world_paint_module,
-                            "restore_base_paint_shortcuts_for_exit",
-                            None,
-                        )
-                        if restore_base_paint_shortcuts is not None:
-                            restore_base_paint_shortcuts(context)
-                    except Exception:
-                        pass
                     _secret_paint_q_debug_log("secret.paint.invoke.finish_running_use_selected.exit", context)
+                    return {'FINISHED'}
+                if getattr(running_operator, "_pick_source_hold_active", False):
                     return {'FINISHED'}
                 try:
                     if not hasattr(running_operator, "_event_is_in_world_paint_view") or running_operator._event_is_in_world_paint_view(context, event):
-                        _secret_paint_q_debug_log("secret.paint.invoke.pick_source_once", context)
-                        running_operator._pick_source_once(context, event)
+                        if event is not None:
+                            _secret_paint_q_debug_log("secret.paint.invoke.begin_pick_source_hold", context)
+                            running_operator._begin_pick_source_hold(context, event)
+                        else:
+                            _secret_paint_q_debug_log("secret.paint.invoke.pick_source_once", context)
+                            running_operator._pick_source_once(context, event)
                 except Exception:
                     pass
                 return {'FINISHED'}
         except Exception:
             pass
-
-        stale_default_paint_shortcut_event = False
-        if (
-            keyboard_shortcut_event
-            and not base_paint_shortcut_event
-            and not retired_stale_object_mode_operator
-            and not raw_exit_paint_mode
-            and not raw_use_selected_source
-            and getattr(event, "type", "") == 'Q'
-            and not any(bool(getattr(event, modifier_name, False)) for modifier_name in ("shift", "ctrl", "alt", "oskey", "hyper"))
-        ):
-            active_keyboard_base_items = []
-            try:
-                if secret_paint_world_paint_module is None:
-                    from . import secret_paint_world_paint as secret_paint_world_paint_module
-                active_keyboard_base_items = [
-                    keymap_item
-                    for keymap_item in secret_paint_world_paint_module._base_paint_keymap_items(context)
-                    if (
-                        bool(getattr(keymap_item, "active", False))
-                        and getattr(keymap_item, "map_type", "") == 'KEYBOARD'
-                    )
-                ]
-            except Exception:
-                active_keyboard_base_items = []
-            configured_plain_q = any(
-                getattr(keymap_item, "type", "") == 'Q'
-                and not any(bool(getattr(keymap_item, modifier_name, False)) for modifier_name in ("shift", "ctrl", "alt", "oskey", "hyper"))
-                for keymap_item in active_keyboard_base_items
-            )
-            stale_default_paint_shortcut_event = bool(active_keyboard_base_items and not configured_plain_q)
-
-        if stale_default_paint_shortcut_event:
-            _secret_paint_q_debug_log(
-                "secret.paint.invoke.cancel_stale_default_shortcut",
-                context,
-                event_type=getattr(event, "type", ""),
-                event_value=getattr(event, "value", ""),
-            )
-            return {'CANCELLED'}
 
         if not use_selected_source and secret_paint_world_paint_module is not None:
             if _secret_paint_cleanup_stale_world_paint_state(context, secret_paint_world_paint_module):
@@ -9948,32 +9491,7 @@ class orenscatter(bpy.types.Operator):
 
             selected_objects = list(context.selected_objects)
             entry_raycast_preview_source = None
-            shortcut_invocation = False
-            if not use_selected_source:
-                try:
-                    shortcut_invocation = bool(
-                        secret_paint_world_paint_module.is_base_paint_shortcut_event(context, event)
-                    )
-                except Exception:
-                    shortcut_invocation = False
-                if not shortcut_invocation:
-                    event_type = getattr(event, "type", "")
-                    event_value = getattr(event, "value", "")
-                    pointer_events = {
-                        'LEFTMOUSE', 'RIGHTMOUSE', 'MIDDLEMOUSE',
-                        'ACTIONMOUSE', 'SELECTMOUSE', 'EVT_TWEAK_L',
-                        'EVT_TWEAK_M', 'EVT_TWEAK_R', 'MOUSEMOVE',
-                        'INBETWEEN_MOUSEMOVE', 'WHEELUPMOUSE',
-                        'WHEELDOWNMOUSE', 'WHEELINMOUSE', 'WHEELOUTMOUSE',
-                        'WINDOW_ACTIVATE', 'WINDOW_DEACTIVATE',
-                        'WINDOW_ENTER', 'WINDOW_LEAVE', 'TIMER', 'NONE',
-                    }
-                    shortcut_invocation = bool(
-                        getattr(getattr(context, "area", None), "type", None) == 'VIEW_3D'
-                        and event_type
-                        and event_type not in pointer_events
-                        and event_value in {'PRESS', 'CLICK', 'CLICK_DRAG'}
-                    )
+            use_cursor_source = use_cursor_source and not use_selected_source
 
             selected_single_procedural_system = bool(
                 getattr(context, "mode", "") == 'OBJECT'
@@ -9981,19 +9499,18 @@ class orenscatter(bpy.types.Operator):
                 and _secret_paint_system_is_procedural(selected_objects[0])
             )
             raycast_over_single_selection = bool(
-                shortcut_invocation
+                use_cursor_source
                 and
                 getattr(preferences, "checkboxRaycastQWhenSingleSelected", False)
                 and len(selected_objects) == 1
                 and not selected_single_procedural_system
             )
             if (
-                shortcut_invocation
-                and not retired_stale_object_mode_operator
+                use_cursor_source
                 and (not selected_objects or raycast_over_single_selection)
             ):
                 _secret_paint_q_debug_log(
-                    "secret.paint.invoke.shortcut_pick_source",
+                    "secret.paint.invoke.cursor_pick_source",
                     context,
                     selected_count=len(selected_objects),
                     raycast_over_single_selection=raycast_over_single_selection,
@@ -10040,7 +9557,7 @@ class orenscatter(bpy.types.Operator):
             entry_hold_preview_source = entry_raycast_preview_source
             if (
                 entry_hold_preview_source is None
-                and shortcut_invocation
+                and use_cursor_source
                 and getattr(context, "mode", "") == 'OBJECT'
                 and len(selected_objects) == 1
                 and _secret_paint_system_modifier(selected_objects[0]) is None
@@ -10124,7 +9641,7 @@ class orenscatter(bpy.types.Operator):
                 "secret.paint.invoke.start_world_paint_mode",
                 context,
                 selected_count=len(selected_objects),
-                shortcut_invocation=shortcut_invocation,
+                use_cursor_source=use_cursor_source,
                 use_selected_source=use_selected_source,
             )
             result = _secret_paint_invoke_world_paint_mode(context)
@@ -13934,27 +13451,7 @@ def _set_next_viewport_bookmark_slot(storage_owner, slot, legacy_scene=None):
 
 
 def _viewport_bookmark_shortcut_text(context):
-    wm = getattr(context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None) if wm else None
-    if keyconfigs is None:
-        return "W"
-
-    for keyconfig_name in ("user", "addon", "active"):
-        keyconfig = getattr(keyconfigs, keyconfig_name, None)
-        if keyconfig is None:
-            continue
-        for keymap in keyconfig.keymaps:
-            for keymap_item in keymap.keymap_items:
-                if (
-                    getattr(keymap_item, "idname", "") != "secret.toggle_viewport_tab_bookmark"
-                    or not getattr(keymap_item, "active", False)
-                ):
-                    continue
-                try:
-                    return keymap_item.to_string() or str(keymap_item.type)
-                except Exception:
-                    return str(getattr(keymap_item, "type", "W"))
-    return "W"
+    return "Shift W"
 
 
 class toggle_viewport_tab_bookmark(bpy.types.Operator):
@@ -14033,6 +13530,10 @@ _SECRET_PAINT_WORLD_PAINT_CLASS_NAMES = (
     "secret_world_paint_toggle_align_to_normal",
     "secret_world_paint_adjust_size",
     "secret_world_paint_adjust_strength",
+    "secret_world_paint_end_adjust",
+    "secret_world_paint_end_pick_source",
+    "secret_world_paint_undo_source_pick",
+    "secret_world_paint_ignore_size_adjust",
     "secret_world_paint_set_tool",
     "secret_world_paint_toggle_flag",
     "secret_world_paint_set_falloff_shape",

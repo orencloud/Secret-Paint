@@ -1,8 +1,6 @@
 import json
 import math
-import os
 import random
-import sys
 import time
 
 import blf
@@ -11,7 +9,7 @@ import gpu
 from bpy.app.handlers import persistent
 from bpy_extras import view3d_utils
 from gpu_extras.batch import batch_for_shader
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 from . import secret_paint_shared as shared
 
@@ -55,7 +53,7 @@ WORLD_DENSITY_PREVIEW_SOLID_STEPS = 48
 WORLD_DENSITY_PREVIEW_SPARSE_RING_OFFSETS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 WORLD_ADJUST_DRAG_SCALE = 0.008
 WORLD_CUSTOM_ADJUST_UI_ENABLED = False
-WORLD_SIZE_ADJUST_SHORTCUT_ENABLED = bool(getattr(shared, "SECRET_PAINT_WORLD_SIZE_ADJUST_ENABLED", False))
+WORLD_SIZE_ADJUST_ENABLED = bool(getattr(shared, "SECRET_PAINT_WORLD_SIZE_ADJUST_ENABLED", False))
 WORLD_NATIVE_DENSITY_MODAL_ADJUST_ENABLED = True
 
 WORLD_TARGET_KIND_MESH = "MESH"
@@ -69,9 +67,6 @@ WORLD_TOOL_SELECT = "SELECT"
 WORLD_TOOL_COMB = "COMB"
 WORLD_TOOL_SCALE = "SCALE"
 WORLD_TOOL_BEZIER = "BEZIER"
-WORLD_ACTION_PICK_SOURCE = "PICK_SOURCE"
-WORLD_ACTION_BRUSH_SWITCH = "BRUSH_SWITCH"
-
 WORLD_TOOL_ITEMS = (
     (WORLD_TOOL_DENSITY, "Density", "Paint density"),
     (WORLD_TOOL_DELETE, "Delete", "Delete painted instances"),
@@ -104,21 +99,12 @@ WORLD_TOOLBAR_SPECS = (
     (WORLD_TOOL_SELECT, "Select", "Select or deselect painted strands.", "RESTRICT_SELECT_OFF"),
     (WORLD_TOOL_BEZIER, "Bezier", "Draw 3D Bezier curves on the hovered surface.", "CURVE_BEZCURVE"),
 )
+WORLD_TOOL_RAIL_TOOLTIP_DELAY = 0.45
+WORLD_TOOL_ICON_ATLAS_CELL_SIZE = 160
+WORLD_TOOL_ICON_COORDINATE_SPAN = 1.6
+WORLD_TOOL_ICON_STROKE_RADIUS = 0.043
+WORLD_TOOL_ICON_EDGE_SOFTNESS = 0.025
 
-WORLD_WORKSPACE_TOOL_IDS = {
-    tool_id: f"secret.world_paint_tool_{tool_id.lower()}"
-    for tool_id, _label, _description, _icon in WORLD_TOOLBAR_SPECS
-}
-WORLD_TOOL_OPERATOR_IDS = {
-    WORLD_TOOL_DENSITY: "secret.world_paint_tool_density",
-    WORLD_TOOL_DELETE: "secret.world_paint_tool_delete",
-    WORLD_TOOL_SINGLE: "secret.world_paint_tool_single",
-    WORLD_TOOL_SLIDE: "secret.world_paint_tool_slide",
-    WORLD_TOOL_SELECT: "secret.world_paint_tool_select",
-    WORLD_TOOL_COMB: "secret.world_paint_tool_rotation",
-    WORLD_TOOL_SCALE: "secret.world_paint_tool_scale",
-    WORLD_TOOL_BEZIER: "secret.world_paint_tool_bezier",
-}
 WORLD_FLAG_OPERATOR_IDS = {
     "LOCK_SURFACE": "secret.world_paint_toggle_lock_surface",
     "TARGET_SURFACE": "secret.world_paint_toggle_target_surface",
@@ -127,16 +113,7 @@ WORLD_FLAG_OPERATOR_IDS = {
     "RANDOM_Z": "secret.world_paint_toggle_random_z",
     "ALIGN_TO_NORMAL": "secret.world_paint_toggle_align_to_normal",
 }
-WORLD_ADJUST_OPERATOR_IDS = {
-    "SIZE": "secret.world_paint_adjust_size",
-    "STRENGTH": "secret.world_paint_adjust_strength",
-}
 WORLD_PAINT_STATUS_TEXT = "Secret Paint Mode: LMB paint, RMB remove, paint key picks source, F size, Alt+F density/strength"
-WORLD_TOOL_FROM_WORKSPACE = {
-    workspace_tool_id: tool_id
-    for tool_id, workspace_tool_id in WORLD_WORKSPACE_TOOL_IDS.items()
-}
-
 WORLD_FLAG_ITEMS = (
     ("LOCK_SURFACE", "Lock Terrain", "Lock painting to the current terrain or all selected terrains; select multiple terrains before pressing the button to paint and target all of them"),
     ("TARGET_SURFACE", "Target Surface", "Allow the current Secret Paint system to be painted on as a target surface"),
@@ -146,38 +123,10 @@ WORLD_FLAG_ITEMS = (
     ("ALIGN_TO_NORMAL", "Align To Normal", "Toggle align-to-normal on the active system"),
 )
 
-WORLD_SHORTCUT_ACTIONS = (
-    ("TOOL", WORLD_TOOL_DENSITY, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_DENSITY], "", "", "D", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_DELETE, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_DELETE], "", "", "X", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_SINGLE, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_SINGLE], "", "", "ONE", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_SLIDE, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_SLIDE], "", "", "THREE", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_SELECT, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_SELECT], "", "", "FOUR", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_COMB, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_COMB], "", "", "R", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_SCALE, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_SCALE], "", "", "S", False, False, False, ("3D View",)),
-    ("TOOL", WORLD_TOOL_BEZIER, WORLD_TOOL_OPERATOR_IDS[WORLD_TOOL_BEZIER], "", "", "FIVE", False, False, False, ("3D View",)),
-    ("FLAG", "LOCK_SURFACE", WORLD_FLAG_OPERATOR_IDS["LOCK_SURFACE"], "", "", "TWO", False, False, False, ("3D View",)),
-    ("FLAG", "TARGET_SURFACE", WORLD_FLAG_OPERATOR_IDS["TARGET_SURFACE"], "", "", "I", False, False, False, ("3D View",)),
-    ("FLAG", "ALLOW_WIRE_BOUNDS_SURFACES", WORLD_FLAG_OPERATOR_IDS["ALLOW_WIRE_BOUNDS_SURFACES"], "", "", "NONE", False, False, False, ("3D View",)),
-    ("FLAG", "INTERPOLATE", WORLD_FLAG_OPERATOR_IDS["INTERPOLATE"], "", "", "Y", False, False, False, ("3D View",)),
-    ("FLAG", "RANDOM_Z", WORLD_FLAG_OPERATOR_IDS["RANDOM_Z"], "", "", "T", False, False, False, ("3D View",)),
-    ("FLAG", "ALIGN_TO_NORMAL", WORLD_FLAG_OPERATOR_IDS["ALIGN_TO_NORMAL"], "", "", "N", False, False, False, ("3D View",)),
-    ("ADJUST", "SIZE", WORLD_ADJUST_OPERATOR_IDS["SIZE"], "", "", "F", False, False, False, ("3D View", "Sculpt Curves")),
-    ("ADJUST", "STRENGTH", WORLD_ADJUST_OPERATOR_IDS["STRENGTH"], "", "", "F", False, False, True, ("3D View", "Sculpt Curves")),
-    ("ACTION", WORLD_ACTION_PICK_SOURCE, "secret.world_paint_pick_source", "", "", "Q", False, False, False, ("3D View", "Sculpt Curves")),
-    ("ACTION", WORLD_ACTION_BRUSH_SWITCH, "secret.paintbrushswitch", "", "", "Q", True, False, False, ("Object Mode", "Sculpt Curves", "Weight Paint", "Curve")),
-)
-
 _WORLD_STATE = {
     "operator": None,
     "runtime_registered": False,
-    "ui_hijacked": False,
-    "header_draw_original": None,
-    "tool_header_draw_original": None,
-    "toolbar_draw_cls_original": None,
-    "toolbar_original": None,
-    "toolbar_temp_restore_depth": 0,
-    "suppressed_keymap_items": [],
-    "suppressed_world_paint_shortcut_items": [],
+    "ui_active": False,
     "curve_data_cache": {},
     "curve_cache_signatures": {},
     "last_live_update_time": 0.0,
@@ -186,86 +135,29 @@ _WORLD_STATE = {
     "object_mode_guard_system_names": set(),
     "object_mode_guard_timer_running": False,
     "exit_consume_paint_until": 0.0,
-    "view3d_builtin_tool_entries_checked": False,
     "brush_debug_last_state": None,
     "shift_delete_debug_last_state": None,
     "source_curve_candidates_cache": {},
     "source_system_candidates_cache": {},
-    "shortcut_event_types_cache": {},
-    "base_paint_keymap_items_cache": None,
-    "viewport_bookmark_keymap_item_groups_cache": None,
-    "runtime_keymap_sync_signature": None,
-    "runtime_keymap_sync_last_check": 0.0,
-    "right_delete_brush_keymaps": [],
+    "tool_icon_texture": None,
 }
 
-WORLD_Q_SHORTCUT_DEBUG_LOG_PATH = None
-WORLD_Q_SHORTCUT_DEBUG_ENABLED = False
-
-
-def reset_q_shortcut_debug_log(reason=""):
-    return None
-
-
-def _q_debug_value(value):
-    try:
-        if hasattr(value, "name"):
-            return getattr(value, "name", "")
-    except Exception:
-        pass
-    try:
-        return repr(value)
-    except Exception:
-        return "<unrepr>"
-
-
-def _q_debug_keymap_summary(context):
-    wm = getattr(context, "window_manager", None) if context is not None else None
-    keyconfigs = getattr(wm, "keyconfigs", None)
-    if keyconfigs is None:
-        return "no_keyconfigs"
-
-    rows = []
-    idnames = {"secret.paint", "secret.paintbrushswitch", "secret.world_paint_pick_source"}
-    for keyconfig_name in ("user", "addon"):
-        keyconfig = getattr(keyconfigs, keyconfig_name, None)
-        if keyconfig is None:
-            continue
-        for keymap_name in ("Object Mode", "Sculpt Curves", "Weight Paint", "Curve", "3D View"):
-            keymap = keyconfig.keymaps.get(keymap_name)
-            if keymap is None:
-                continue
-            for keymap_item in keymap.keymap_items:
-                try:
-                    idname = getattr(keymap_item, "idname", "")
-                    if idname not in idnames:
-                        continue
-                    rows.append(
-                        "/".join(
-                            (
-                                keyconfig_name,
-                                keymap_name,
-                                idname,
-                                str(getattr(keymap_item, "type", "")),
-                                str(getattr(keymap_item, "value", "")),
-                                "active=" + str(bool(getattr(keymap_item, "active", False))),
-                                "shift=" + str(bool(getattr(keymap_item, "shift", False))),
-                                "ctrl=" + str(bool(getattr(keymap_item, "ctrl", False))),
-                                "alt=" + str(bool(getattr(keymap_item, "alt", False))),
-                                "userdef=" + str(bool(getattr(keymap_item, "is_user_defined", False))),
-                            )
-                        )
-                    )
-                except Exception:
-                    continue
-    return "; ".join(rows) if rows else "none"
-
+WORLD_WORKSPACE_TOOL_IDS = {
+    WORLD_TOOL_DENSITY: "secret_paint.world_density",
+    WORLD_TOOL_DELETE: "secret_paint.world_delete",
+    WORLD_TOOL_SLIDE: "secret_paint.world_slide",
+    WORLD_TOOL_SCALE: "secret_paint.world_scale",
+    WORLD_TOOL_COMB: "secret_paint.world_rotation",
+    WORLD_TOOL_SINGLE: "secret_paint.world_single",
+    WORLD_TOOL_SELECT: "secret_paint.world_select",
+    WORLD_TOOL_BEZIER: "secret_paint.world_bezier",
+}
+WORLD_TOOL_BY_WORKSPACE_ID = {
+    workspace_tool_id: tool_id
+    for tool_id, workspace_tool_id in WORLD_WORKSPACE_TOOL_IDS.items()
+}
 
 def _q_debug_log(label, context=None, **fields):
-    return None
-
-
-def _q_debug_log_keymaps(label, context=None, **fields):
     return None
 
 WORLD_BLOCKED_SURFACE_DISPLAY_TYPES = {"BOUNDS", "WIRE"}
@@ -306,36 +198,6 @@ WORLD_NATIVE_TOOL_BY_BRUSH_TYPE = {
     for tool_id, brush_type in WORLD_NATIVE_TOOL_BRUSH_TYPES.items()
 }
 WORLD_NATIVE_TOOL_IDS_BY_BRUSH_TYPE = dict(shared.SECRET_PAINT_NATIVE_CURVES_TOOL_IDS_BY_TYPE)
-WORLD_PAINT_SHORTCUT_OPERATOR_IDNAMES = {
-    "secret.paint",
-    "secret.paintbrushswitch",
-    "secret.world_paint_begin_adjust",
-    "secret.world_paint_pick_source",
-    "secret.world_paint_set_tool",
-    "secret.world_paint_toggle_flag",
-}
-WORLD_PAINT_SHORTCUT_OPERATOR_IDNAMES.update(WORLD_TOOL_OPERATOR_IDS.values())
-WORLD_PAINT_SHORTCUT_OPERATOR_IDNAMES.update(WORLD_FLAG_OPERATOR_IDS.values())
-WORLD_PAINT_SHORTCUT_OPERATOR_IDNAMES.update(WORLD_ADJUST_OPERATOR_IDS.values())
-WORLD_BASE_PAINT_SHORTCUT_OPERATOR_IDNAMES = {
-    "secret.paint",
-    "secret.paintbrushswitch",
-}
-WORLD_MODIFIER_NAMES = ("shift", "ctrl", "alt", "oskey", "hyper")
-WORLD_MODIFIER_KEY_TYPES = {
-    "LEFT_SHIFT": "shift",
-    "RIGHT_SHIFT": "shift",
-    "LEFT_CTRL": "ctrl",
-    "RIGHT_CTRL": "ctrl",
-    "LEFT_ALT": "alt",
-    "RIGHT_ALT": "alt",
-    "OSKEY": "oskey",
-    "LEFT_OSKEY": "oskey",
-    "RIGHT_OSKEY": "oskey",
-    "HYPER": "hyper",
-    "LEFT_HYPER": "hyper",
-    "RIGHT_HYPER": "hyper",
-}
 WORLD_BRUSH_SWITCH_COPY_INPUTS = (
     "Input_2",
     "Input_9",
@@ -471,10 +333,12 @@ def _native_brush_debug_value(value):
 
 
 def _active_workspace_tool_id(context):
-    if (getattr(context, "mode", "") or "") == 'SCULPT_CURVES':
-        return ""
     try:
-        return context.workspace.tools.from_space_view3d_mode(context.mode).idname
+        workspace_tool = context.workspace.tools.from_space_view3d_mode(
+            context.mode,
+            create=False,
+        )
+        return workspace_tool.idname if workspace_tool is not None else ""
     except Exception:
         return ""
 
@@ -592,25 +456,6 @@ def is_world_paint_event_in_view(context, event=None):
         return False
 
 
-def is_base_paint_shortcut_event(context, event=None):
-    if event is None:
-        return False
-    try:
-        return _event_matches_base_paint_shortcut(context, event)
-    except Exception:
-        return False
-
-
-def remember_base_paint_shortcut_release(context, event=None):
-    operator = _world_operator()
-    if operator is None or event is None:
-        return False
-    try:
-        return operator._remember_paint_shortcut_release_chord(context, event)
-    except Exception:
-        return False
-
-
 def switch_active_system_brush_under_mouse(context, event=None):
     operator = _world_operator()
     if operator is None:
@@ -672,12 +517,6 @@ def _world_flag_available(flag_id):
     return feature_name is None or bool(getattr(shared, feature_name, False))
 
 
-def _world_shortcut_available(shortcut):
-    if shortcut[0] == "ADJUST" and shortcut[1] == "SIZE":
-        return WORLD_SIZE_ADJUST_SHORTCUT_ENABLED
-    return shortcut[0] != "FLAG" or _world_flag_available(shortcut[1])
-
-
 def _schedule_world_tool_sync():
     def _sync():
         operator = _world_operator()
@@ -696,29 +535,6 @@ def _schedule_world_tool_sync():
         bpy.app.timers.register(_sync, first_interval=WORLD_UI_TOOL_SYNC_DELAY)
     except Exception:
         pass
-
-
-def _ensure_bl_ui_toolsystem():
-    scripts_root = bpy.utils.system_resource('SCRIPTS')
-    startup_path = os.path.join(scripts_root, "startup")
-    bl_ui_path = os.path.join(startup_path, "bl_ui")
-    if startup_path not in sys.path:
-        sys.path.append(startup_path)
-    if bl_ui_path not in sys.path:
-        sys.path.append(bl_ui_path)
-
-    from bl_ui.space_toolsystem_common import ToolDef
-    from bl_ui.space_toolsystem_toolbar import VIEW3D_PT_tools_active
-
-    return ToolDef, VIEW3D_PT_tools_active
-
-
-def _workspace_tool_id_for_world_tool(tool_id):
-    return WORLD_WORKSPACE_TOOL_IDS.get(tool_id, "")
-
-
-def _world_tool_from_workspace_id(workspace_tool_id):
-    return WORLD_TOOL_FROM_WORKSPACE.get(workspace_tool_id)
 
 
 def _native_brush_type_for_world_tool(tool_id):
@@ -754,10 +570,6 @@ def _world_tool_accepts_object_mode_fallback_tool(tool_id, workspace_tool_id):
     )
 
 
-def _is_world_workspace_tool_id(workspace_tool_id):
-    return bool(workspace_tool_id) and workspace_tool_id.startswith("secret.world_paint_tool_")
-
-
 def _world_tool_spec(tool_id):
     for spec_tool_id, label, description, icon in WORLD_TOOLBAR_SPECS:
         if spec_tool_id == tool_id:
@@ -775,505 +587,7 @@ def _world_tool_spec(tool_id):
     }
 
 
-def _shortcut_keymap_active(context, keymap_name):
-    if keymap_name == "Sculpt Curves":
-        return getattr(context, "mode", "") == 'SCULPT_CURVES'
-    return True
-
-
-def _shortcut_operator_identities(shortcut):
-    action_kind, action_value, idname, prop_name, prop_value, _key_type, _shift, _ctrl, _alt, _keymap_names = shortcut
-    identities = [(idname, prop_name, prop_value)]
-    if action_kind == "TOOL":
-        identities.append(("secret.world_paint_set_tool", "tool_id", action_value))
-    elif action_kind == "FLAG":
-        identities.append(("secret.world_paint_toggle_flag", "flag_id", action_value))
-    elif action_kind == "ADJUST":
-        identities.append(("secret.world_paint_begin_adjust", "adjust_mode", action_value))
-    return identities
-
-
-def _keymap_item_matches_shortcut_identity(keymap_item, idname, prop_name, prop_value):
-    if getattr(keymap_item, "idname", "") != idname:
-        return False
-    if not prop_name:
-        return True
-
-    properties = getattr(keymap_item, "properties", None)
-    if properties is None:
-        return False
-    try:
-        if hasattr(properties, "is_property_set") and not properties.is_property_set(prop_name):
-            return False
-        return getattr(properties, prop_name) == prop_value
-    except Exception:
-        return False
-
-
-def _active_keyboard_shortcut_items(keymap_items):
-    return [
-        keymap_item
-        for keymap_item in keymap_items
-        if (
-            bool(getattr(keymap_item, "active", False))
-            and getattr(keymap_item, "map_type", "") == 'KEYBOARD'
-        )
-    ]
-
-
-def _allow_default_shortcut_fallback(shortcut, keymap_items):
-    if not keymap_items:
-        return True
-    if shortcut[0] == "ADJUST" and shortcut[1] in {"SIZE", "STRENGTH"}:
-        return not _active_keyboard_shortcut_items(keymap_items)
-    return False
-
-
-def _clear_world_keymap_lookup_caches():
-    _WORLD_STATE["shortcut_event_types_cache"] = {}
-    _WORLD_STATE["base_paint_keymap_items_cache"] = None
-    _WORLD_STATE["viewport_bookmark_keymap_item_groups_cache"] = None
-
-
-def _shortcut_user_items(context, shortcut):
-    _action_kind, _action_value, _idname, _prop_name, _prop_value, _key_type, _shift, _ctrl, _alt, keymap_names = shortcut
-    wm = getattr(context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None)
-    user_keyconfig = getattr(keyconfigs, "user", None)
-    if user_keyconfig is None:
-        return ()
-
-    items = []
-    operator_identities = _shortcut_operator_identities(shortcut)
-    for keymap_name in keymap_names:
-        if not _shortcut_keymap_active(context, keymap_name):
-            continue
-        keymap = user_keyconfig.keymaps.get(keymap_name)
-        if keymap is None:
-            continue
-        for keymap_item in keymap.keymap_items:
-            if any(
-                _keymap_item_matches_shortcut_identity(keymap_item, identity_idname, identity_prop_name, identity_prop_value)
-                for identity_idname, identity_prop_name, identity_prop_value in operator_identities
-            ):
-                items.append(keymap_item)
-    if items:
-        return tuple(items)
-
-    for keymap in user_keyconfig.keymaps:
-        if keymap.name in keymap_names:
-            continue
-        for keymap_item in keymap.keymap_items:
-            if any(
-                _keymap_item_matches_shortcut_identity(keymap_item, identity_idname, identity_prop_name, identity_prop_value)
-                for identity_idname, identity_prop_name, identity_prop_value in operator_identities
-            ):
-                items.append(keymap_item)
-    return tuple(items)
-
-
-def _shortcut_addon_items(context, shortcut):
-    _action_kind, _action_value, _idname, _prop_name, _prop_value, _key_type, _shift, _ctrl, _alt, keymap_names = shortcut
-    wm = getattr(context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None)
-    addon_keyconfig = getattr(keyconfigs, "addon", None)
-    if addon_keyconfig is None:
-        return ()
-
-    items = []
-    operator_identities = _shortcut_operator_identities(shortcut)
-    for keymap_name in keymap_names:
-        if not _shortcut_keymap_active(context, keymap_name):
-            continue
-        keymap = addon_keyconfig.keymaps.get(keymap_name)
-        if keymap is None:
-            continue
-        for keymap_item in keymap.keymap_items:
-            if any(
-                _keymap_item_matches_shortcut_identity(keymap_item, identity_idname, identity_prop_name, identity_prop_value)
-                for identity_idname, identity_prop_name, identity_prop_value in operator_identities
-            ):
-                items.append(keymap_item)
-    return tuple(items)
-
-
-def _shortcut_configured_items(context, shortcut, *, sync=True):
-    user_items = _shortcut_user_items(context, shortcut)
-    addon_items = _shortcut_addon_items(context, shortcut)
-    return user_items or addon_items
-
-
-def _world_runtime_keymap_sync_signature(private_impl):
-    addon_keymaps = getattr(private_impl, "addon_keymaps", ()) or ()
-    signature = []
-    for addon_keymap_index, keymap_pair in enumerate(addon_keymaps):
-        try:
-            km_add, kmi_add = keymap_pair
-        except Exception:
-            continue
-        try:
-            signature.append((
-                addon_keymap_index,
-                getattr(km_add, "name", ""),
-                getattr(km_add, "space_type", ""),
-                getattr(km_add, "region_type", ""),
-                bool(getattr(km_add, "is_modal", False)),
-                getattr(kmi_add, "propvalue", "") if bool(getattr(km_add, "is_modal", False)) else getattr(kmi_add, "idname", ""),
-                getattr(kmi_add, "map_type", ""),
-                getattr(kmi_add, "type", ""),
-                getattr(kmi_add, "value", ""),
-                bool(getattr(kmi_add, "any", False)),
-                bool(getattr(kmi_add, "shift", False)),
-                bool(getattr(kmi_add, "ctrl", False)),
-                bool(getattr(kmi_add, "alt", False)),
-                bool(getattr(kmi_add, "oskey", False)),
-                bool(getattr(kmi_add, "hyper", False)),
-                getattr(kmi_add, "key_modifier", ""),
-                getattr(kmi_add, "direction", ""),
-                bool(getattr(kmi_add, "repeat", False)),
-                bool(getattr(kmi_add, "active", False)),
-            ))
-        except Exception:
-            continue
-    return tuple(signature)
-
-
-def _sync_world_runtime_keymaps_from_user_overrides(context, *, force=False, force_check=False):
-    return 0
-
-
-def _is_stale_secret_paint_density_adjust_keymap_item(keymap_item):
-    if getattr(keymap_item, "type", "") != 'F':
-        return False
-    if getattr(keymap_item, "value", "") != 'PRESS':
-        return False
-    if not bool(getattr(keymap_item, "alt", False)):
-        return False
-    if bool(getattr(keymap_item, "shift", False)) or bool(getattr(keymap_item, "ctrl", False)):
-        return False
-
-    idname = getattr(keymap_item, "idname", "")
-    if idname == "secret.world_paint_begin_adjust":
-        properties = getattr(keymap_item, "properties", None)
-        try:
-            return properties is not None and getattr(properties, "adjust_mode", "") == "STRENGTH"
-        except Exception:
-            return False
-    return False
-
-
-def _disable_stale_secret_paint_density_adjust_keymaps_runtime(context):
-    return 0
-
-
-def _event_matches_keymap_item(event, keymap_item, *, ignore_value=False):
-    if not getattr(keymap_item, "active", False):
-        return False
-    if getattr(keymap_item, "map_type", "") != 'KEYBOARD':
-        return False
-    if getattr(event, "type", "") != getattr(keymap_item, "type", ""):
-        return False
-    if not ignore_value:
-        keymap_value = getattr(keymap_item, "value", "PRESS")
-        if keymap_value != 'ANY' and getattr(event, "value", "") != keymap_value:
-            return False
-
-    if getattr(keymap_item, "any", False):
-        return True
-
-    for modifier_name in ("shift", "ctrl", "alt", "oskey", "hyper"):
-        if bool(getattr(event, modifier_name, False)) != bool(getattr(keymap_item, modifier_name, False)):
-            return False
-
-    key_modifier = getattr(keymap_item, "key_modifier", 'NONE')
-    return key_modifier in {'NONE', ''}
-
-
-def _event_matches_default_shortcut(event, shortcut, *, ignore_value=False):
-    _action_kind, _action_value, _idname, _prop_name, _prop_value, key_type, shift, ctrl, alt, _keymap_names = shortcut
-    if key_type in {"", "NONE"}:
-        return False
-    if getattr(event, "type", "") != key_type:
-        return False
-    if not ignore_value and getattr(event, "value", "") != 'PRESS':
-        return False
-    if bool(getattr(event, "shift", False)) != bool(shift):
-        return False
-    if bool(getattr(event, "ctrl", False)) != bool(ctrl):
-        return False
-    if bool(getattr(event, "alt", False)) != bool(alt):
-        return False
-    if bool(getattr(event, "oskey", False)):
-        return False
-    if bool(getattr(event, "hyper", False)):
-        return False
-    return True
-
-
-def _event_active_modifier_names(event):
-    return {
-        modifier_name
-        for modifier_name in WORLD_MODIFIER_NAMES
-        if bool(getattr(event, modifier_name, False))
-    }
-
-
-def _shortcut_chord_from_keymap_item(keymap_item, event=None):
-    key_type = getattr(keymap_item, "type", "")
-    if key_type in {"", "NONE"}:
-        return None
-    if getattr(keymap_item, "any", False) and event is not None:
-        modifiers = _event_active_modifier_names(event)
-    else:
-        modifiers = {
-            modifier_name
-            for modifier_name in WORLD_MODIFIER_NAMES
-            if bool(getattr(keymap_item, modifier_name, False))
-        }
-    return {
-        "key_type": key_type,
-        "modifiers": frozenset(modifiers),
-    }
-
-
-def _shortcut_chord_from_default(shortcut):
-    _action_kind, _action_value, _idname, _prop_name, _prop_value, key_type, shift, ctrl, alt, _keymap_names = shortcut
-    if key_type in {"", "NONE"}:
-        return None
-    modifiers = set()
-    if shift:
-        modifiers.add("shift")
-    if ctrl:
-        modifiers.add("ctrl")
-    if alt:
-        modifiers.add("alt")
-    return {
-        "key_type": key_type,
-        "modifiers": frozenset(modifiers),
-    }
-
-
-def _shortcut_chord_from_event(event):
-    event_type = getattr(event, "type", "")
-    if event_type in {"", "NONE"} or event_type in WORLD_MODIFIER_KEY_TYPES:
-        return None
-    return {
-        "key_type": event_type,
-        "modifiers": frozenset(_event_active_modifier_names(event)),
-    }
-
-
-def _shortcut_chord_parts(chord):
-    if not chord:
-        return set()
-    parts = set()
-    key_type = chord.get("key_type", "")
-    if key_type not in {"", "NONE"}:
-        parts.add(("key", key_type))
-    for modifier_name in chord.get("modifiers", ()) or ():
-        parts.add(("modifier", modifier_name))
-    return parts
-
-
-def _shortcut_chord_release_part(event, chord):
-    if getattr(event, "value", "") != 'RELEASE' or not chord:
-        return None
-    event_type = getattr(event, "type", "")
-    if event_type == chord.get("key_type", ""):
-        return ("key", event_type)
-    modifier_name = WORLD_MODIFIER_KEY_TYPES.get(event_type)
-    if modifier_name and modifier_name in (chord.get("modifiers", ()) or ()):
-        return ("modifier", modifier_name)
-    return None
-
-
-def _base_paint_shortcut_chord_from_event(context, event):
-    for keymap_item in _base_paint_keymap_items(context):
-        try:
-            if _event_matches_keymap_item(event, keymap_item, ignore_value=True):
-                return _shortcut_chord_from_keymap_item(keymap_item, event)
-        except Exception:
-            continue
-    return None
-
-
-def _pick_source_shortcut_chord_from_event(context, event):
-    shortcut = _world_action_shortcut(WORLD_ACTION_PICK_SOURCE)
-    if shortcut is not None:
-        configured_items = _shortcut_configured_items(context, shortcut)
-        if configured_items:
-            for keymap_item in configured_items:
-                try:
-                    if _event_matches_keymap_item(event, keymap_item, ignore_value=True):
-                        return _shortcut_chord_from_keymap_item(keymap_item, event)
-                except Exception:
-                    continue
-            return None
-        if _event_matches_default_shortcut(event, shortcut, ignore_value=True):
-            return _shortcut_chord_from_default(shortcut)
-    return _base_paint_shortcut_chord_from_event(context, event)
-
-
-def _world_paint_event_matches_shortcut(context, event, action_kind, action_value, *, ignore_value=False):
-    if action_kind == "ACTION" and action_value == WORLD_ACTION_PICK_SOURCE:
-        for shortcut in WORLD_SHORTCUT_ACTIONS:
-            if shortcut[0] == "ACTION" and shortcut[1] == WORLD_ACTION_PICK_SOURCE:
-                configured_items = _shortcut_configured_items(context, shortcut)
-                if configured_items:
-                    return any(
-                        _event_matches_keymap_item(event, keymap_item, ignore_value=ignore_value)
-                        for keymap_item in configured_items
-                    )
-                break
-        return _event_matches_pick_source_shortcut(context, event, ignore_value=ignore_value)
-
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if not _world_shortcut_available(shortcut):
-            continue
-        shortcut_action_kind, shortcut_action_value = shortcut[0], shortcut[1]
-        if shortcut_action_kind != action_kind or shortcut_action_value != action_value:
-            continue
-
-        configured_items = _shortcut_configured_items(context, shortcut)
-        if configured_items:
-            if any(
-                _event_matches_keymap_item(event, keymap_item, ignore_value=ignore_value)
-                for keymap_item in configured_items
-            ):
-                return True
-            if not _allow_default_shortcut_fallback(shortcut, configured_items):
-                return False
-        return _event_matches_default_shortcut(event, shortcut, ignore_value=ignore_value)
-    return False
-
-
-def _world_paint_shortcut_from_event(context, event):
-    if getattr(event, "value", "") != 'PRESS':
-        return None
-
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if not _world_shortcut_available(shortcut):
-            continue
-        if shortcut[0] == "ACTION" and shortcut[1] == WORLD_ACTION_PICK_SOURCE:
-            configured_items = _shortcut_configured_items(context, shortcut)
-            if configured_items:
-                if any(_event_matches_keymap_item(event, keymap_item) for keymap_item in configured_items):
-                    return shortcut
-                continue
-            if _event_matches_pick_source_shortcut(context, event):
-                return shortcut
-            continue
-        configured_items = _shortcut_configured_items(context, shortcut)
-        if configured_items:
-            if any(_event_matches_keymap_item(event, keymap_item) for keymap_item in configured_items):
-                return shortcut
-            if not _allow_default_shortcut_fallback(shortcut, configured_items):
-                continue
-        if _event_matches_default_shortcut(event, shortcut):
-            return shortcut
-    return None
-
-
-def _world_adjust_shortcut_confirm_on_release(context, event, shortcut):
-    def _read_confirm_on_release(keymap_item):
-        try:
-            properties = getattr(keymap_item, "properties", None)
-            if properties is None:
-                return False
-            for property_name in ("confirm_on_release", "release_confirm"):
-                if not hasattr(properties, property_name):
-                    continue
-                return bool(getattr(properties, property_name, False))
-        except Exception:
-            pass
-        return False
-
-    keyconfigs = getattr(getattr(context, "window_manager", None), "keyconfigs", None)
-    addon_keyconfig = getattr(keyconfigs, "addon", None)
-
-    matched_addon_items = []
-    if addon_keyconfig is not None:
-        operator_identities = _shortcut_operator_identities(shortcut)
-        for keymap_name in shortcut[9]:
-            keymap = addon_keyconfig.keymaps.get(keymap_name)
-            if keymap is None:
-                continue
-            for keymap_item in keymap.keymap_items:
-                if not any(
-                    _keymap_item_matches_shortcut_identity(
-                        keymap_item,
-                        identity_idname,
-                        identity_prop_name,
-                        identity_prop_value,
-                    )
-                    for identity_idname, identity_prop_name, identity_prop_value in operator_identities
-                ):
-                    continue
-                if _event_matches_keymap_item(event, keymap_item):
-                    matched_addon_items.append(keymap_item)
-    if matched_addon_items:
-        confirm_on_release = any(_read_confirm_on_release(keymap_item) for keymap_item in matched_addon_items)
-        shared.secret_paint_brush_size_trace_log(
-            "world.adjust_shortcut.confirm_on_release.addon",
-            context,
-            event_type=getattr(event, "type", ""),
-            event_value=getattr(event, "value", ""),
-            matched_items=len(matched_addon_items),
-            confirm_on_release=confirm_on_release,
-        )
-        return confirm_on_release
-
-    matched_user_items = []
-    for keymap_item in _shortcut_user_items(context, shortcut):
-        try:
-            if _event_matches_keymap_item(event, keymap_item):
-                matched_user_items.append(keymap_item)
-        except Exception:
-            continue
-    if matched_user_items:
-        confirm_on_release = any(_read_confirm_on_release(keymap_item) for keymap_item in matched_user_items)
-        shared.secret_paint_brush_size_trace_log(
-            "world.adjust_shortcut.confirm_on_release.user",
-            context,
-            event_type=getattr(event, "type", ""),
-            event_value=getattr(event, "value", ""),
-            matched_items=len(matched_user_items),
-            confirm_on_release=confirm_on_release,
-        )
-        return confirm_on_release
-
-    shared.secret_paint_brush_size_trace_log(
-        "world.adjust_shortcut.confirm_on_release.default_false",
-        context,
-        event_type=getattr(event, "type", ""),
-        event_value=getattr(event, "value", ""),
-        shortcut_action=shortcut[1],
-    )
-    return False
-
-
-def _world_action_shortcut(action_value):
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if shortcut[0] == "ACTION" and shortcut[1] == action_value:
-            return shortcut
-    return None
-
-
-def _world_adjust_shortcut(adjust_mode):
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if shortcut[0] == "ADJUST" and shortcut[1] == adjust_mode:
-            return shortcut
-    return None
-
-
-def _event_has_no_modifiers(event):
-    return not any(
-        bool(getattr(event, modifier_name, False))
-        for modifier_name in ("shift", "ctrl", "alt", "oskey", "hyper")
-    )
-
-
-def _event_looks_like_keyboard_shortcut(event):
+def _event_is_keyboard_input(event):
     event_type = getattr(event, "type", "")
     if not event_type:
         return False
@@ -1303,441 +617,34 @@ def _event_looks_like_keyboard_shortcut(event):
     }
 
 
-def _windows_virtual_key_for_event_type(event_type):
-    if not event_type:
-        return None
-    if len(event_type) == 1:
-        char = event_type.upper()
-        if "A" <= char <= "Z" or "0" <= char <= "9":
-            return ord(char)
-    if event_type.startswith("F") and event_type[1:].isdigit():
-        function_index = int(event_type[1:])
-        if 1 <= function_index <= 24:
-            return 0x70 + function_index - 1
-    return {
-        "ZERO": ord("0"),
-        "ONE": ord("1"),
-        "TWO": ord("2"),
-        "THREE": ord("3"),
-        "FOUR": ord("4"),
-        "FIVE": ord("5"),
-        "SIX": ord("6"),
-        "SEVEN": ord("7"),
-        "EIGHT": ord("8"),
-        "NINE": ord("9"),
-        "RET": 0x0D,
-        "NUMPAD_ENTER": 0x0D,
-        "ESC": 0x1B,
-        "TAB": 0x09,
-        "SPACE": 0x20,
-        "LEFT_SHIFT": 0xA0,
-        "RIGHT_SHIFT": 0xA1,
-        "LEFT_CTRL": 0xA2,
-        "RIGHT_CTRL": 0xA3,
-        "LEFT_ALT": 0xA4,
-        "RIGHT_ALT": 0xA5,
-        "ALT": 0x12,
-        "OSKEY": 0x5B,
-    }.get(event_type)
-
-
-def _windows_key_down_for_event_type(event_type):
-    vk_code = _windows_virtual_key_for_event_type(event_type)
-    if vk_code is None:
-        return None
-    try:
-        import ctypes
-        return bool(ctypes.windll.user32.GetAsyncKeyState(vk_code) & 0x8000)
-    except Exception:
-        return None
-
-
-def _windows_modifier_down(modifier_name):
-    modifier_name = modifier_name.lower()
-    if modifier_name == "shift":
-        key_states = (
-            _windows_key_down_for_event_type("LEFT_SHIFT"),
-            _windows_key_down_for_event_type("RIGHT_SHIFT"),
-        )
-    elif modifier_name == "ctrl":
-        key_states = (
-            _windows_key_down_for_event_type("LEFT_CTRL"),
-            _windows_key_down_for_event_type("RIGHT_CTRL"),
-        )
-    elif modifier_name == "alt":
-        key_states = (
-            _windows_key_down_for_event_type("LEFT_ALT"),
-            _windows_key_down_for_event_type("RIGHT_ALT"),
-            _windows_key_down_for_event_type("ALT"),
-        )
-    elif modifier_name == "oskey":
-        key_states = (_windows_key_down_for_event_type("OSKEY"),)
-    else:
-        return None
-    if any(state is True for state in key_states):
-        return True
-    if any(state is None for state in key_states):
-        return None
-    return False
-
-
-def _base_paint_keymap_items(context, *, sync=True):
-    cached_items = _WORLD_STATE.get("base_paint_keymap_items_cache")
-    if cached_items is not None:
-        return cached_items
-    wm = getattr(context, "window_manager", None)
-    keyconfigs = getattr(wm, "keyconfigs", None)
-    if keyconfigs is None:
-        _WORLD_STATE["base_paint_keymap_items_cache"] = ()
-        return _WORLD_STATE["base_paint_keymap_items_cache"]
-
-    keymap_names = ("Sculpt Curves", "Object Mode", "Weight Paint", "Curve")
-
-    def _paint_keymap_items(keyconfig):
-        items = []
-        if keyconfig is None:
-            return items
-        for keymap_name in keymap_names:
-            keymap = keyconfig.keymaps.get(keymap_name)
-            if keymap is None:
-                continue
-            for keymap_item in keymap.keymap_items:
-                try:
-                    if getattr(keymap_item, "idname", "") == "secret.paint":
-                        items.append(keymap_item)
-                except Exception:
-                    continue
-        return items
-
-    _WORLD_STATE["base_paint_keymap_items_cache"] = tuple(
-        _paint_keymap_items(getattr(keyconfigs, "user", None))
-        or _paint_keymap_items(getattr(keyconfigs, "addon", None))
-    )
-    return _WORLD_STATE["base_paint_keymap_items_cache"]
-
-
-def _world_paint_shortcut_event_types(context, *, sync=True):
-    mode_key = getattr(context, "mode", "") if context is not None else ""
-    cache = _WORLD_STATE.setdefault("shortcut_event_types_cache", {})
-    if mode_key in cache:
-        return cache[mode_key]
-
-    event_types = set()
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if not _world_shortcut_available(shortcut):
-            continue
-        configured_items = _shortcut_configured_items(context, shortcut, sync=False)
-        if configured_items:
-            keymap_items = configured_items
-        else:
-            key_type = shortcut[5]
-            if key_type not in {"", "NONE"}:
-                event_types.add(key_type)
-            keymap_items = ()
-        for keymap_item in keymap_items:
-            if not bool(getattr(keymap_item, "active", False)):
-                continue
-            if getattr(keymap_item, "map_type", "") != 'KEYBOARD':
-                continue
-            key_type = getattr(keymap_item, "type", "")
-            if key_type not in {"", "NONE"}:
-                event_types.add(key_type)
-
-    for keymap_item in _base_paint_keymap_items(context, sync=False):
-        if not bool(getattr(keymap_item, "active", False)):
-            continue
-        if getattr(keymap_item, "map_type", "") != 'KEYBOARD':
-            continue
-        key_type = getattr(keymap_item, "type", "")
-        if key_type not in {"", "NONE"}:
-            event_types.add(key_type)
-
-    cache[mode_key] = frozenset(event_types)
-    return cache[mode_key]
-
-
-def _world_paint_event_type_can_match_shortcut(context, event, fallback_key_type=""):
-    event_type = getattr(event, "type", "")
-    if not event_type:
-        return True
-    if fallback_key_type and event_type == fallback_key_type:
-        return True
-    return event_type in _world_paint_shortcut_event_types(context)
-
-
-def _precache_world_modal_keymaps(context):
-    _clear_world_keymap_lookup_caches()
-    _base_paint_keymap_items(context, sync=False)
-    _world_paint_shortcut_event_types(context, sync=False)
-    _viewport_bookmark_keymap_item_groups(context)
-
-
-def _world_keymap_item_is_alive(keymap, keymap_item):
-    try:
-        target_pointer = keymap_item.as_pointer()
-    except Exception:
-        target_pointer = None
-    try:
-        for item in keymap.keymap_items:
-            if item is keymap_item:
-                return True
-            if target_pointer is not None:
-                try:
-                    if item.as_pointer() == target_pointer:
-                        return True
-                except Exception:
-                    pass
-    except Exception:
-        return False
-    return False
-
-
-def _remove_world_right_delete_brush_keymap(context=None):
-    _WORLD_STATE["right_delete_brush_keymaps"] = []
-    return 0
-
-
-def _ensure_world_right_delete_brush_keymap(context):
-    _WORLD_STATE["right_delete_brush_keymaps"] = []
-    return False
-
-
-def restore_base_paint_shortcuts_for_exit(context):
-    _q_debug_log_keymaps("restore_base_paint_shortcuts.enter", context)
-    _set_world_paint_shortcuts_enabled(context, True)
-    _q_debug_log_keymaps("restore_base_paint_shortcuts.exit", context, restored=0)
-    return 0
-
-
 def world_paint_exit_state_active(context=None):
-    operator = _world_operator()
-    return operator is not None or bool(
-        _WORLD_STATE.get("ui_hijacked", False)
-        or _WORLD_STATE.get("suppressed_world_paint_shortcut_items")
-        or _WORLD_STATE.get("right_delete_brush_keymaps")
-    )
+    return _world_operator() is not None or bool(_WORLD_STATE.get("ui_active", False))
 
 
 def cleanup_world_paint_exit_state(context=None):
     context = context or bpy.context
-    _q_debug_log_keymaps("cleanup_exit_state.enter", context)
     operator = _world_operator()
     if operator is not None:
         operator.finish_world_paint(context)
-        restore_base_paint_shortcuts_for_exit(context)
-        _q_debug_log_keymaps("cleanup_exit_state.running_operator_exit", context)
         return True
 
     was_active = world_paint_exit_state_active(context)
-    try:
-        _set_world_keymap_conflicts_enabled(context, True)
-    except Exception:
-        pass
-    try:
-        _set_world_paint_shortcuts_enabled(context, True)
-    except Exception:
-        pass
-    try:
-        _remove_world_right_delete_brush_keymap(context)
-    except Exception:
-        pass
-
-    original_draw = _WORLD_STATE.get("header_draw_original")
-    if original_draw is not None:
-        try:
-            bpy.types.VIEW3D_HT_header.draw = original_draw
-        except Exception:
-            pass
-    _WORLD_STATE["header_draw_original"] = None
-
-    original_tool_header_draw = _WORLD_STATE.get("tool_header_draw_original")
-    if original_tool_header_draw is not None:
-        try:
-            bpy.types.VIEW3D_HT_tool_header.draw = original_tool_header_draw
-        except Exception:
-            pass
-    _WORLD_STATE["tool_header_draw_original"] = None
-
-    try:
-        _restore_world_toolbar()
-    except Exception:
-        pass
-
     _WORLD_STATE["operator"] = None
-    _WORLD_STATE["ui_hijacked"] = False
+    if _WORLD_STATE.get("ui_active", False):
+        dummy_operator = type("SecretPaintDummy", (), {
+            "_invoke_area_pointer": 0,
+            "_saved_view3d_state": {},
+        })()
+        _restore_world_ui(dummy_operator, context)
     _WORLD_STATE["exit_consume_paint_until"] = 0.0
-    _WORLD_STATE["suppressed_world_paint_shortcut_items"] = []
     _clear_world_paint_object_mode_guard()
 
     try:
         shared.secret_paint_enable_sculpt_curves_cage(context)
     except Exception:
         pass
-    try:
-        _sanitize_sculpt_curves_tool_before_world_exit(context)
-    except Exception:
-        pass
-    try:
-        restore_base_paint_shortcuts_for_exit(context)
-    except Exception:
-        pass
-    try:
-        _tag_redraw_view3d_areas(context)
-    except Exception:
-        pass
-    _q_debug_log_keymaps("cleanup_exit_state.exit", context, was_active=was_active)
+    _tag_redraw_view3d_areas(context)
     return was_active
-
-
-def _event_matches_base_paint_shortcut(context, event, fallback_key_type="", *, ignore_value=False):
-    if not ignore_value and getattr(event, "value", "") != 'PRESS':
-        return False
-
-    event_type = getattr(event, "type", "")
-    if fallback_key_type and event_type == fallback_key_type and _event_has_no_modifiers(event):
-        return True
-
-    seen_items = set()
-    for keymap_item in _base_paint_keymap_items(context):
-        try:
-            try:
-                item_key = keymap_item.as_pointer()
-            except Exception:
-                item_key = id(keymap_item)
-            if item_key in seen_items:
-                continue
-            seen_items.add(item_key)
-            if _event_matches_keymap_item(event, keymap_item, ignore_value=ignore_value):
-                return True
-        except Exception:
-            continue
-
-    return False
-
-
-def _start_base_paint_from_stopped_modal(context, event):
-    _q_debug_log(
-        "stopped_modal_start_base_paint.enter",
-        context,
-        event_type=getattr(event, "type", ""),
-        event_value=getattr(event, "value", ""),
-    )
-    if event is None:
-        return False
-    if not _event_looks_like_keyboard_shortcut(event):
-        _q_debug_log("stopped_modal_start_base_paint.not_keyboard", context)
-        return False
-    try:
-        restore_base_paint_shortcuts_for_exit(context)
-    except Exception:
-        pass
-    try:
-        if not _event_matches_base_paint_shortcut(context, event):
-            _q_debug_log_keymaps("stopped_modal_start_base_paint.no_match", context)
-            return False
-    except Exception:
-        _q_debug_log("stopped_modal_start_base_paint.match_error", context)
-        return False
-    try:
-        restart_operator = type(
-            "_StoppedModalBasePaintRestart",
-            (),
-            {
-                "exit_paint_mode": False,
-                "use_selected_source": False,
-                "report": lambda self, *_args, **_kwargs: None,
-            },
-        )()
-        result = shared.orenscatter.invoke(restart_operator, context, event)
-        _q_debug_log_keymaps("stopped_modal_start_base_paint.direct_invoked", context, result=result)
-        return True
-    except Exception:
-        _q_debug_log_keymaps("stopped_modal_start_base_paint.direct_invoke_error", context)
-    try:
-        bpy.ops.secret.paint('INVOKE_DEFAULT')
-        _q_debug_log_keymaps("stopped_modal_start_base_paint.dispatched", context)
-        return True
-    except Exception:
-        _q_debug_log_keymaps("stopped_modal_start_base_paint.dispatch_error", context)
-        return False
-
-
-def _event_matches_pick_source_shortcut(context, event, fallback_key_type="", *, ignore_value=False):
-    shortcut = _world_action_shortcut(WORLD_ACTION_PICK_SOURCE)
-    if shortcut is not None:
-        configured_items = _shortcut_configured_items(context, shortcut)
-        if configured_items:
-            if any(
-                _event_matches_keymap_item(event, keymap_item, ignore_value=ignore_value)
-                for keymap_item in configured_items
-            ):
-                return True
-            return False
-    return _event_matches_base_paint_shortcut(
-        context,
-        event,
-        fallback_key_type,
-        ignore_value=ignore_value,
-    )
-
-
-def _event_matches_shift_pick_source_shortcut(context, event, _fallback_key_type="", *, ignore_value=False):
-    shortcut = _world_action_shortcut(WORLD_ACTION_BRUSH_SWITCH)
-    if shortcut is None:
-        return False
-
-    configured_items = _shortcut_configured_items(context, shortcut)
-    if configured_items:
-        if any(
-            _event_matches_keymap_item(event, keymap_item, ignore_value=ignore_value)
-            for keymap_item in configured_items
-        ):
-            return True
-        return False
-    return _event_matches_default_shortcut(event, shortcut, ignore_value=ignore_value)
-
-
-def _adjust_shortcut_key_specs(context, adjust_mode):
-    shortcut = _world_adjust_shortcut(adjust_mode)
-    if shortcut is None:
-        return ()
-
-    configured_items = _shortcut_configured_items(context, shortcut)
-    specs = []
-    for keymap_item in _active_keyboard_shortcut_items(configured_items):
-        key_type = getattr(keymap_item, "type", "")
-        if key_type in {"", "NONE"}:
-            continue
-        if getattr(keymap_item, "key_modifier", 'NONE') not in {'NONE', ''}:
-            continue
-        modifiers = {
-            modifier_name
-            for modifier_name in WORLD_MODIFIER_NAMES
-            if bool(getattr(keymap_item, modifier_name, False))
-        }
-        specs.append({
-            "key_type": key_type,
-            "modifiers": frozenset(modifiers),
-        })
-    if specs:
-        return tuple(specs)
-
-    if not _allow_default_shortcut_fallback(shortcut, configured_items):
-        return ()
-    default_chord = _shortcut_chord_from_default(shortcut)
-    return (default_chord,) if default_chord else ()
-
-
-def _event_matches_current_adjust_shortcut(context, event, adjust_mode, *, ignore_value=False):
-    if not adjust_mode:
-        return False
-    return _world_paint_event_matches_shortcut(
-        context,
-        event,
-        "ADJUST",
-        adjust_mode,
-        ignore_value=ignore_value,
-    )
 
 
 def _event_view3d_window_override_and_mouse(context, event, invoke_area_pointer=0):
@@ -1984,389 +891,9 @@ def _curves_brush_matches_type(brush, brush_type):
     return bool(brush_type and shared.secret_paint_is_curves_brush_type(brush, brush_type))
 
 
-def _world_toolbar_tools(*, sculpt_curves_mode=False):
-    ToolDef, _VIEW3D_PT_tools_active = _ensure_bl_ui_toolsystem()
-    tools = []
-    for index, (tool_id, label, description, icon) in enumerate(WORLD_TOOLBAR_SPECS):
-        if index and tool_id in {WORLD_TOOL_SLIDE, WORLD_TOOL_SINGLE}:
-            tools.append(None)
-        tool_def = {
-            "idname": _workspace_tool_id_for_world_tool(tool_id),
-            "label": label,
-            "description": description,
-            "icon": icon,
-            "cursor": None,
-            "widget": None,
-            "keymap": None,
-            "data_block": None,
-            "draw_settings": None,
-            "draw_cursor": None,
-        }
-        tool_def["operator"] = None
-        native_brush_type = _curves_brush_type_for_world_tool(tool_id)
-        native_tool_id = _native_workspace_tool_id_for_world_tool(tool_id)
-        if sculpt_curves_mode and native_brush_type and native_tool_id:
-            tool_def["idname"] = native_tool_id
-            tool_def["options"] = {'USE_BRUSHES'}
-            tool_def["brush_type"] = native_brush_type
-        tools.append(ToolDef.from_dict(tool_def))
-    return tools
-
-
-def _world_toolbar_override_map(base_tools):
-    tools = dict(base_tools)
-    tools.setdefault(None, [])
-    return tools
-
-
-def _iter_toolbar_item_idnames(item):
-    if item is None:
-        return
-    if isinstance(item, (tuple, list)):
-        for sub_item in item:
-            yield from _iter_toolbar_item_idnames(sub_item)
-        return
-    idname = getattr(item, "idname", "")
-    if idname:
-        yield idname
-
-
-def _toolbar_tools_contain_id(tools, mode, idname):
-    if not isinstance(tools, dict):
-        return False
-    for key in (None, mode):
-        for item in tools.get(key, ()) or ():
-            if idname in _iter_toolbar_item_idnames(item):
-                return True
-    return False
-
-
-def _toolbar_item_contains_id(item, idname):
-    return idname in _iter_toolbar_item_idnames(item)
-
-
-def _remove_duplicate_leading_toolbar_group(items, idname):
-    if not items or not _toolbar_item_contains_id(items[0], idname):
-        return items, False
-    if not any(_toolbar_item_contains_id(item, idname) for item in items[1:]):
-        return items, False
-
-    remove_count = 2 if len(items) > 1 and items[1] is None else 1
-    return items[remove_count:], True
-
-
-def _remove_toolbar_items_with_id(items, idname):
-    cleaned = []
-    changed = False
-    skip_separator = False
-    for item in items:
-        if _toolbar_item_contains_id(item, idname):
-            changed = True
-            skip_separator = True
-            continue
-        if skip_separator and item is None:
-            changed = True
-            skip_separator = False
-            continue
-        skip_separator = False
-        cleaned.append(item)
-    return cleaned, changed
-
-
-def _cleanup_view3d_toolbar_tool_entries():
+def _set_mode(mode):
     try:
-        import bl_ui.space_toolsystem_toolbar as toolbar_module
-        VIEW3D_PT_tools_active = toolbar_module.VIEW3D_PT_tools_active
-    except Exception:
-        return False
-
-    tools = getattr(VIEW3D_PT_tools_active, "_tools", None)
-    if not isinstance(tools, dict):
-        return False
-
-    changed = False
-    repaired_tools = dict(tools)
-
-    for mode, items in tuple(repaired_tools.items()):
-        if not isinstance(items, (list, tuple)):
-            continue
-        cleaned_items = list(items)
-        if mode == 'SCULPT_CURVES':
-            cleaned_items, mode_changed = _remove_toolbar_items_with_id(
-                cleaned_items,
-                "builtin.select_box",
-            )
-            changed = changed or mode_changed
-        cleaned_items, mode_changed = _remove_duplicate_leading_toolbar_group(
-            cleaned_items,
-            "builtin.select_box",
-        )
-        if mode_changed:
-            changed = True
-        if mode_changed or cleaned_items != list(items):
-            repaired_tools[mode] = cleaned_items
-
-    if changed:
-        try:
-            VIEW3D_PT_tools_active._tools = repaired_tools
-        except Exception:
-            return False
-    _WORLD_STATE["view3d_builtin_tool_entries_checked"] = True
-    return changed
-
-
-def _ensure_view3d_builtin_tool_entries():
-    if _WORLD_STATE.get("view3d_builtin_tool_entries_checked", False):
-        return False
-    return _cleanup_view3d_toolbar_tool_entries()
-
-
-def _iter_toolbar_tooldefs(item, context=None):
-    if item is None:
-        return
-    if isinstance(item, (tuple, list)):
-        for sub_item in item:
-            yield from _iter_toolbar_tooldefs(sub_item, context)
-        return
-    if not getattr(item, "idname", "") and callable(item):
-        try:
-            dynamic_items = item(context)
-        except Exception:
-            return
-        yield from _iter_toolbar_tooldefs(dynamic_items, context)
-        return
-    if getattr(item, "idname", ""):
-        yield item
-
-
-def _view3d_toolbar_tooldefs_for_mode(context, mode):
-    try:
-        _ToolDef, VIEW3D_PT_tools_active = _ensure_bl_ui_toolsystem()
-    except Exception:
-        return []
-
-    tooldefs = []
-    try:
-        mode_tools = VIEW3D_PT_tools_active.tools_from_context(context, mode)
-        for item in mode_tools:
-            tooldefs.extend(_iter_toolbar_tooldefs(item, context))
-    except Exception:
-        return []
-    return tooldefs
-
-
-def _view3d_toolbar_tool_ids_for_mode(context, mode):
-    return {
-        getattr(item, "idname", "")
-        for item in _view3d_toolbar_tooldefs_for_mode(context, mode)
-        if getattr(item, "idname", "")
-    }
-
-
-def _view3d_toolbar_tooldef_for_mode(context, mode, preferred_ids):
-    preferred_ids = tuple(preferred_ids or ())
-    for item in _view3d_toolbar_tooldefs_for_mode(context, mode):
-        if getattr(item, "idname", "") in preferred_ids:
-            return item
-    return None
-
-
-def _sculpt_curves_density_tooldef(context):
-    tooldef = _view3d_toolbar_tooldef_for_mode(
-        context,
-        'SCULPT_CURVES',
-        ("builtin_brush.density", "builtin.brush", "builtin_brush.selection_paint"),
-    )
-    if tooldef is not None:
-        return tooldef
-    try:
-        import bl_ui.space_toolsystem_toolbar as toolbar_module
-        curves_defs = getattr(toolbar_module, "_defs_curves_sculpt", None)
-        if curves_defs is not None:
-            return getattr(curves_defs, "density", None)
-    except Exception:
-        pass
-    return None
-
-
-def _tooldef_keymap_name(tooldef):
-    keymap = getattr(tooldef, "keymap", None)
-    if keymap is None:
-        return ""
-    if isinstance(keymap, str):
-        return keymap
-    try:
-        return keymap[0] if keymap else ""
-    except Exception:
-        return ""
-
-
-def _setup_view3d_workspace_tool_from_tooldef(context, mode, tooldef):
-    if tooldef is None:
-        return False
-    try:
-        workspace_tool = context.workspace.tools.from_space_view3d_mode(mode, create=True)
-    except Exception:
-        workspace_tool = None
-    if workspace_tool is None:
-        return False
-
-    try:
-        workspace_tool.setup(
-            idname=getattr(tooldef, "idname", ""),
-            keymap=_tooldef_keymap_name(tooldef),
-            cursor=getattr(tooldef, "cursor", None) or 'DEFAULT',
-            options=set(getattr(tooldef, "options", None) or set()),
-            gizmo_group=getattr(tooldef, "widget", None) or "",
-            brush_type=getattr(tooldef, "brush_type", None) or 'ANY',
-            data_block=getattr(tooldef, "data_block", None) or "",
-            operator=getattr(tooldef, "operator", None) or "",
-            index=-1,
-            idname_fallback="",
-            keymap_fallback="",
-        )
-        return True
-    except Exception:
-        return False
-
-
-def _ensure_valid_sculpt_curves_workspace_tool(context):
-    context = context or bpy.context
-    return _setup_view3d_workspace_tool_from_tooldef(
-        context,
-        'SCULPT_CURVES',
-        _sculpt_curves_density_tooldef(context),
-    )
-
-
-def _sanitize_sculpt_curves_tool_before_world_exit(context=None, *, area_pointer=0):
-    context = context or bpy.context
-    mode = getattr(context, "mode", "") or ""
-    active_obj = getattr(context, "active_object", None)
-    active_mode = getattr(active_obj, "mode", "") if active_obj is not None else ""
-    if mode != 'SCULPT_CURVES' and active_mode != 'SCULPT_CURVES':
-        return _cleanup_view3d_toolbar_tool_entries()
-
-    fixed_tool = _ensure_valid_sculpt_curves_workspace_tool(context)
-    cleaned = _cleanup_view3d_toolbar_tool_entries()
-    return cleaned or fixed_tool
-
-
-def _draw_secret_paint_world_toolbar_cls(cls, layout, context, detect_layout=True, scale_y=1.75):
-    operator = _world_operator()
-    original_draw_cls = _WORLD_STATE.get("toolbar_draw_cls_original")
-    if operator is None or getattr(getattr(context, "space_data", None), "type", "") != 'VIEW_3D':
-        if original_draw_cls is not None:
-            return original_draw_cls(layout, context, detect_layout=detect_layout, scale_y=scale_y)
-        return None
-
-    try:
-        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
-    except Exception:
-        if original_draw_cls is not None:
-            return original_draw_cls(layout, context, detect_layout=detect_layout, scale_y=scale_y)
-        return None
-
-    if getattr(operator, "tool_id", "") == WORLD_TOOL_BEZIER and original_draw_cls is not None:
-        try:
-            original_draw_cls(layout, context, detect_layout=detect_layout, scale_y=scale_y)
-            layout.separator()
-        except Exception:
-            pass
-
-    if detect_layout:
-        ui_gen, show_text = ToolSelectPanelHelper._layout_generator_detect_from_region(
-            layout,
-            context.region,
-            scale_y,
-        )
-    else:
-        ui_gen = ToolSelectPanelHelper._layout_generator_single_column(layout, scale_y)
-        show_text = True
-
-    ui_gen.send(None)
-    native_passthrough = (
-        operator._native_curves_brush_passthrough_active()
-        or operator._active_brush_requests_native_passthrough(context)
-    )
-    for index, (tool_id, label, _description, icon) in enumerate(WORLD_TOOLBAR_SPECS):
-        if index and tool_id in {WORLD_TOOL_SLIDE, WORLD_TOOL_SINGLE}:
-            ui_gen.send(True)
-        sub = ui_gen.send(False)
-        props = sub.operator(
-            WORLD_TOOL_OPERATOR_IDS.get(tool_id, "secret.world_paint_set_tool"),
-            text=label if show_text else "",
-            depress=(not native_passthrough and operator.tool_id == tool_id),
-            icon=icon,
-        )
-        if hasattr(props, "tool_id"):
-            props.tool_id = tool_id
-    ui_gen.send(None)
-    return None
-
-
-def _hijack_world_toolbar():
-    if _WORLD_STATE["toolbar_original"] is not None:
-        return
-
-    _ensure_view3d_builtin_tool_entries()
-    _ToolDef, VIEW3D_PT_tools_active = _ensure_bl_ui_toolsystem()
-    _WORLD_STATE["toolbar_original"] = VIEW3D_PT_tools_active._tools
-    _WORLD_STATE["toolbar_draw_cls_original"] = VIEW3D_PT_tools_active.draw_cls
-    VIEW3D_PT_tools_active.draw_cls = classmethod(_draw_secret_paint_world_toolbar_cls)
-
-
-def _restore_world_toolbar():
-    if _WORLD_STATE["toolbar_original"] is None:
-        return
-
-    _ensure_view3d_builtin_tool_entries()
-    _ToolDef, VIEW3D_PT_tools_active = _ensure_bl_ui_toolsystem()
-    original_draw_cls = _WORLD_STATE.get("toolbar_draw_cls_original")
-    if original_draw_cls is not None:
-        VIEW3D_PT_tools_active.draw_cls = original_draw_cls
-    _WORLD_STATE["toolbar_draw_cls_original"] = None
-    _WORLD_STATE["toolbar_original"] = None
-    _WORLD_STATE["toolbar_temp_restore_depth"] = 0
-
-
-def _with_original_world_toolbar(callback):
-    if _WORLD_STATE.get("toolbar_temp_restore_depth", 0) > 0:
-        return callback()
-
-    restored_draw_cls = False
-    VIEW3D_PT_tools_active = None
-    try:
-        try:
-            _ToolDef, VIEW3D_PT_tools_active = _ensure_bl_ui_toolsystem()
-        except Exception:
-            return callback()
-        original_draw_cls = _WORLD_STATE.get("toolbar_draw_cls_original")
-        if original_draw_cls is not None:
-            VIEW3D_PT_tools_active.draw_cls = original_draw_cls
-            restored_draw_cls = True
-        return callback()
-    finally:
-        _WORLD_STATE["toolbar_temp_restore_depth"] = 0
-        if (
-            restored_draw_cls and
-            VIEW3D_PT_tools_active is not None and
-            _WORLD_STATE.get("toolbar_draw_cls_original") is not None
-        ):
-            VIEW3D_PT_tools_active.draw_cls = classmethod(_draw_secret_paint_world_toolbar_cls)
-
-
-def _mode_set_with_world_toolbar_restored(mode):
-    try:
-        if mode != 'SCULPT_CURVES':
-            operator = _world_operator()
-            _sanitize_sculpt_curves_tool_before_world_exit(
-                bpy.context,
-                area_pointer=getattr(operator, "_invoke_area_pointer", 0) if operator is not None else 0,
-            )
-        return _with_original_world_toolbar(
-            lambda: _operator_result_ok(bpy.ops.object.mode_set(mode=mode))
-        )
+        return _operator_result_ok(bpy.ops.object.mode_set(mode=mode))
     except Exception:
         return False
 
@@ -2382,7 +909,7 @@ def _force_object_mode_after_world_paint(context=None):
     if mode != 'SCULPT_CURVES' and active_mode != 'SCULPT_CURVES':
         return False
 
-    return _mode_set_with_world_toolbar_restored('OBJECT')
+    return _set_mode('OBJECT')
 
 
 def _force_object_select_tool_after_world_paint(context=None):
@@ -2438,7 +965,7 @@ def _force_system_names_object_mode_after_world_paint(context, system_names):
 
             try:
                 if context.mode != 'OBJECT':
-                    _mode_set_with_world_toolbar_restored('OBJECT')
+                    _set_mode('OBJECT')
             except Exception:
                 pass
             try:
@@ -2454,13 +981,13 @@ def _force_system_names_object_mode_after_world_paint(context, system_names):
                 continue
             try:
                 if context.mode != 'OBJECT' or getattr(system_obj, "mode", "") != 'OBJECT':
-                    changed = _mode_set_with_world_toolbar_restored('OBJECT') or changed
+                    changed = _set_mode('OBJECT') or changed
             except Exception:
                 pass
     finally:
         try:
             if context.mode != 'OBJECT':
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
         try:
@@ -2559,7 +1086,7 @@ def _activate_native_curves_tool(context, brush_type, *, area_pointer=0):
             return _tool_set_by_id(context, "builtin.brush", area_pointer=area_pointer)
         return False
 
-    result = _with_original_world_toolbar(_activate)
+    result = _activate()
     if brush_type != 'DENSITY':
         try:
             result = bool(shared.secret_paint_activate_essential_curves_brush_asset(brush_type, context)) or result
@@ -2583,152 +1110,11 @@ def _force_native_curves_tool_rebuild(context, brush_type, *, area_pointer=0):
                 break
         return _activate_native_curves_tool(context, brush_type, area_pointer=area_pointer)
 
-    return _with_original_world_toolbar(_activate)
+    return _activate()
 
 
 def _activate_native_density_tool(context, *, area_pointer=0):
     return _activate_native_curves_tool(context, 'DENSITY', area_pointer=area_pointer)
-
-
-def _prepare_workspace_tool_for_native_density_session(context, *, area_pointer=0):
-    active_workspace_tool = _active_workspace_tool_id(context)
-
-    return _is_world_workspace_tool_id(active_workspace_tool)
-
-
-def _priority_chord_key(chord):
-    if not chord:
-        return None
-    key_type = chord.get("key_type", "")
-    if key_type in {"", "NONE"}:
-        return None
-    return (
-        key_type,
-        tuple(sorted(chord.get("modifiers", ()) or ())),
-    )
-
-
-def _keymap_item_priority_chord_key(keymap_item):
-    try:
-        if not bool(getattr(keymap_item, "active", False)):
-            return None
-        if getattr(keymap_item, "map_type", "") != 'KEYBOARD':
-            return None
-        if getattr(keymap_item, "value", "PRESS") not in {'ANY', 'PRESS'}:
-            return None
-        if getattr(keymap_item, "key_modifier", 'NONE') not in {'NONE', ''}:
-            return None
-        chord = _shortcut_chord_from_keymap_item(keymap_item)
-    except Exception:
-        return None
-    return _priority_chord_key(chord)
-
-
-def _keymap_item_conflicts_with_priority_chords(keymap_item, priority_chords):
-    try:
-        if not bool(getattr(keymap_item, "active", False)):
-            return False
-        if getattr(keymap_item, "map_type", "") != 'KEYBOARD':
-            return False
-        if getattr(keymap_item, "value", "PRESS") not in {'ANY', 'PRESS'}:
-            return False
-        if getattr(keymap_item, "key_modifier", 'NONE') not in {'NONE', ''}:
-            return False
-
-        key_type = getattr(keymap_item, "type", "")
-        if key_type in {"", "NONE"}:
-            return False
-        if getattr(keymap_item, "any", False):
-            return any(chord_key[0] == key_type for chord_key in priority_chords)
-
-        return _keymap_item_priority_chord_key(keymap_item) in priority_chords
-    except Exception:
-        return False
-
-
-def _world_paint_priority_shortcut_chords(context):
-    priority_chords = set()
-    for shortcut in WORLD_SHORTCUT_ACTIONS:
-        if not _world_shortcut_available(shortcut):
-            continue
-        configured_items = _shortcut_configured_items(context, shortcut)
-        active_items = _active_keyboard_shortcut_items(configured_items)
-        if active_items:
-            for keymap_item in active_items:
-                chord_key = _keymap_item_priority_chord_key(keymap_item)
-                if chord_key is not None:
-                    priority_chords.add(chord_key)
-            continue
-
-        if _allow_default_shortcut_fallback(shortcut, configured_items):
-            chord_key = _priority_chord_key(_shortcut_chord_from_default(shortcut))
-            if chord_key is not None:
-                priority_chords.add(chord_key)
-    return priority_chords
-
-
-def _world_keymap_item_is_secret_paint_shortcut(keymap_item):
-    idname = getattr(keymap_item, "idname", "")
-    return idname.startswith("secret.") or idname in WORLD_PAINT_SHORTCUT_OPERATOR_IDNAMES
-
-
-def _restore_world_keymap_conflicts():
-    restored = 0
-    for keymap, keymap_item in _WORLD_STATE.get("suppressed_keymap_items", ()) or ():
-        try:
-            if not _world_keymap_item_is_alive(keymap, keymap_item):
-                continue
-            keymap_item.active = True
-            restored += 1
-        except Exception:
-            continue
-    _WORLD_STATE["suppressed_keymap_items"] = []
-    return restored
-
-
-def _set_world_keymap_conflicts_enabled(context, enabled):
-    restored = 0
-    for suppressed_item in _WORLD_STATE.get("suppressed_keymap_items", ()) or ():
-        try:
-            first, second = suppressed_item
-        except Exception:
-            continue
-        try:
-            if hasattr(first, "keymap_items"):
-                keymap, keymap_item = first, second
-                if not _world_keymap_item_is_alive(keymap, keymap_item):
-                    continue
-                keymap_item.active = True
-            else:
-                keymap_item, original_active = first, second
-                keymap_item.active = original_active
-            restored += 1
-        except Exception:
-            continue
-    _WORLD_STATE["suppressed_keymap_items"] = []
-    _q_debug_log_keymaps(
-        "set_world_keymap_conflicts.noop",
-        context,
-        enabled=enabled,
-        restored=restored,
-    )
-    return restored
-
-
-def _set_world_paint_shortcuts_enabled(context, enabled):
-    _q_debug_log_keymaps(
-        "set_world_paint_shortcuts.enter",
-        context,
-        enabled=enabled,
-        suppressed_before=0,
-    )
-    _WORLD_STATE["suppressed_world_paint_shortcut_items"] = []
-    _q_debug_log_keymaps(
-        "set_world_paint_shortcuts.noop",
-        context,
-        disabled=0,
-        skipped_base=0,
-    )
 
 
 def _context_curve_edit_mode_active(context, curve_obj=None):
@@ -2748,10 +1134,6 @@ def _world_paint_bezier_curve_edit_active(context, operator=None):
         and getattr(operator, "tool_id", "") == WORLD_TOOL_BEZIER
         and _context_curve_edit_mode_active(context)
     )
-
-
-def _remove_stale_shift_delete_native_keymaps(context):
-    return
 
 
 def _invoke_native_density_size_adjust(context, *, area_pointer=0, release_confirm=False):
@@ -2860,98 +1242,6 @@ def _invoke_native_density_spacing_adjust(context, *, area_pointer=0, release_co
             return False
     except Exception:
         return False
-
-
-WORLD_NATIVE_MODE_SHORTCUT_IDNAMES = {
-    "object.mode_set",
-    "view3d.object_mode_pie_or_toggle",
-    "wm.call_menu_pie",
-}
-
-
-def _native_mode_shortcut_kind(keymap_item):
-    idname = getattr(keymap_item, "idname", "")
-    properties = getattr(keymap_item, "properties", None)
-    if idname == "view3d.object_mode_pie_or_toggle":
-        return "PIE"
-    if idname == "wm.call_menu_pie":
-        return (
-            "PIE"
-            if properties is not None
-            and getattr(properties, "name", "") == "VIEW3D_MT_object_mode_pie"
-            else ""
-        )
-    if idname != "object.mode_set" or properties is None:
-        return ""
-    try:
-        return "TOGGLE" if bool(getattr(properties, "toggle", False)) else ""
-    except Exception:
-        return ""
-
-
-def _native_mode_shortcut_from_event(context, event):
-    if (
-        getattr(event, "type", "") == 'TAB'
-        and getattr(event, "value", "") in {'PRESS', 'CLICK_DRAG'}
-        and _event_has_no_modifiers(event)
-    ):
-        return "PIE"
-
-    keyconfigs = getattr(getattr(context, "window_manager", None), "keyconfigs", None)
-    active_keyconfig = getattr(keyconfigs, "active", None)
-    if active_keyconfig is None:
-        return ""
-
-    preferred_keymaps = ("Sculpt Curves", "Object Non-modal", "3D View")
-    for keymap_name in preferred_keymaps:
-        keymap = active_keyconfig.keymaps.get(keymap_name)
-        if keymap is None:
-            continue
-        for keymap_item in keymap.keymap_items:
-            if getattr(keymap_item, "idname", "") not in WORLD_NATIVE_MODE_SHORTCUT_IDNAMES:
-                continue
-            shortcut_kind = _native_mode_shortcut_kind(keymap_item)
-            if shortcut_kind and _event_matches_keymap_item(event, keymap_item):
-                return shortcut_kind
-    return ""
-
-
-def _viewport_bookmark_shortcut_from_event(context, event):
-    if getattr(event, "value", "") != 'PRESS':
-        return False
-
-    for keymap_items in _viewport_bookmark_keymap_item_groups(context):
-        return any(_event_matches_keymap_item(event, keymap_item) for keymap_item in keymap_items)
-
-    return False
-
-
-def _viewport_bookmark_keymap_item_groups(context):
-    cached_groups = _WORLD_STATE.get("viewport_bookmark_keymap_item_groups_cache")
-    if cached_groups is not None:
-        return cached_groups
-
-    keyconfigs = getattr(getattr(context, "window_manager", None), "keyconfigs", None)
-    def _bookmark_keymap_items(keyconfig):
-        if keyconfig is None:
-            return []
-        items = []
-        for keymap in keyconfig.keymaps:
-            for keymap_item in keymap.keymap_items:
-                if getattr(keymap_item, "idname", "") != "secret.toggle_viewport_tab_bookmark":
-                    continue
-                items.append(keymap_item)
-        return items
-
-    groups = []
-    for keyconfig_name in ("user", "addon", "active"):
-        keyconfig = getattr(keyconfigs, keyconfig_name, None) if keyconfigs is not None else None
-        keymap_items = _bookmark_keymap_items(keyconfig)
-        if not keymap_items:
-            continue
-        groups.append(tuple(keymap_items))
-    _WORLD_STATE["viewport_bookmark_keymap_item_groups_cache"] = tuple(groups)
-    return _WORLD_STATE["viewport_bookmark_keymap_item_groups_cache"]
 
 
 def _modal_idle_for_viewport_bookmark(operator):
@@ -3920,12 +2210,6 @@ def _target_info_for_secret_paint_hit(context, hit_obj, hit_location, hit_normal
     picked_system = _secret_paint_system_from_target_hit(hit_obj, hit_location, hit_matrix, depsgraph)
     if picked_system is None:
         return None
-    if not (
-        _world_target_surface_feature_enabled() and
-        bool(picked_system.get(WORLD_PAINT_TARGET_ENABLED_PROP, False))
-    ):
-        return None
-
     surface_obj = _system_surface_object(picked_system)
     if surface_obj is None or getattr(surface_obj, "type", "") != "MESH":
         return None
@@ -6263,7 +4547,7 @@ def _delete_visible_empty_manual_paint_systems(context, system_names):
 
     try:
         if (getattr(context, "mode", "") or "") != 'OBJECT':
-            _mode_set_with_world_toolbar_restored('OBJECT')
+            _set_mode('OBJECT')
     except Exception:
         pass
 
@@ -8370,13 +6654,6 @@ def _draw_world_circle(operator, context):
     gpu.state.blend_set('NONE')
 
 
-def _draw_text_line(font_id, x, y, text, color=(1.0, 1.0, 1.0, 1.0), size=12):
-    blf.position(font_id, x, y, 0)
-    blf.size(font_id, size)
-    blf.color(font_id, *color)
-    blf.draw(font_id, text)
-
-
 def _draw_world_hud(operator, context):
     if not getattr(operator, "_running", False):
         return
@@ -8550,7 +6827,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         _WORLD_STATE["curve_data_cache"] = {}
         _WORLD_STATE["source_curve_candidates_cache"] = {}
         _WORLD_STATE["source_system_candidates_cache"] = {}
-        _clear_world_keymap_lookup_caches()
         _WORLD_STATE["last_live_update_time"] = 0.0
         self._draw_handle_2d = None
         self._draw_handle_3d = None
@@ -8600,29 +6876,17 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._native_density_adjust_depth_location = None
         self._native_density_adjust_manual_spacing = None
         self._native_density_adjust_auto_confirm_until = 0.0
-        self._native_density_adjust_release_watch_token = 0
-        self._native_density_adjust_release_watch_running = False
-        self._native_density_adjust_release_watch_saw_shortcut_down = False
-        self._native_density_adjust_release_watch_started = 0.0
+        self._native_density_adjust_confirm_token = 0
         self._native_density_adjust_finalizing = False
-        self._native_density_adjust_waiting_for_alt_release = False
         self._native_density_adjust_live_sync_token = 0
         self._native_density_adjust_live_sync_running = False
         self._native_density_adjust_confirm_on_release = False
         self._native_density_adjust_native_release_confirm = False
-        self._native_density_radial_passthrough_active = False
-        self._native_density_radial_passthrough_token = 0
-        self._native_density_radial_confirm_on_release = True
-        self._native_density_radial_confirm_sent = False
-        self._native_density_radial_confirm_pending = False
-        self._native_density_radial_confirm_sent_time = 0.0
-        self._native_density_radial_result_committed = False
         self._native_size_adjust_commit_token = 0
         self._native_brush_ui_size_interaction_active = False
         self._native_brush_ui_size_interaction_start_state = None
         self._native_brush_ui_size_interaction_changed = False
         self._native_density_confirmed_size_state = None
-        self._disabled_size_adjust_passthrough_active = False
         self._native_density_pending_adjust_mode = ""
         self.last_hover_key = ""
         self.hover_mouse_region = None
@@ -8631,9 +6895,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._viewport_navigation_last_state_key = None
         self.last_slider_value = 1.0
         self._syncing_slider = False
-        self.toggle_key_type = 'Q'
-        self._paint_shortcut_release_chord = None
-        self._paint_shortcut_release_down = set()
         self._selection_preview_token = 0
         self._selection_preview_cage_until = 0.0
         self._selection_preview_active = False
@@ -8708,6 +6969,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._last_modal_event_time = 0.0
         self._last_region_in_window = False
         self._brush_cursor_focus_lost = False
+        self._tool_rail_draw_handle = None
+        self._tool_rail_pointer_active = False
+        self._tool_rail_hover_tool = ""
+        self._tool_rail_hover_started = 0.0
+        self._tool_rail_hover_token = 0
         self._shift_key_held = False
         self._density_right_delete_button_down = False
         self._density_right_delete_restore_pending = False
@@ -8984,59 +7250,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         elif event.value == 'RELEASE':
             self._shift_key_held = False
         return previous != self._shift_key_held
-
-    def _remember_paint_shortcut_release_chord(self, context, event, *, prefer_pick_source=False):
-        chord = None
-        if event is not None:
-            try:
-                if prefer_pick_source:
-                    chord = _pick_source_shortcut_chord_from_event(context, event)
-                if chord is None:
-                    chord = _base_paint_shortcut_chord_from_event(context, event)
-                if chord is None and not prefer_pick_source:
-                    chord = _pick_source_shortcut_chord_from_event(context, event)
-                if chord is None and _event_looks_like_keyboard_shortcut(event):
-                    chord = _shortcut_chord_from_event(event)
-            except Exception:
-                chord = None
-
-        parts = _shortcut_chord_parts(chord)
-        if not parts:
-            self._paint_shortcut_release_chord = None
-            self._paint_shortcut_release_down = set()
-            return False
-
-        self._paint_shortcut_release_chord = chord
-        self._paint_shortcut_release_down = parts
-        return True
-
-    def _paint_shortcut_release_status(self, context, event):
-        if event is None or getattr(event, "value", "") != 'RELEASE':
-            return ""
-
-        chord = getattr(self, "_paint_shortcut_release_chord", None)
-        release_down = set(getattr(self, "_paint_shortcut_release_down", set()) or set())
-        release_part = _shortcut_chord_release_part(event, chord)
-        if release_part is not None and release_down:
-            release_down.discard(release_part)
-            self._paint_shortcut_release_down = release_down
-            if release_down:
-                return "pending"
-            self._paint_shortcut_release_chord = None
-            self._paint_shortcut_release_down = set()
-            return "complete"
-
-        if _event_matches_pick_source_shortcut(
-            context,
-            event,
-            self.toggle_key_type,
-            ignore_value=True,
-        ):
-            self._paint_shortcut_release_chord = None
-            self._paint_shortcut_release_down = set()
-            return "complete"
-
-        return ""
 
     def _begin_shift_delete_tool(self, context):
         if self.tool_id != WORLD_TOOL_DENSITY or self.stroke_active or self.adjust_mode:
@@ -9401,8 +7614,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             WORLD_KEEP_NATIVE_SESSION_WHILE_IDLE or
             not self._density_uses_native_ui() or
             self.stroke_active or
-            self.adjust_mode or
-            getattr(self, "_native_density_radial_passthrough_active", False)
+            self.adjust_mode
         ):
             return False
         if not self._native_density_session_active:
@@ -9472,9 +7684,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         return True
 
     def _sync_tool_ui_mode(self, context):
-        if _WORLD_STATE["ui_hijacked"] and _WORLD_STATE.get("toolbar_original") is None:
-            _hijack_world_toolbar()
-
         if self._native_curves_brush_passthrough_active():
             self._remove_draw_handlers()
             self._set_native_os_cursor_hidden(context, False)
@@ -10281,12 +8490,10 @@ class secret_world_paint_mode(bpy.types.Operator):
         active_before = getattr(brush_container, "brush", None) if brush_container is not None else None
         delete_tool_ok = True
         if brush_type == "DELETE":
-            delete_tool_ok = _with_original_world_toolbar(
-                lambda: _tool_set_by_id(
-                    context,
-                    "builtin_brush.delete",
-                    area_pointer=self._invoke_area_pointer,
-                )
+            delete_tool_ok = _tool_set_by_id(
+                context,
+                "builtin_brush.delete",
+                area_pointer=self._invoke_area_pointer,
             )
         assigned = False
         active_after = active_before
@@ -10378,16 +8585,14 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         activated_brush = None
         try:
-            activated_brush = _with_original_world_toolbar(
-                lambda: shared.secret_paint_activate_native_curves_brush(
-                    brush_type,
-                    context,
-                    system_obj,
-                    configure=False,
-                    override_settings=False,
-                    size=None,
-                    defer=False,
-                )
+            activated_brush = shared.secret_paint_activate_native_curves_brush(
+                brush_type,
+                context,
+                system_obj,
+                configure=False,
+                override_settings=False,
+                size=None,
+                defer=False,
             )
         except Exception:
             activated_brush = None
@@ -10940,16 +9145,14 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             pass
         try:
-            brush = _with_original_world_toolbar(
-                lambda: shared.secret_paint_activate_native_curves_brush(
-                    'DENSITY',
-                    context,
-                    self._current_system(),
-                    configure=False,
-                    override_settings=False,
-                    size=None,
-                    defer=False,
-                )
+            brush = shared.secret_paint_activate_native_curves_brush(
+                'DENSITY',
+                context,
+                self._current_system(),
+                configure=False,
+                override_settings=False,
+                size=None,
+                defer=False,
             )
         except Exception:
             brush = None
@@ -11229,7 +9432,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         area, region, space = _view3d_area_data(context, self._invoke_area_pointer)
         try:
             if context.mode != 'SCULPT_CURVES':
-                _mode_set_with_world_toolbar_restored('SCULPT_CURVES')
+                _set_mode('SCULPT_CURVES')
             if area is not None and region is not None and space is not None:
                 with context.temp_override(area=area, region=region, space_data=space):
                     bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
@@ -11474,7 +9677,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         try:
             if context.mode != 'OBJECT':
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
 
@@ -11573,7 +9776,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         try:
             if context.mode != 'OBJECT':
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
 
@@ -11586,10 +9789,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             pass
 
-        _prepare_workspace_tool_for_native_density_session(
-            context,
-            area_pointer=self._invoke_area_pointer,
-        )
         try:
             shared.context3sculptbrush(
                 context,
@@ -11603,7 +9802,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         if context.mode != 'SCULPT_CURVES':
             try:
-                _mode_set_with_world_toolbar_restored('SCULPT_CURVES')
+                _set_mode('SCULPT_CURVES')
                 shared.secret_paint_disable_sculpt_curves_cage(context)
                 self._world_ui_cage_hidden = True
             except Exception:
@@ -11699,7 +9898,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
     def _restore_selection(self, context):
         try:
-            _mode_set_with_world_toolbar_restored('OBJECT')
+            _set_mode('OBJECT')
         except Exception:
             pass
 
@@ -11940,6 +10139,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._entry_source_preview_active = True
         self._entry_source_preview_allows_hold_pick = bool(hold)
         self._entry_source_preview_hold_start_time = time.perf_counter() if hold else 0.0
+        _hide_native_world_toolbar(self, context)
         if hold:
             return True
 
@@ -12765,7 +10965,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             pass
         try:
             if getattr(context, "mode", "") != 'OBJECT':
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
         try:
@@ -12778,6 +10978,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._pick_source_hold_restore_mode = ""
         if not self._running:
             return
+        _hide_native_world_toolbar(self, context)
         if event is not None and hasattr(event, "mouse_region_x") and hasattr(event, "mouse_region_y"):
             self.hover_mouse_region = (event.mouse_region_x, event.mouse_region_y)
         if self._surface_lock_waiting_for_target():
@@ -12795,6 +10996,9 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._sync_tool_ui_mode(context)
 
     def _begin_pick_source_hold(self, context, event):
+        if getattr(self, "_pick_source_hold_active", False):
+            self._update_pick_source_hold(context, event)
+            return
         self._prepare_pick_source_object_mode(context)
         self._pick_source_hold_active = True
         self._pick_source_hold_source_data = None
@@ -12803,6 +11007,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._pick_source_hold_last_mouse = None
         self._pick_source_hold_last_update_time = 0.0
         self._pick_source_hold_last_hit_time = 0.0
+        _hide_native_world_toolbar(self, context)
         self._update_pick_source_hold(context, event)
 
     def _update_pick_source_hold(self, context, event):
@@ -12962,10 +11167,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._finish_native_density_session(context, restore_selection=False)
         original_mode = context.mode if context.mode else ""
         if leaving_bezier_curve_edit:
-            _set_world_paint_shortcuts_enabled(context, True)
             if getattr(context, "mode", "") != 'OBJECT':
                 try:
-                    _mode_set_with_world_toolbar_restored('OBJECT')
+                    _set_mode('OBJECT')
                 except Exception:
                     pass
         self.tool_id = tool_id
@@ -13140,676 +11344,16 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._sync_brush_controls(context)
         _tag_redraw_view3d_areas(context)
 
-    def _handle_reserved_modal_key(self, context, event):
-        if not self._event_is_in_world_paint_view(context, event):
-            return False
-
-        undo_shortcut = (
-            event.type == 'Z'
-            and bool(getattr(event, "ctrl", False))
-            and not bool(getattr(event, "shift", False))
-            and self._source_switch_history
-        )
-        paint_shortcut_release_status = ""
-        if (
-            getattr(event, "value", "") == 'RELEASE'
-            and (
-                getattr(self, "_entry_source_preview_active", False)
-                or getattr(self, "_pick_source_hold_active", False)
-            )
-        ):
-            paint_shortcut_release_status = self._paint_shortcut_release_status(context, event)
-        if (
-            not undo_shortcut
-            and not paint_shortcut_release_status
-            and not _world_paint_event_type_can_match_shortcut(context, event, self.toggle_key_type)
-        ):
-            return False
-
-        if _event_matches_shift_pick_source_shortcut(
-            context,
-            event,
-            self.toggle_key_type,
-            ignore_value=True,
-        ):
-            if event.value == 'PRESS':
-                if not self._switch_active_system_brush_under_mouse(context, event):
-                    self._pick_source_once(context, event)
-            return True
-
-        pick_source_shortcut = bool(paint_shortcut_release_status) or _event_matches_pick_source_shortcut(
-            context,
-            event,
-            self.toggle_key_type,
-            ignore_value=True,
-        )
-        if pick_source_shortcut:
-            if getattr(self, "_entry_source_preview_active", False):
-                if event.value == 'RELEASE' and paint_shortcut_release_status != "pending":
-                    self._end_entry_source_preview(context, event)
-                return True
-            if event.value == 'PRESS':
-                if not getattr(self, "_pick_source_hold_active", False):
-                    self._remember_paint_shortcut_release_chord(context, event, prefer_pick_source=True)
-                    self._begin_pick_source_hold(context, event)
-            elif event.value == 'RELEASE':
-                if paint_shortcut_release_status != "pending":
-                    self._end_pick_source_hold(context, event, commit=True)
-            return True
-
-        if (
-            undo_shortcut
-        ):
-            if event.value == 'PRESS':
-                if self.stroke_active:
-                    self._finish_stroke(context, event)
-                self._restore_previous_source_pick(context)
-            return True
-
-        return False
-
-    def _handle_shortcut_event(self, context, event):
-        if event.value != 'PRESS':
-            return False
-        if not _world_paint_event_type_can_match_shortcut(context, event, self.toggle_key_type):
-            return False
-        if not self._event_is_in_world_paint_view(context, event):
-            if not (
-                _event_looks_like_keyboard_shortcut(event) and
-                self._event_is_in_world_paint_area(context, event)
-            ):
-                return False
-
-        shortcut = _world_paint_shortcut_from_event(context, event)
-        if shortcut is None:
-            return False
-
-        action_kind, action_value = shortcut[0], shortcut[1]
-        if (
-            action_kind == "ADJUST"
-            and action_value == "STRENGTH"
-            and not self._tool_uses_brush_strength_adjust()
-            and self._native_density_adjust_keymap_passthrough_enabled()
-            and self._native_density_radial_adjust_passthrough_enabled()
-        ):
-            return False
-        _native_brush_debug_log("shortcut.matched", context, self, force=True, action_kind=action_kind, action_value=action_value, event_type=getattr(event, "type", ""))
-        if action_kind == "TOOL":
-            self._set_tool(context, action_value, sync_workspace=True)
-            return True
-
-        if action_kind == "FLAG":
-            self._toggle_flag(context, action_value)
-            return True
-
-        if action_kind == "ADJUST":
-            if self.adjust_mode != action_value:
-                confirm_on_release = _world_adjust_shortcut_confirm_on_release(
-                    context,
-                    event,
-                    shortcut,
-                )
-                shared.secret_paint_brush_size_trace_log(
-                    "world.shortcut.adjust_begin",
-                    context,
-                    self,
-                    action_value=action_value,
-                    confirm_on_release=confirm_on_release,
-                    event_type=getattr(event, "type", ""),
-                    event_value=getattr(event, "value", ""),
-                    event_alt=bool(getattr(event, "alt", False)),
-                )
-                return self._begin_adjust(
-                    context,
-                    action_value,
-                    event=event,
-                    confirm_on_release=confirm_on_release,
-                )
-            return True
-
-        if action_kind == "ACTION" and action_value == WORLD_ACTION_PICK_SOURCE:
-            if self.stroke_active:
-                self._finish_stroke(context, event)
-            self._pick_source_under_brush(context, event)
-            return True
-
-        if action_kind == "ACTION" and action_value == WORLD_ACTION_BRUSH_SWITCH:
-            if self.stroke_active:
-                self._finish_stroke(context, event)
-            self._switch_active_system_brush_under_mouse(context, event)
-            return True
-
-        return False
-
-    def _handle_priority_shortcut_event(self, context, event):
-        event_value = getattr(event, "value", "")
-        if event_value not in {'PRESS', 'CLICK', 'CLICK_DRAG', 'RELEASE'}:
-            return False
-        if not _world_paint_event_type_can_match_shortcut(context, event, self.toggle_key_type):
-            return False
-        if not (
-            _event_looks_like_keyboard_shortcut(event)
-            or event_value == 'RELEASE'
-        ):
-            return False
-        if self._handle_reserved_modal_key(context, event):
-            return True
-        return self._handle_shortcut_event(context, event)
-
-    def _native_density_adjust_keymap_passthrough_enabled(self):
+    def _native_density_adjust_passthrough_enabled(self):
         return bool(
             self._density_uses_native_ui()
             and not WORLD_CUSTOM_ADJUST_UI_ENABLED
             and WORLD_NATIVE_DENSITY_MODAL_ADJUST_ENABLED
         )
 
-    def _native_density_radial_adjust_passthrough_enabled(self):
-        return False
-
-    def _is_native_density_radial_adjust_shortcut_event(self, context, event):
-        if getattr(event, "value", "") != 'PRESS':
-            return False
-        if not self._event_is_in_world_paint_view(context, event):
-            return False
-        if self._tool_uses_brush_strength_adjust():
-            return False
-        if not self._native_density_radial_adjust_passthrough_enabled():
-            return False
-        if _event_matches_default_shortcut(
-            event,
-            (
-                "ADJUST",
-                "STRENGTH",
-                WORLD_ADJUST_OPERATOR_IDS["STRENGTH"],
-                "",
-                "",
-                "F",
-                False,
-                False,
-                True,
-                ("3D View", "Sculpt Curves"),
-            ),
-        ):
-            return True
-        return _world_paint_event_matches_shortcut(
-            context,
-            event,
-            "ADJUST",
-            "STRENGTH",
-        )
-
-    def _native_density_radial_keymap_release_confirm_enabled(self, context, event=None):
-        keyconfigs = getattr(getattr(context, "window_manager", None), "keyconfigs", None)
-        if keyconfigs is None:
-            return True
-
-        def _matches_density_radial_keymap_item(keymap_item):
-            if not getattr(keymap_item, "active", False):
-                return False
-            if getattr(keymap_item, "idname", "") != "wm.radial_control":
-                return False
-            properties = getattr(keymap_item, "properties", None)
-            if (
-                properties is None or
-                getattr(properties, "data_path_primary", "") !=
-                "tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance"
-            ):
-                return False
-            if event is not None:
-                return _event_matches_keymap_item(event, keymap_item)
-            return (
-                getattr(keymap_item, "type", "") == 'F'
-                and getattr(keymap_item, "value", "") == 'PRESS'
-                and bool(getattr(keymap_item, "alt", False))
-                and not bool(getattr(keymap_item, "shift", False))
-                and not bool(getattr(keymap_item, "ctrl", False))
-            )
-
-        for keyconfig_name in ("user", "addon"):
-            keyconfig = getattr(keyconfigs, keyconfig_name, None)
-            if keyconfig is None:
-                continue
-            for keymap_name in ("Sculpt Curves", "3D View"):
-                keymap = keyconfig.keymaps.get(keymap_name)
-                if keymap is None:
-                    continue
-                for keymap_item in keymap.keymap_items:
-                    if _matches_density_radial_keymap_item(keymap_item):
-                        properties = getattr(keymap_item, "properties", None)
-                        return bool(getattr(properties, "release_confirm", True))
-        return True
-
     def _send_native_adjust_confirm_key_event(self):
-        shared.secret_paint_brush_size_trace_log(
-            "world.send_native_confirm_key.enter",
-            bpy.context,
-            self,
-        )
-        try:
-            import ctypes
-            from ctypes import wintypes
-            self._native_density_adjust_auto_confirm_until = time.perf_counter() + 0.5
-            user32 = ctypes.windll.user32
-            input_keyboard = 1
-            vk_return = 0x0D
-            keyeventf_keyup = 0x0002
-            ulong_ptr = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
-
-            class _KeybdInput(ctypes.Structure):
-                _fields_ = (
-                    ("wVk", wintypes.WORD),
-                    ("wScan", wintypes.WORD),
-                    ("dwFlags", wintypes.DWORD),
-                    ("time", wintypes.DWORD),
-                    ("dwExtraInfo", ulong_ptr),
-                )
-
-            class _InputUnion(ctypes.Union):
-                _fields_ = (("ki", _KeybdInput),)
-
-            class _Input(ctypes.Structure):
-                _fields_ = (
-                    ("type", wintypes.DWORD),
-                    ("union", _InputUnion),
-                )
-
-            events = (_Input * 2)()
-            events[0].type = input_keyboard
-            events[0].union.ki = _KeybdInput(vk_return, 0, 0, 0, 0)
-            events[1].type = input_keyboard
-            events[1].union.ki = _KeybdInput(vk_return, 0, keyeventf_keyup, 0, 0)
-            try:
-                user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int)
-                user32.SendInput.restype = wintypes.UINT
-                if user32.SendInput(2, events, ctypes.sizeof(_Input)) == 2:
-                    shared.secret_paint_brush_size_trace_log(
-                        "world.send_native_confirm_key.sendinput_success",
-                        bpy.context,
-                        self,
-                    )
-                    return True
-            except Exception:
-                pass
-            try:
-                user32.keybd_event(vk_return, 0x1C, 0, 0)
-                user32.keybd_event(vk_return, 0x1C, keyeventf_keyup, 0)
-                shared.secret_paint_brush_size_trace_log(
-                    "world.send_native_confirm_key.keybd_success",
-                    bpy.context,
-                    self,
-                )
-                return True
-            except Exception:
-                shared.secret_paint_brush_size_trace_log(
-                    "world.send_native_confirm_key.keybd_failed",
-                    bpy.context,
-                    self,
-                )
-                return False
-        except Exception:
-            shared.secret_paint_brush_size_trace_log(
-                "world.send_native_confirm_key.exception",
-                bpy.context,
-                self,
-            )
-            return False
-
-    def _schedule_native_density_radial_passthrough_sync(self, *, first_interval=0.03, max_attempts=6):
-        try:
-            self._schedule_native_density_adjust_result_sync(
-                "STRENGTH",
-                first_interval=first_interval,
-                max_attempts=max_attempts,
-            )
-        except Exception:
-            try:
-                self._sync_density_spacing_from_native_brush(bpy.context)
-            except Exception:
-                pass
-
-    def _confirm_native_density_radial_passthrough(self, *, prefer_mouse=True):
-        if not bool(getattr(self, "_native_density_radial_confirm_on_release", True)):
-            return False
-        if bool(getattr(self, "_native_density_radial_confirm_sent", False)):
-            return False
-        self._native_density_radial_confirm_pending = False
-        self._native_density_radial_confirm_sent = True
-        self._native_density_radial_confirm_sent_time = time.perf_counter()
-        sent = False
-        if prefer_mouse:
-            try:
-                sent = bool(self._send_native_adjust_confirm_event())
-            except Exception:
-                pass
-        if not sent:
-            try:
-                sent = bool(self._send_native_adjust_confirm_key_event())
-            except Exception:
-                pass
-        if not sent and prefer_mouse:
-            try:
-                self._send_native_adjust_confirm_event()
-            except Exception:
-                pass
-        self._schedule_native_density_radial_passthrough_sync(
-            first_interval=0.08,
-            max_attempts=6,
-        )
-        return True
-
-    def _request_native_density_radial_release_confirm(
-        self,
-        *,
-        prefer_mouse=True,
-        wait_for_alt_release=True,
-        first_interval=0.02,
-    ):
-        if not bool(getattr(self, "_native_density_radial_confirm_on_release", True)):
-            return False
-        if bool(getattr(self, "_native_density_radial_confirm_sent", False)):
-            return False
-        if bool(getattr(self, "_native_density_radial_confirm_pending", False)):
-            return False
-
-        def _alt_is_down():
-            if not wait_for_alt_release:
-                return False
-            key_state = self._native_density_alt_f_key_state()
-            if key_state is None:
-                return False
-            alt_down, _f_down = key_state
-            return bool(alt_down)
-
-        def _send_and_finish(operator):
-            operator._confirm_native_density_radial_passthrough(prefer_mouse=prefer_mouse)
-            operator._schedule_finish_native_density_radial_passthrough_after_confirm()
-            return True
-
-        if not _alt_is_down():
-            return _send_and_finish(self)
-
-        self._native_density_radial_confirm_pending = True
-        confirm_token = getattr(self, "_native_density_radial_passthrough_token", 0)
-
-        def _confirm_after_alt_release():
-            operator = _world_operator()
-            if operator is None:
-                return None
-            if confirm_token != getattr(operator, "_native_density_radial_passthrough_token", 0):
-                return None
-            if not getattr(operator, "_native_density_radial_passthrough_active", False):
-                return None
-            if getattr(operator, "_native_density_radial_confirm_sent", False):
-                operator._native_density_radial_confirm_pending = False
-                return None
-
-            key_state = operator._native_density_alt_f_key_state()
-            if key_state is not None:
-                alt_down, _f_down = key_state
-                if alt_down:
-                    return 0.02
-
-            operator._native_density_radial_confirm_pending = False
-            try:
-                _send_and_finish(operator)
-            except Exception:
-                pass
-            return None
-
-        try:
-            bpy.app.timers.register(
-                _confirm_after_alt_release,
-                first_interval=max(0.0, float(first_interval)),
-            )
-        except Exception:
-            self._native_density_radial_confirm_pending = False
-            return _send_and_finish(self)
-        return True
-
-    def _commit_native_density_radial_passthrough_result(self, context):
-        committed = False
-        native_spacing = None
-        try:
-            native_spacing = self._read_density_spacing_from_active_curves_brush(context)
-            if native_spacing is None:
-                native_spacing = self._read_density_spacing_from_native_brush(context)
-        except Exception:
-            native_spacing = None
-
-        if native_spacing is not None:
-            try:
-                self.density_spacing = _density_spacing_value(native_spacing, fallback=self.density_spacing)
-                self._native_density_adjust_manual_spacing = self.density_spacing
-                try:
-                    self._apply_density_spacing_to_native_brush(context)
-                except Exception:
-                    pass
-                try:
-                    active_system = self._current_system()
-                    _store_system_density_spacing(active_system, self.density_spacing)
-                except Exception:
-                    pass
-                self._sync_brush_controls(context, force=True)
-                _tag_view3d_tool_ui_regions(
-                    context,
-                    area_pointer=getattr(self, "_invoke_area_pointer", 0),
-                )
-                _tag_redraw_view3d_areas(context)
-                committed = True
-            except Exception:
-                committed = False
-
-        if not committed:
-            try:
-                self._sync_native_density_adjust_result(context, "STRENGTH")
-                committed = True
-            except Exception:
-                try:
-                    self._sync_density_spacing_from_native_brush(context)
-                    committed = True
-                except Exception:
-                    committed = False
-        if committed:
-            self._native_density_radial_result_committed = True
-        return committed
-
-    def _schedule_finish_native_density_radial_passthrough_after_confirm(self, delay=0.16):
-        token = getattr(self, "_native_density_radial_passthrough_token", 0)
-
-        def _finish_radial_passthrough():
-            operator = _world_operator()
-            if operator is None:
-                return None
-            if token != getattr(operator, "_native_density_radial_passthrough_token", 0):
-                return None
-            if not getattr(operator, "_native_density_radial_passthrough_active", False):
-                return None
-            if not getattr(operator, "_native_density_radial_confirm_sent", False):
-                return None
-            try:
-                operator._finish_native_density_radial_passthrough(
-                    bpy.context,
-                    first_interval=0.02,
-                    max_attempts=4,
-                )
-            except Exception:
-                pass
-            return None
-
-        try:
-            bpy.app.timers.register(
-                _finish_radial_passthrough,
-                first_interval=max(0.01, float(delay)),
-            )
-        except Exception:
-            _finish_radial_passthrough()
-        return True
-
-    def _finish_native_density_radial_passthrough(
-        self,
-        context,
-        *,
-        commit_result=True,
-        schedule_sync=True,
-        first_interval=0.02,
-        max_attempts=4,
-    ):
-        committed = False
-        if commit_result and not bool(getattr(self, "_native_density_radial_result_committed", False)):
-            committed = self._commit_native_density_radial_passthrough_result(context)
-        elif commit_result:
-            committed = True
-        self._native_density_radial_passthrough_active = False
-        self._native_density_radial_confirm_sent = False
-        self._native_density_radial_confirm_pending = False
-        self._native_density_radial_confirm_sent_time = 0.0
-        self._native_density_radial_result_committed = False
-        try:
-            self._native_density_radial_passthrough_token += 1
-        except Exception:
-            pass
-        if schedule_sync:
-            self._schedule_native_density_radial_passthrough_sync(
-                first_interval=first_interval,
-                max_attempts=max_attempts,
-            )
-        return committed
-
-    def _start_native_density_radial_passthrough_release_watch(self):
-        self._native_density_radial_passthrough_token += 1
-        watch_token = self._native_density_radial_passthrough_token
-        watch_started = time.perf_counter()
-
-        def _watch_release():
-            operator = _world_operator()
-            if operator is None:
-                return None
-            if watch_token != getattr(operator, "_native_density_radial_passthrough_token", 0):
-                return None
-            if not getattr(operator, "_native_density_radial_passthrough_active", False):
-                return None
-
-            key_state = operator._native_density_alt_f_key_state()
-            if key_state is None:
-                if (time.perf_counter() - watch_started) > 30.0:
-                    operator._finish_native_density_radial_passthrough(
-                        bpy.context,
-                        commit_result=False,
-                    )
-                    return None
-                return 0.05
-
-            alt_down, f_down = key_state
-            if alt_down and f_down:
-                return 0.02
-            if not f_down or not alt_down:
-                if bool(getattr(operator, "_native_density_radial_confirm_on_release", True)):
-                    operator._commit_native_density_radial_passthrough_result(bpy.context)
-                    operator._request_native_density_radial_release_confirm(
-                        prefer_mouse=True,
-                        wait_for_alt_release=bool(alt_down),
-                    )
-                    return None
-                operator._schedule_native_density_radial_passthrough_sync()
-                return None
-            return 0.02
-
-        try:
-            bpy.app.timers.register(_watch_release, first_interval=0.02)
-        except Exception:
-            return False
-        return True
-
-    def _begin_native_density_radial_passthrough(self, context, event):
-        self._commit_active_native_density_adjust_result(context)
-        _disable_stale_secret_paint_density_adjust_keymaps_runtime(context)
-        if event is not None and hasattr(event, "mouse_region_x") and hasattr(event, "mouse_region_y"):
-            self.hover_mouse_region = (event.mouse_region_x, event.mouse_region_y)
-        if self._begin_native_density_session(context, create_system=False):
-            self._restore_native_density_brush_overlay()
-            self._restore_native_density_brush_visibility(context)
-            self._force_native_brush_visibility(context)
-        self._native_density_radial_passthrough_active = True
-        self._native_density_radial_confirm_on_release = self._native_density_radial_keymap_release_confirm_enabled(
-            context,
-            event,
-        )
-        self._native_density_radial_confirm_sent = False
-        self._native_density_radial_confirm_pending = False
-        self._native_density_radial_result_committed = False
-        self._start_native_density_radial_passthrough_release_watch()
-        return True
-
-    def _handle_native_density_radial_passthrough_event(self, context, event):
-        if self._is_native_density_radial_adjust_shortcut_event(context, event):
-            self._begin_native_density_radial_passthrough(context, event)
-            return True
-
-        if not getattr(self, "_native_density_radial_passthrough_active", False):
-            return False
-
-        event_type = getattr(event, "type", "")
-        event_value = getattr(event, "value", "")
-        if event_type in {'F', 'LEFT_ALT', 'RIGHT_ALT', 'ALT'} and event_value == 'RELEASE':
-            if bool(getattr(self, "_native_density_radial_confirm_on_release", True)):
-                self._commit_native_density_radial_passthrough_result(context)
-                self._request_native_density_radial_release_confirm(
-                    prefer_mouse=True,
-                    wait_for_alt_release=(event_type == 'F'),
-                )
-            elif event_type == 'F':
-                self._schedule_native_density_radial_passthrough_sync()
-            return True
-        if event_type in {'LEFTMOUSE', 'RET', 'NUMPAD_ENTER'} and event_value in {'PRESS', 'RELEASE'}:
-            if event_value == 'RELEASE':
-                self._finish_native_density_radial_passthrough(context)
-            else:
-                self._schedule_native_density_radial_passthrough_sync()
-            return True
-        if event_type in {'ESC', 'RIGHTMOUSE'} and event_value in {'PRESS', 'RELEASE'}:
-            if event_value == 'RELEASE':
-                self._finish_native_density_radial_passthrough(
-                    context,
-                    commit_result=False,
-                    schedule_sync=False,
-                )
-            return True
-        return event_type in {
-            'MOUSEMOVE',
-            'INBETWEEN_MOUSEMOVE',
-            'TIMER',
-        }
-
-    def _handle_disabled_size_adjust_passthrough_event(self, context, event):
-        if WORLD_SIZE_ADJUST_SHORTCUT_ENABLED or not self._density_uses_native_ui():
-            return False
-        if getattr(self, "adjust_mode", ""):
-            return False
-        if getattr(self, "_native_density_radial_passthrough_active", False):
-            return False
-        event_type = getattr(event, "type", "")
-        event_value = getattr(event, "value", "")
-        if event_type == 'F' and not any(
-            bool(getattr(event, modifier_name, False))
-            for modifier_name in ("shift", "ctrl", "alt", "oskey", "hyper")
-        ):
-            if event_value == 'PRESS':
-                self._disabled_size_adjust_passthrough_active = True
-                return True
-            if event_value == 'RELEASE':
-                self._disabled_size_adjust_passthrough_active = False
-                return True
-
-        if getattr(self, "_disabled_size_adjust_passthrough_active", False):
-            return event_type in {
-                'MOUSEMOVE',
-                'INBETWEEN_MOUSEMOVE',
-                'LEFTMOUSE',
-                'RIGHTMOUSE',
-                'ACTIONMOUSE',
-                'SELECTMOUSE',
-            }
         return False
+
 
     def _sync_workspace_tool(self, context):
         if self.tool_id == WORLD_TOOL_DENSITY and self._native_density_stroke_erase:
@@ -13818,26 +11362,29 @@ class secret_world_paint_mode(bpy.types.Operator):
         if _world_paint_bezier_curve_edit_active(context, self):
             return True
         active_workspace_tool = _active_workspace_tool_id(context) or ""
+        exclusive_ui_active = bool(_WORLD_STATE.get("ui_active", False))
+
+        secret_world_tool = WORLD_TOOL_BY_WORKSPACE_ID.get(active_workspace_tool)
+        if secret_world_tool is not None:
+            if secret_world_tool != self.tool_id:
+                if exclusive_ui_active:
+                    _native_brush_debug_log(
+                        "sync_workspace.reject_stale_secret_tool",
+                        context,
+                        self,
+                        force=True,
+                        active_workspace_tool=active_workspace_tool,
+                        stale_world_tool=secret_world_tool,
+                        authoritative_world_tool=self.tool_id,
+                    )
+                    self._activate_workspace_tool_for_world_tool(context, self.tool_id)
+                else:
+                    self._set_tool(context, secret_world_tool, sync_workspace=False)
+            return True
 
         if not active_workspace_tool:
             _native_brush_debug_log("sync_workspace.no_active_tool", context, self, force=True)
-        if _is_world_workspace_tool_id(active_workspace_tool):
-            _native_brush_debug_log(
-                "sync_workspace.clear_stale_secret_tool",
-                context,
-                self,
-                force=True,
-                active_workspace_tool=active_workspace_tool,
-            )
-            if context.mode == 'SCULPT_CURVES' and (
-                self._use_native_density_backend() or self._use_native_tool_backend()
-            ):
-                self._activate_workspace_tool_for_world_tool(context, self.tool_id)
-                active_workspace_tool = ""
-            else:
-                active_workspace_tool = ""
-
-        world_tool = _world_tool_from_workspace_id(active_workspace_tool)
+        world_tool = None
         native_workspace_tool = False
         brush_container = _tool_settings_brush_container(context)
         active_brush = getattr(brush_container, "brush", None) if brush_container is not None else None
@@ -13865,7 +11412,8 @@ class secret_world_paint_mode(bpy.types.Operator):
             if context.mode == 'SCULPT_CURVES' and active_brush is not None:
                 self._native_curves_passthrough_brush_name = getattr(active_brush, "name", "")
                 return True
-            self._leave_native_curves_brush_passthrough(context)
+            else:
+                self._leave_native_curves_brush_passthrough(context)
         if requested_active and context.mode == 'SCULPT_CURVES':
             desired_brush_type = (
                 getattr(self, "_requested_native_tool_brush_type", "")
@@ -13964,7 +11512,7 @@ class secret_world_paint_mode(bpy.types.Operator):
                         self._activate_native_brush_cursor(context, brush, self._current_system(), defer=True)
                 return True
         if (
-            _WORLD_STATE["ui_hijacked"] and
+            _WORLD_STATE["ui_active"] and
             context.mode == 'SCULPT_CURVES' and
             (self._use_native_density_backend() or self._use_native_tool_backend())
         ):
@@ -14047,8 +11595,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
             if (
                 context.mode == 'SCULPT_CURVES' and
-                native_workspace_tool and
-                not _is_world_workspace_tool_id(active_workspace_tool)
+                native_workspace_tool
             ):
                 self._activate_workspace_tool_for_world_tool(context, world_tool)
             if world_tool != self.tool_id:
@@ -14097,7 +11644,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             return True
 
         if (
-            _WORLD_STATE["ui_hijacked"]
+            _WORLD_STATE["ui_active"]
             and active_workspace_tool != self._saved_workspace_tool_id
             and not _world_tool_accepts_object_mode_fallback_tool(self.tool_id, active_workspace_tool)
         ):
@@ -14125,7 +11672,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         curve_obj=None,
         activate_draw_tool=True,
         configure_settings=True,
-        suppress_world_shortcuts=True,
     ):
         if curve_obj is not None and getattr(curve_obj, "type", None) != "CURVE":
             curve_obj = None
@@ -14142,7 +11688,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         try:
             if context.mode != 'OBJECT' and getattr(context, "active_object", None) != curve_obj:
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
 
@@ -14168,7 +11714,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                 bpy.ops.wm.tool_set_by_id(name="builtin.draw")
             except Exception:
                 pass
-        _set_world_paint_shortcuts_enabled(context, not suppress_world_shortcuts)
         _tag_redraw_view3d_areas(context)
         return True
 
@@ -14203,7 +11748,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                 curve_obj=curve_obj,
                 activate_draw_tool=True,
                 configure_settings=False,
-                suppress_world_shortcuts=False,
             )
         finally:
             _WORLD_STATE["bezier_handoff_object_names"] = set()
@@ -14220,7 +11764,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._finish_native_density_session(context, restore_selection=False)
         if context.mode != 'OBJECT':
             try:
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
             except Exception:
                 pass
 
@@ -14323,7 +11867,7 @@ class secret_world_paint_mode(bpy.types.Operator):
 
         try:
             if context.mode != 'OBJECT' and getattr(context, "active_object", None) != system_obj:
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
         except Exception:
             pass
 
@@ -14351,7 +11895,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             pass
         try:
             if context.mode != 'SCULPT_CURVES':
-                _mode_set_with_world_toolbar_restored('SCULPT_CURVES')
+                _set_mode('SCULPT_CURVES')
                 shared.secret_paint_disable_sculpt_curves_cage(context)
                 self._world_ui_cage_hidden = True
         except Exception:
@@ -15234,7 +12778,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         system_obj = bpy.data.objects.get(self._native_density_active_system_name) if self._native_density_active_system_name else None
         if restore_native_mode and system_obj is not None:
             _keep_active_system_object(context, system_obj)
-            _mode_set_with_world_toolbar_restored('OBJECT')
+            _set_mode('OBJECT')
         removed_any = self._apply_density_erase_tool(
             context,
             hit,
@@ -15244,7 +12788,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             system_obj = bpy.data.objects.get(self._native_density_active_system_name) if self._native_density_active_system_name else None
             if system_obj is not None:
                 _keep_active_system_object(context, system_obj)
-            _mode_set_with_world_toolbar_restored('SCULPT_CURVES')
+            _set_mode('SCULPT_CURVES')
             self._prepare_native_density_stroke(context, erase=True)
         if hit is not None:
             self.stroke_last_sample_world = hit["location"].copy()
@@ -15450,7 +12994,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._primary_paint_button_down = True
         if self._surface_lock_waiting_for_target() and context.mode != 'OBJECT':
             try:
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
             except Exception:
                 pass
         previous_target_key = self.last_hover_key
@@ -16511,12 +14055,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._native_density_adjust_passthrough = False
         self._native_density_adjust_confirm_pending = False
         self._native_density_adjust_auto_confirm_until = 0.0
-        self._native_density_adjust_release_watch_token += 1
-        self._native_density_adjust_release_watch_running = False
-        self._native_density_adjust_release_watch_saw_shortcut_down = False
-        self._native_density_adjust_release_watch_started = 0.0
+        self._native_density_adjust_confirm_token += 1
         self._native_density_adjust_finalizing = False
-        self._native_density_adjust_waiting_for_alt_release = False
         self._native_density_adjust_native_release_confirm = False
         self._native_density_pending_adjust_mode = ""
         self._native_density_adjust_depth_location = None
@@ -16683,18 +14223,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             return event.mouse_region_x
         return None
 
-    def _is_adjust_confirm_release_event(self, context, event):
-        if not self.adjust_mode or getattr(event, "value", "") != 'RELEASE':
-            return False
-        if not bool(getattr(self, "_native_density_adjust_confirm_on_release", False)):
-            return False
-        return _event_matches_current_adjust_shortcut(
-            context,
-            event,
-            self.adjust_mode,
-            ignore_value=True,
-        )
-
     def _is_brush_strength_adjust_active(self):
         return (
             self.adjust_mode == "STRENGTH"
@@ -16702,31 +14230,11 @@ class secret_world_paint_mode(bpy.types.Operator):
             and not getattr(self, "_native_density_adjust_passthrough", False)
         )
 
-    def _is_brush_strength_adjust_shortcut_release_event(self, context, event):
-        if not self._is_brush_strength_adjust_active() or getattr(event, "value", "") != 'RELEASE':
-            return False
-        if _event_matches_current_adjust_shortcut(context, event, "STRENGTH", ignore_value=True):
-            return True
-        event_type = getattr(event, "type", "")
-        for spec in _adjust_shortcut_key_specs(context, "STRENGTH"):
-            if event_type == spec.get("key_type", ""):
-                return True
-            modifier_name = WORLD_MODIFIER_KEY_TYPES.get(event_type)
-            if modifier_name and modifier_name in (spec.get("modifiers", ()) or ()):
-                return True
-        return False
-
     def _handle_brush_strength_adjust_confirm_event(self, context, event):
         if not self._is_brush_strength_adjust_active():
             return False
         event_type = getattr(event, "type", "")
         event_value = getattr(event, "value", "")
-        if (
-            bool(getattr(self, "_native_density_adjust_confirm_on_release", False))
-            and self._is_brush_strength_adjust_shortcut_release_event(context, event)
-        ):
-            self._confirm_adjust_from_event(context, event)
-            return True
         if event_type in {'LEFTMOUSE', 'ACTIONMOUSE', 'SELECTMOUSE'} and event_value in {'PRESS', 'CLICK'}:
             self._confirm_adjust_from_event(context, event)
             return True
@@ -16785,121 +14293,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             return None
 
-    def _native_density_alt_f_key_state(self):
-        try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            alt_down = bool(user32.GetAsyncKeyState(0x12) & 0x8000)
-            f_down = bool(user32.GetAsyncKeyState(0x46) & 0x8000)
-            return alt_down, f_down
-        except Exception:
-            return None
-
-    def _native_density_adjust_shortcut_key_state(self, context, adjust_mode):
-        saw_known_state = False
-        any_key_down = False
-        any_modifier_down = False
-        any_chord_down = False
-        key_types = []
-        for spec in _adjust_shortcut_key_specs(context, adjust_mode):
-            key_type = spec.get("key_type", "")
-            if key_type in {"", "NONE"}:
-                continue
-            key_down = _windows_key_down_for_event_type(key_type)
-            modifier_states = [
-                _windows_modifier_down(modifier_name)
-                for modifier_name in spec.get("modifiers", ()) or ()
-            ]
-            if key_down is None or any(state is None for state in modifier_states):
-                continue
-            saw_known_state = True
-            key_down = bool(key_down)
-            modifiers_down = any(bool(state) for state in modifier_states)
-            modifiers_match = all(bool(state) for state in modifier_states)
-            any_key_down = any_key_down or key_down
-            any_modifier_down = any_modifier_down or modifiers_down
-            any_chord_down = any_chord_down or (key_down and modifiers_match)
-            key_types.append(key_type)
-        if not saw_known_state:
-            return None
-        return {
-            "key_down": any_key_down,
-            "modifier_down": any_modifier_down,
-            "shortcut_down": any_key_down or any_modifier_down,
-            "chord_down": any_chord_down,
-            "key_types": tuple(key_types),
-        }
-
     def _send_native_adjust_confirm_event(self):
-        shared.secret_paint_brush_size_trace_log(
-            "world.send_native_confirm_mouse.enter",
-            bpy.context,
-            self,
-        )
-        try:
-            import ctypes
-            from ctypes import wintypes
-            self._native_density_adjust_auto_confirm_until = time.perf_counter() + 0.5
-            user32 = ctypes.windll.user32
-            input_mouse = 0
-            mouseeventf_leftdown = 0x0002
-            mouseeventf_leftup = 0x0004
+        return False
 
-            ulong_ptr = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
 
-            class _MouseInput(ctypes.Structure):
-                _fields_ = (
-                    ("dx", wintypes.LONG),
-                    ("dy", wintypes.LONG),
-                    ("mouseData", wintypes.DWORD),
-                    ("dwFlags", wintypes.DWORD),
-                    ("time", wintypes.DWORD),
-                    ("dwExtraInfo", ulong_ptr),
-                )
-
-            class _InputUnion(ctypes.Union):
-                _fields_ = (("mi", _MouseInput),)
-
-            class _Input(ctypes.Structure):
-                _fields_ = (
-                    ("type", wintypes.DWORD),
-                    ("union", _InputUnion),
-                )
-
-            events = (_Input * 2)()
-            events[0].type = input_mouse
-            events[0].union.mi = _MouseInput(0, 0, 0, mouseeventf_leftdown, 0, 0)
-            events[1].type = input_mouse
-            events[1].union.mi = _MouseInput(0, 0, 0, mouseeventf_leftup, 0, 0)
-            try:
-                user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int)
-                user32.SendInput.restype = wintypes.UINT
-                if user32.SendInput(2, events, ctypes.sizeof(_Input)) == 2:
-                    shared.secret_paint_brush_size_trace_log(
-                        "world.send_native_confirm_mouse.sendinput_success",
-                        bpy.context,
-                        self,
-                    )
-                    return True
-            except Exception:
-                pass
-            user32.mouse_event(mouseeventf_leftdown, 0, 0, 0, 0)
-            user32.mouse_event(mouseeventf_leftup, 0, 0, 0, 0)
-            shared.secret_paint_brush_size_trace_log(
-                "world.send_native_confirm_mouse.mouse_event_success",
-                bpy.context,
-                self,
-            )
-            return True
-        except Exception:
-            shared.secret_paint_brush_size_trace_log(
-                "world.send_native_confirm_mouse.exception",
-                bpy.context,
-                self,
-            )
-            return False
-
-    def _finalize_native_density_adjust_release(self, context, *, wait_for_alt_release=False):
+    def _finalize_native_density_adjust_release(self, context):
         if not (
             self.adjust_mode == "STRENGTH"
             and getattr(self, "_native_density_adjust_passthrough", False)
@@ -16914,7 +14312,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             getattr(self, "_native_density_adjust_native_release_confirm", False)
         )
 
-        self._native_density_adjust_waiting_for_alt_release = False
         self._native_density_adjust_confirm_pending = True
         self._native_density_adjust_finalizing = True
         self._native_density_adjust_manual_spacing = None
@@ -16954,35 +14351,21 @@ class secret_world_paint_mode(bpy.types.Operator):
             return False
 
         self._native_density_adjust_confirm_pending = True
-        confirm_token = getattr(self, "_native_density_adjust_release_watch_token", 0)
+        self._native_density_adjust_confirm_token += 1
+        confirm_token = self._native_density_adjust_confirm_token
         first_interval = max(0.0, float(delay))
 
         def _confirm_density_adjust():
             operator = _world_operator()
             if operator is None:
                 return None
-            if confirm_token != getattr(operator, "_native_density_adjust_release_watch_token", 0):
+            if confirm_token != getattr(operator, "_native_density_adjust_confirm_token", 0):
                 return None
             if not (
                 getattr(operator, "adjust_mode", "") == "STRENGTH"
                 and getattr(operator, "_native_density_adjust_passthrough", False)
             ):
                 return None
-            key_state = operator._native_density_adjust_shortcut_key_state(
-                bpy.context,
-                "STRENGTH",
-            )
-            if key_state is not None and key_state.get("shortcut_down", False):
-                operator._native_density_adjust_waiting_for_alt_release = True
-                return 0.02
-            if key_state is None:
-                fallback_key_state = operator._native_density_alt_f_key_state()
-                if fallback_key_state is not None:
-                    alt_down, f_down = fallback_key_state
-                    if alt_down or f_down:
-                        operator._native_density_adjust_waiting_for_alt_release = True
-                        return 0.02
-            operator._native_density_adjust_waiting_for_alt_release = False
             sent = False
             try:
                 sent = bool(operator._send_native_adjust_confirm_event())
@@ -17139,120 +14522,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         )
         return True
 
-    def _start_native_density_adjust_release_watch(self, context, event=None):
-        adjust_mode = self.adjust_mode
-        if adjust_mode not in {"SIZE", "STRENGTH"}:
-            return False
-        started_from_shortcut = False
-        if event is not None:
-            if not _event_matches_current_adjust_shortcut(
-                context,
-                event,
-                adjust_mode,
-                ignore_value=True,
-            ):
-                return False
-            started_from_shortcut = True
-
-        self._native_density_adjust_release_watch_token += 1
-        watch_token = self._native_density_adjust_release_watch_token
-        self._native_density_adjust_release_watch_running = True
-        self._native_density_adjust_release_watch_saw_shortcut_down = started_from_shortcut
-        self._native_density_adjust_release_watch_started = time.perf_counter()
-        self._native_density_adjust_finalizing = False
-        self._native_density_adjust_waiting_for_alt_release = False
-        shared.secret_paint_brush_size_trace_log(
-            "world.release_watch.start",
-            context,
-            self,
-            adjust_mode=adjust_mode,
-            event_type=getattr(event, "type", "") if event is not None else "",
-            event_value=getattr(event, "value", "") if event is not None else "",
-            event_alt=bool(getattr(event, "alt", False)) if event is not None else False,
-            watch_token=watch_token,
-            saw_shortcut_down=self._native_density_adjust_release_watch_saw_shortcut_down,
-        )
-
-        def _watch_release():
-            operator = _world_operator()
-            if operator is None:
-                return None
-            if watch_token != getattr(operator, "_native_density_adjust_release_watch_token", 0):
-                return None
-            current_adjust_mode = getattr(operator, "adjust_mode", "")
-            if not (current_adjust_mode == adjust_mode and getattr(operator, "_native_density_adjust_passthrough", False)):
-                operator._native_density_adjust_release_watch_running = False
-                return None
-
-            key_state = operator._native_density_adjust_shortcut_key_state(
-                bpy.context,
-                adjust_mode,
-            )
-            if key_state is None:
-                if (
-                    time.perf_counter()
-                    - float(getattr(operator, "_native_density_adjust_release_watch_started", 0.0) or 0.0)
-                ) > 30.0:
-                    operator._native_density_adjust_release_watch_running = False
-                    return None
-                return 0.05
-            shortcut_down = bool(key_state.get("shortcut_down", False))
-            shared.secret_paint_brush_size_trace_log(
-                "world.release_watch.tick",
-                bpy.context,
-                operator,
-                adjust_mode=adjust_mode,
-                shortcut_down=shortcut_down,
-                key_down=bool(key_state.get("key_down", False)),
-                modifier_down=bool(key_state.get("modifier_down", False)),
-                key_types=",".join(key_state.get("key_types", ()) or ()),
-                saw_shortcut_down=getattr(operator, "_native_density_adjust_release_watch_saw_shortcut_down", False),
-                watch_token=watch_token,
-            )
-            if shortcut_down:
-                operator._native_density_adjust_release_watch_saw_shortcut_down = True
-                return 0.02
-            if (
-                not shortcut_down
-                and getattr(operator, "_native_density_adjust_release_watch_saw_shortcut_down", False)
-            ):
-                elapsed = (
-                    time.perf_counter()
-                    - float(getattr(operator, "_native_density_adjust_release_watch_started", 0.0) or 0.0)
-                )
-                if adjust_mode != "SIZE" and elapsed < 0.08:
-                    return 0.02
-                operator._native_density_adjust_release_watch_running = False
-                shared.secret_paint_brush_size_trace_log(
-                    "world.release_watch.shortcut_released",
-                    bpy.context,
-                    operator,
-                    adjust_mode=adjust_mode,
-                    elapsed=elapsed,
-                    shortcut_down=shortcut_down,
-                    key_down=bool(key_state.get("key_down", False)),
-                    modifier_down=bool(key_state.get("modifier_down", False)),
-                    watch_token=watch_token,
-                )
-                if adjust_mode == "STRENGTH":
-                    operator._finalize_native_density_adjust_release(
-                        bpy.context,
-                        wait_for_alt_release=bool(key_state.get("modifier_down", False)),
-                    )
-                else:
-                    operator._request_native_size_adjust_confirm(
-                        delay=0.0,
-                        reason="release_confirm_watch",
-                    )
-                return None
-            return 0.02
-
-        try:
-            bpy.app.timers.register(_watch_release, first_interval=0.02)
-        except Exception:
-            return False
-        return True
-
     def _apply_density_spacing_to_native_brush(self, context):
         if self.tool_id != WORLD_TOOL_DENSITY or self._native_density_stroke_erase:
             return False
@@ -17372,8 +14641,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             return False
 
         self._start_live_native_adjust_control_sync(context, adjust_mode)
-        if event is not None and self._native_density_adjust_confirm_on_release:
-            self._start_native_density_adjust_release_watch(context, event=event)
         shared.secret_paint_brush_size_trace_log(
             "world.begin_native_adjust.exit",
             context,
@@ -17434,7 +14701,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._native_density_adjust_manual_spacing = None
         self._native_density_adjust_confirm_pending = False
         self._native_density_adjust_finalizing = False
-        self._native_density_adjust_waiting_for_alt_release = False
         self._native_density_adjust_confirm_on_release = bool(confirm_on_release)
         self._last_brush_control_sync_time = 0.0
         if adjust_mode == "SIZE":
@@ -17507,12 +14773,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._native_density_adjust_passthrough = False
         self._native_density_adjust_confirm_pending = False
         self._native_density_adjust_auto_confirm_until = 0.0
-        self._native_density_adjust_release_watch_token += 1
-        self._native_density_adjust_release_watch_running = False
-        self._native_density_adjust_release_watch_saw_shortcut_down = False
-        self._native_density_adjust_release_watch_started = 0.0
+        self._native_density_adjust_confirm_token += 1
         self._native_density_adjust_finalizing = False
-        self._native_density_adjust_waiting_for_alt_release = False
         self._native_density_adjust_native_release_confirm = False
         self._stop_live_native_adjust_control_sync()
 
@@ -17625,150 +14887,12 @@ class secret_world_paint_mode(bpy.types.Operator):
                 event_value=event_value,
             )
             return {'PASS_THROUGH'}
-        if (
-            self.adjust_mode == "SIZE"
-            and bool(getattr(self, "_native_density_adjust_confirm_on_release", False))
-            and not _event_matches_current_adjust_shortcut(
-                context,
-                event,
-                self.adjust_mode,
-                ignore_value=True,
-            )
-        ):
-            try:
-                key_state = self._native_density_adjust_shortcut_key_state(
-                    context,
-                    self.adjust_mode,
-                )
-            except Exception:
-                key_state = None
-            if (
-                key_state is not None
-                and not bool(key_state.get("shortcut_down", False))
-                and bool(getattr(self, "_native_density_adjust_release_watch_saw_shortcut_down", False))
-            ):
-                try:
-                    if self._commit_active_native_density_adjust_result(context):
-                        shared.secret_paint_brush_size_trace_log(
-                            "world.native_adjust_passthrough.size_committed_before_next_event",
-                            context,
-                            self,
-                            event_type=event_type,
-                            event_value=event_value,
-                            key_state=key_state,
-                        )
-                        return None
-                except Exception:
-                    pass
-        if event_value == 'PRESS':
-            shortcut = _world_paint_shortcut_from_event(context, event)
-            if shortcut is not None and shortcut[0] == "TOOL":
-                adjust_mode = self.adjust_mode
-                if adjust_mode == "STRENGTH":
-                    self._cache_native_density_adjust_spacing_from_event(context, event)
-                try:
-                    self._sync_native_density_adjust_result(context, adjust_mode)
-                except Exception:
-                    pass
-                self._native_density_pending_adjust_mode = ""
-                self._native_density_adjust_passthrough = False
-                self._end_adjust(context)
-                try:
-                    self._send_native_adjust_confirm_key_event()
-                except Exception:
-                    pass
-                self._set_tool(context, shortcut[1], sync_workspace=True)
-                return {'RUNNING_MODAL'}
-        if self._is_adjust_confirm_release_event(context, event):
-            if self.adjust_mode == "STRENGTH" and WORLD_NATIVE_DENSITY_MODAL_ADJUST_ENABLED:
-                self._cache_native_density_adjust_spacing_from_event(context, event)
-                self._finalize_native_density_adjust_release(
-                    context,
-                    wait_for_alt_release=bool(getattr(event, "alt", False)),
-                )
-                return {'PASS_THROUGH'}
-            if not getattr(self, "_native_density_adjust_confirm_pending", False):
-                adjust_mode = self.adjust_mode
-                if adjust_mode == "SIZE":
-                    shared.secret_paint_brush_size_trace_log(
-                        "world.native_adjust_passthrough.release_confirm_size",
-                        context,
-                        self,
-                        event_type=event_type,
-                        event_value=event_value,
-                    )
-                    self._request_native_size_adjust_confirm(
-                        delay=0.0,
-                        reason="release_confirm_event",
-                    )
-                else:
-                    try:
-                        self._sync_native_density_adjust_result(context, adjust_mode)
-                    except Exception:
-                        pass
-                    self._native_density_adjust_confirm_pending = True
-                    self._schedule_native_density_adjust_result_sync(adjust_mode)
-                    self._schedule_native_adjust_finish(delay=0.04)
-                return {'PASS_THROUGH'}
-            self._end_adjust(context)
-            return {'PASS_THROUGH'}
         if self.adjust_mode == "STRENGTH" and event_type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
             self._cache_native_density_adjust_spacing_from_event(context, event)
             return {'PASS_THROUGH'}
         if self.adjust_mode == "SIZE" and event_type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
             self._sync_live_native_adjust_controls(context, "SIZE")
             return {'PASS_THROUGH'}
-        if (
-            self.adjust_mode == "SIZE"
-            and not bool(getattr(self, "_native_density_adjust_confirm_on_release", False))
-            and _event_matches_current_adjust_shortcut(
-                context,
-                event,
-                self.adjust_mode,
-                ignore_value=True,
-            )
-            and event_value == 'RELEASE'
-        ):
-            shared.secret_paint_brush_size_trace_log(
-                "world.native_adjust_passthrough.size_shortcut_release_left_click_mode",
-                context,
-                self,
-            )
-            return {'PASS_THROUGH'}
-        if (
-            self.adjust_mode == "STRENGTH"
-            and not bool(getattr(self, "_native_density_adjust_confirm_on_release", True))
-            and (
-                _event_matches_current_adjust_shortcut(
-                    context,
-                    event,
-                    self.adjust_mode,
-                    ignore_value=True,
-                )
-                or event_type in {'LEFT_ALT', 'RIGHT_ALT', 'ALT'}
-            )
-            and event_value == 'RELEASE'
-        ):
-            return {'PASS_THROUGH'}
-        if (
-            event_value == 'PRESS'
-            and _event_matches_current_adjust_shortcut(
-                context,
-                event,
-                self.adjust_mode,
-            )
-        ):
-            adjust_mode = self.adjust_mode
-            if adjust_mode == "STRENGTH":
-                self._cache_native_density_adjust_spacing_from_event(context, event)
-            try:
-                self._sync_native_density_adjust_result(context, adjust_mode)
-            except Exception:
-                pass
-            self._native_density_pending_adjust_mode = ""
-            self._native_density_adjust_passthrough = False
-            self._end_adjust(context)
-            return None
         if (
             self.tool_id == WORLD_TOOL_DENSITY and
             event_type == 'RIGHTMOUSE' and
@@ -17793,15 +14917,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._end_adjust(context)
             return None
         if (
-            (
-                event_type in {'ESC', 'LEFTMOUSE', 'ACTIONMOUSE', 'SELECTMOUSE', 'RIGHTMOUSE'}
-                or _event_matches_current_adjust_shortcut(
-                    context,
-                    event,
-                    self.adjust_mode,
-                    ignore_value=True,
-                )
-            )
+            event_type in {'ESC', 'LEFTMOUSE', 'ACTIONMOUSE', 'SELECTMOUSE', 'RIGHTMOUSE'}
             and event_value in {'PRESS', 'RELEASE', 'CLICK'}
         ):
             adjust_mode = self.adjust_mode
@@ -17878,7 +14994,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         self.adjust_mode = ""
         self.adjust_origin_x = None
         self._native_density_adjust_passthrough = False
-        self._disabled_size_adjust_passthrough_active = False
         self.stroke_active = False
         self._active_density_stroke_mode = ""
         self._native_density_interaction_mode = ""
@@ -17903,7 +15018,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         try:
             _mark_world_paint_object_mode_guard(guard_system_names, duration=0.5)
             if (getattr(context, "mode", "") or "") != 'OBJECT':
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
             _force_system_names_object_mode_after_world_paint(context, guard_system_names)
             _delete_visible_empty_manual_paint_systems(
                 context,
@@ -17948,7 +15063,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             pass
 
     def finish_world_paint(self, context):
-        _q_debug_log_keymaps("finish_world_paint.enter", context, finish_requested=getattr(self, "_finish_requested", False))
+        _q_debug_log("finish_world_paint.enter", context, finish_requested=getattr(self, "_finish_requested", False))
         if getattr(self, "_finish_requested", False):
             _q_debug_log("finish_world_paint.skip_already_requested", context)
             return
@@ -17977,26 +15092,13 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._native_cursor_activation_token += 1
         self._native_passthrough_finish_pending = False
         _WORLD_STATE["exit_consume_paint_until"] = 0.0
-        try:
-            _set_world_keymap_conflicts_enabled(context, True)
-        except Exception:
-            pass
-        try:
-            _set_world_paint_shortcuts_enabled(context, True)
-        except Exception:
-            pass
-        try:
-            _remove_world_right_delete_brush_keymap(context)
-        except Exception:
-            pass
-        _clear_world_keymap_lookup_caches()
         if not getattr(self, "_finish_cleanup_done", False):
             self._finish_cleanup_done = True
             try:
                 self._finish_world_paint_cleanup(context, guard_system_names)
             except Exception:
                 pass
-        _q_debug_log_keymaps("finish_world_paint.exit", context)
+        _q_debug_log("finish_world_paint.exit", context)
 
     def invoke(self, context, event):
         _q_debug_log(
@@ -18041,17 +15143,11 @@ class secret_world_paint_mode(bpy.types.Operator):
         _deselect_secret_paint_systems(context)
         if context.mode != 'OBJECT':
             try:
-                _mode_set_with_world_toolbar_restored('OBJECT')
+                _set_mode('OBJECT')
             except Exception:
                 pass
         if self._density_uses_native_ui() and self.tool_id != WORLD_TOOL_BEZIER:
             _park_active_object_away_from_secret_system(context, self.source_data)
-        self.toggle_key_type = (
-            event.type
-            if _event_matches_base_paint_shortcut(context, event) or _event_looks_like_keyboard_shortcut(event)
-            else ""
-        )
-        self._remember_paint_shortcut_release_chord(context, event)
         preferences = _addon_preferences(context)
         scene_locked_targets = _scene_locked_terrain_target_infos(context)
         self.surface_lock = bool(scene_locked_targets)
@@ -18084,9 +15180,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         if not self._density_uses_native_ui():
             self._install_draw_handlers(context)
         _begin_world_ui(self, context)
-        _precache_world_modal_keymaps(context)
-        if self._density_uses_native_ui() and self.tool_id != WORLD_TOOL_BEZIER:
-            _ensure_world_right_delete_brush_keymap(context)
         if self._density_uses_native_ui():
             try:
                 context.window.cursor_modal_restore()
@@ -18178,7 +15271,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._sync_tool_ui_mode(context)
         self._viewport_navigation_last_state_key = _viewport_navigation_state_key(self, context)
         context.window_manager.modal_handler_add(self)
-        _q_debug_log_keymaps("world_paint_mode.invoke.ready", context)
+        _q_debug_log("world_paint_mode.invoke.ready", context)
         shared.secret_paint_world_perf_log(
             "world.invoke.ready",
             mode=context.mode,
@@ -18199,48 +15292,26 @@ class secret_world_paint_mode(bpy.types.Operator):
                 event_type=getattr(event, "type", ""),
                 event_value=getattr(event, "value", ""),
             )
-            if _start_base_paint_from_stopped_modal(context, event):
-                return {'CANCELLED'}
-            return {'CANCELLED', 'PASS_THROUGH'}
-        if (
-            (getattr(context, "mode", "") or "") == 'OBJECT'
-            and not getattr(self, "_pick_source_hold_active", False)
-            and not getattr(self, "stroke_active", False)
-            and not getattr(self, "adjust_mode", "")
-            and _event_looks_like_keyboard_shortcut(event)
-            and _event_matches_base_paint_shortcut(context, event)
-        ):
-            _q_debug_log(
-                "world_paint_mode.modal.stale_object_mode",
-                context,
-                event_type=getattr(event, "type", ""),
-                event_value=getattr(event, "value", ""),
-            )
-            self.finish_world_paint(context)
-            if _event_looks_like_keyboard_shortcut(event):
-                if _start_base_paint_from_stopped_modal(context, event):
-                    return {'CANCELLED'}
             return {'CANCELLED', 'PASS_THROUGH'}
         event_type = getattr(event, "type", "")
+        event_value = getattr(event, "value", "")
+        tool_rail_mouse_event = event_type in {'LEFTMOUSE', 'ACTIONMOUSE', 'SELECTMOUSE'}
+        tool_rail_tool = _world_tool_rail_tool_from_event(self, context, event)
+        _update_world_tool_rail_hover(self, context, tool_rail_tool)
+        if tool_rail_mouse_event and event_value in {'PRESS', 'CLICK'} and tool_rail_tool:
+            self._tool_rail_pointer_active = True
+            self._set_tool(context, tool_rail_tool, sync_workspace=True)
+            return {'RUNNING_MODAL'}
+        if getattr(self, "_tool_rail_pointer_active", False) and tool_rail_mouse_event:
+            if event_value in {'RELEASE', 'CLICK'}:
+                self._tool_rail_pointer_active = False
+            return {'RUNNING_MODAL'}
         primary_down_before_event = bool(getattr(self, "_primary_paint_button_down", False))
         self._sync_primary_paint_button_state(event)
         primary_released_by_event_history = (
             primary_down_before_event and
             not bool(getattr(self, "_primary_paint_button_down", False))
         )
-        if self.tool_id != WORLD_TOOL_BEZIER and self._handle_priority_shortcut_event(context, event):
-            return {'RUNNING_MODAL'}
-        if (
-            _modal_idle_for_viewport_bookmark(self)
-            and _viewport_bookmark_shortcut_from_event(context, event)
-        ):
-            bookmark_result = shared.secret_paint_toggle_viewport_bookmark(context)
-            result = {'RUNNING_MODAL'} if 'FINISHED' in bookmark_result else {'PASS_THROUGH'}
-            return result
-        native_mode_shortcut = _native_mode_shortcut_from_event(context, event)
-        if native_mode_shortcut:
-            self.finish_world_paint(context)
-            return {'CANCELLED', 'PASS_THROUGH'}
         if not self._refresh_undo_invalidated_references():
             self.report({'INFO'}, "Paint source is no longer available after undo")
             self.finish_world_paint(context)
@@ -18281,10 +15352,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._finish_density_right_delete_release(context)
             return {'RUNNING_MODAL'}
 
-        if self._handle_disabled_size_adjust_passthrough_event(context, event):
-            return {'RUNNING_MODAL'}
-        if self._handle_native_density_radial_passthrough_event(context, event):
-            return {'PASS_THROUGH'}
         if (
             event_type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'} and
             self._density_uses_native_ui() and
@@ -18295,29 +15362,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
         ):
             self._maybe_refresh_brush_cursor_for_region_reentry(context, event)
-        paint_shortcut_release_status = ""
-        if (
-            getattr(event, "value", "") == 'RELEASE'
-            and (
-                getattr(self, "_entry_source_preview_active", False)
-                or getattr(self, "_pick_source_hold_active", False)
-            )
-        ):
-            paint_shortcut_release_status = self._paint_shortcut_release_status(context, event)
-        if (
-            getattr(self, "_entry_source_preview_active", False)
-            and paint_shortcut_release_status
-        ):
-            if paint_shortcut_release_status == "complete":
-                self._end_entry_source_preview(context, event)
-            return {'RUNNING_MODAL'}
-        if (
-            getattr(self, "_pick_source_hold_active", False)
-            and paint_shortcut_release_status
-        ):
-            if paint_shortcut_release_status == "complete":
-                self._end_pick_source_hold(context, event, commit=True)
-            return {'RUNNING_MODAL'}
         if (
             getattr(self, "_entry_source_preview_active", False)
             and getattr(self, "_entry_source_preview_allows_hold_pick", False)
@@ -18388,6 +15432,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         if event_type in {'WINDOW_ACTIVATE', 'WINDOW_ENTER'}:
             self._last_region_in_window = False
             self._brush_cursor_focus_lost = True
+            _ensure_exclusive_world_toolbar(self, context)
             try:
                 if self.adjust_mode:
                     if getattr(self, "_native_density_adjust_passthrough", False):
@@ -18619,16 +15664,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                 native_proxy = self._continue_stroke(context, event)
                 result = {'PASS_THROUGH'} if native_proxy else {'RUNNING_MODAL'}
                 return result
-        reserved_modal_key = False if bezier_tool_active else self._handle_reserved_modal_key(context, event)
-        if reserved_modal_key:
-            return {'RUNNING_MODAL'}
-        adjust_confirm_release = self._is_adjust_confirm_release_event(context, event)
-        if adjust_confirm_release:
-            self._confirm_adjust_from_event(context, event)
-            return {'RUNNING_MODAL'}
-        shortcut_event_handled = False if bezier_tool_active else self._handle_shortcut_event(context, event)
-        if shortcut_event_handled:
-            return {'RUNNING_MODAL'}
         navigation_event = _is_viewport_navigation_event(event)
         sample_navigation_state = (
             self._viewport_navigation_active and
@@ -18715,10 +15750,9 @@ class secret_world_paint_mode(bpy.types.Operator):
             not self._requested_native_tool_active() and
             not self._native_tool_override_active() and
             (
-                _event_looks_like_keyboard_shortcut(event) or
+                _event_is_keyboard_input(event) or
                 getattr(event, "type", "") in {'LEFT_ALT', 'RIGHT_ALT', 'LEFT_CTRL', 'RIGHT_CTRL', 'LEFT_SHIFT', 'RIGHT_SHIFT'}
-            ) and
-            not _world_paint_event_type_can_match_shortcut(context, event, self.toggle_key_type)
+            )
         )
         if not workspace_sync_skipped:
             if not self._sync_workspace_tool(context):
@@ -19087,33 +16121,31 @@ def _draw_world_falloff_shape_controls(layout, context, operator):
     projected_op.falloff_shape = 'PROJECTED'
 
 
+def _world_native_brush_ui_active(operator, context):
+    if operator is None:
+        return False
+    if operator._native_curves_brush_passthrough_active():
+        return True
+    try:
+        return operator._active_brush_requests_native_passthrough(context)
+    except (AttributeError, ReferenceError, RuntimeError):
+        return False
+
+
+def _block_native_header_tail(layout):
+    """Keep Blender's remaining header draw outside the visible region."""
+    blocker = layout.row()
+    blocker.scale_x = 1000.0
+    blocker.separator()
+
+
 def _draw_secret_paint_mode_header(self, context):
     operator = _world_operator()
-    if operator is None:
-        original_draw = _WORLD_STATE.get("header_draw_original")
-        if original_draw is not None:
-            original_draw(self, context)
+    if operator is None or _world_native_brush_ui_active(operator, context):
         return
 
     layout = self.layout
-    original_draw = _WORLD_STATE.get("header_draw_original")
-    if (
-        (
-            operator._native_curves_brush_passthrough_active()
-            or operator._active_brush_requests_native_passthrough(context)
-        )
-        and original_draw is not None
-    ):
-        original_draw(self, context)
-        return
-    if getattr(operator, "tool_id", "") == WORLD_TOOL_BEZIER and original_draw is not None:
-        try:
-            original_draw(self, context)
-            layout.separator(factor=0.8)
-        except Exception:
-            layout.row(align=True).template_header()
-    else:
-        layout.row(align=True).template_header()
+    layout.separator(factor=0.8)
 
     badge_row = layout.row(align=True)
     badge_row.scale_y = 1.15
@@ -19159,34 +16191,19 @@ def _draw_secret_paint_mode_header(self, context):
     layout.separator(factor=0.8)
     action_row = layout.row(align=True)
     action_row.operator("secret.world_paint_realize_selection", text="Realize")
+    _block_native_header_tail(layout)
 
 
 def _draw_secret_paint_mode_tool_header(self, context):
     operator = _world_operator()
-    if operator is None:
-        original_draw = _WORLD_STATE.get("tool_header_draw_original")
-        if original_draw is not None:
-            original_draw(self, context)
+    if operator is None or _world_native_brush_ui_active(operator, context):
         return
 
     layout = self.layout
-    if (
-        operator._native_curves_brush_passthrough_active()
-        or operator._active_brush_requests_native_passthrough(context)
-    ):
-        original_draw = _WORLD_STATE.get("tool_header_draw_original")
-        if original_draw is not None:
-            original_draw(self, context)
-        return
     if operator.tool_id == WORLD_TOOL_BEZIER:
-        original_draw = _WORLD_STATE.get("tool_header_draw_original")
-        if original_draw is not None:
-            try:
-                original_draw(self, context)
-                layout.separator(factor=0.8)
-            except Exception:
-                pass
+        layout.separator(factor=0.8)
         _draw_world_bezier_curve_topbar_controls(layout, context)
+        _block_native_header_tail(layout)
         return
 
     source_name, source_icon = _world_source_label_info(operator.source_data)
@@ -19203,6 +16220,7 @@ def _draw_secret_paint_mode_tool_header(self, context):
     elif operator.tool_id == WORLD_TOOL_DELETE:
         row.separator(factor=1.2)
         row.label(text="Delete: Native Brush")
+    _block_native_header_tail(layout)
 
 
 class SECRET_PT_world_paint_bezier_settings(bpy.types.Panel):
@@ -19248,8 +16266,633 @@ class secret_world_paint_set_bezier_depth_mode(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _world_toolbar_area_space(operator, context):
+    invoke_area_pointer = getattr(operator, "_invoke_area_pointer", 0)
+    area = getattr(context, "area", None)
+    space = getattr(context, "space_data", None)
+    if (
+        area is None
+        or area.type != 'VIEW_3D'
+        or (invoke_area_pointer and area.as_pointer() != invoke_area_pointer)
+        or space is None
+    ):
+        area, _region, space = _view3d_area_data(context, invoke_area_pointer)
+    return area, space
+
+
+def _world_tool_rail_rects(context, region):
+    if region is None:
+        return ()
+    ui_scale = max(0.5, float(getattr(context.preferences.system, "ui_scale", 1.0)))
+    left = 12.0 * ui_scale
+    top = float(region.height) - (64.0 * ui_scale)
+    size = 38.0 * ui_scale
+    gap = 4.0 * ui_scale
+    group_gap = 7.0 * ui_scale
+    items = []
+    y_max = top
+    for index, (tool_id, label, description, icon) in enumerate(WORLD_TOOLBAR_SPECS):
+        if index in {2, 5}:
+            y_max -= group_gap
+        y_min = y_max - size
+        items.append((tool_id, label, description, icon, left, y_min, left + size, y_max))
+        y_max = y_min - gap
+    return tuple(items)
+
+
+def _rounded_rect_perimeter(x_min, y_min, x_max, y_max, radius, *, steps=10):
+    radius = max(0.0, min(float(radius), (x_max - x_min) * 0.5, (y_max - y_min) * 0.5))
+    if radius <= 0.0:
+        return ((x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max))
+
+    points = []
+    for center_x, center_y, start_angle in (
+        (x_max - radius, y_max - radius, 0.0),
+        (x_min + radius, y_max - radius, math.pi * 0.5),
+        (x_min + radius, y_min + radius, math.pi),
+        (x_max - radius, y_min + radius, math.pi * 1.5),
+    ):
+        for step in range(steps + 1):
+            angle = start_angle + ((math.pi * 0.5) * (step / steps))
+            points.append((
+                center_x + (math.cos(angle) * radius),
+                center_y + (math.sin(angle) * radius),
+            ))
+    return tuple(points)
+
+
+def _polygon_fan_triangles(points):
+    if len(points) < 3:
+        return ()
+    center_x = sum(point[0] for point in points) / len(points)
+    center_y = sum(point[1] for point in points) / len(points)
+    center = (center_x, center_y)
+    triangles = []
+    for index, point in enumerate(points):
+        triangles.extend((center, point, points[(index + 1) % len(points)]))
+    return tuple(triangles)
+
+
+def _draw_solid_rounded_rect(shader, x_min, y_min, x_max, y_max, radius, color):
+    perimeter = _rounded_rect_perimeter(x_min, y_min, x_max, y_max, radius)
+    shader.bind()
+    shader.uniform_float("color", color)
+    batch_for_shader(shader, 'TRIS', {"pos": _polygon_fan_triangles(perimeter)}).draw(shader)
+
+
+def _color_with_alpha(color, alpha_multiplier):
+    return (color[0], color[1], color[2], color[3] * alpha_multiplier)
+
+
+def _draw_rounded_rect(shader, x_min, y_min, x_max, y_max, radius, fill_color, outline_color):
+    antialias_width = 0.8
+    border_width = 1.0
+    _draw_solid_rounded_rect(
+        shader,
+        x_min - antialias_width,
+        y_min - antialias_width,
+        x_max + antialias_width,
+        y_max + antialias_width,
+        radius + antialias_width,
+        _color_with_alpha(outline_color, 0.22),
+    )
+    _draw_solid_rounded_rect(shader, x_min, y_min, x_max, y_max, radius, outline_color)
+    _draw_solid_rounded_rect(
+        shader,
+        x_min + border_width,
+        y_min + border_width,
+        x_max - border_width,
+        y_max - border_width,
+        max(0.0, radius - border_width),
+        fill_color,
+    )
+
+
+def _append_icon_polyline(segments, points, *, closed=False):
+    for index in range(len(points) - 1):
+        segments.append((points[index], points[index + 1]))
+    if closed and len(points) > 2:
+        segments.append((points[-1], points[0]))
+
+
+def _append_icon_arrowhead(segments, tip, direction, *, length=0.2, width=0.22):
+    direction_length = math.hypot(direction[0], direction[1])
+    if direction_length <= 1.0e-12:
+        return
+    direction_x = direction[0] / direction_length
+    direction_y = direction[1] / direction_length
+    base_x = tip[0] - (direction_x * length)
+    base_y = tip[1] - (direction_y * length)
+    half_width = width * 0.5
+    perpendicular_x = -direction_y * half_width
+    perpendicular_y = direction_x * half_width
+    segments.extend((
+        (tip, (base_x + perpendicular_x, base_y + perpendicular_y)),
+        (tip, (base_x - perpendicular_x, base_y - perpendicular_y)),
+    ))
+
+
+def _world_tool_icon_segments(tool_id):
+    segments = []
+    if tool_id == WORLD_TOOL_DELETE:
+        _append_icon_polyline(segments, ((-0.43, 0.29), (0.43, 0.29)))
+        _append_icon_polyline(segments, ((-0.17, 0.52), (0.17, 0.52)))
+        _append_icon_polyline(
+            segments,
+            ((-0.31, 0.16), (-0.24, -0.49), (0.24, -0.49), (0.31, 0.16)),
+        )
+        segments.extend((((-0.1, 0.06), (-0.07, -0.3)), ((0.1, 0.06), (0.07, -0.3))))
+    elif tool_id == WORLD_TOOL_SLIDE:
+        segments.extend((
+            ((-0.57, 0.0), (0.57, 0.0)),
+            ((0.0, -0.57), (0.0, 0.57)),
+        ))
+        _append_icon_arrowhead(segments, (-0.57, 0.0), (-1.0, 0.0))
+        _append_icon_arrowhead(segments, (0.57, 0.0), (1.0, 0.0))
+        _append_icon_arrowhead(segments, (0.0, -0.57), (0.0, -1.0))
+        _append_icon_arrowhead(segments, (0.0, 0.57), (0.0, 1.0))
+    elif tool_id == WORLD_TOOL_SCALE:
+        _append_icon_polyline(
+            segments,
+            ((-0.52, -0.52), (0.06, -0.52), (0.06, 0.06), (-0.52, 0.06)),
+            closed=True,
+        )
+        segments.append(((-0.1, -0.1), (0.57, 0.57)))
+        _append_icon_arrowhead(segments, (0.57, 0.57), (1.0, 1.0), length=0.25, width=0.3)
+    elif tool_id == WORLD_TOOL_COMB:
+        first_arc_angles = tuple(math.radians(-20.0 + (145.0 * index / 16)) for index in range(17))
+        second_arc_angles = tuple(math.radians(160.0 + (145.0 * index / 16)) for index in range(17))
+        first_arc = tuple((math.cos(angle) * 0.48, math.sin(angle) * 0.48) for angle in first_arc_angles)
+        second_arc = tuple((math.cos(angle) * 0.48, math.sin(angle) * 0.48) for angle in second_arc_angles)
+        _append_icon_polyline(segments, first_arc)
+        _append_icon_polyline(segments, second_arc)
+        first_angle = first_arc_angles[-1]
+        second_angle = second_arc_angles[-1]
+        _append_icon_arrowhead(
+            segments,
+            first_arc[-1],
+            (-math.sin(first_angle), math.cos(first_angle)),
+            length=0.2,
+            width=0.24,
+        )
+        _append_icon_arrowhead(
+            segments,
+            second_arc[-1],
+            (-math.sin(second_angle), math.cos(second_angle)),
+            length=0.2,
+            width=0.24,
+        )
+    elif tool_id == WORLD_TOOL_SINGLE:
+        segments.extend((((-0.48, 0.0), (0.48, 0.0)), ((0.0, -0.48), (0.0, 0.48))))
+    elif tool_id == WORLD_TOOL_SELECT:
+        corner_length = 0.23
+        for x_sign, y_sign in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
+            corner_x = 0.52 * x_sign
+            corner_y = 0.52 * y_sign
+            segments.extend((
+                ((corner_x, corner_y), (corner_x - (corner_length * x_sign), corner_y)),
+                ((corner_x, corner_y), (corner_x, corner_y - (corner_length * y_sign))),
+            ))
+    elif tool_id == WORLD_TOOL_BEZIER:
+        curve = []
+        for index in range(21):
+            t = index / 20
+            one_minus_t = 1.0 - t
+            x = -0.58 + (1.16 * t)
+            y = (
+                (one_minus_t ** 3) * -0.34
+                + (3.0 * one_minus_t * one_minus_t * t * 0.68)
+                + (3.0 * one_minus_t * t * t * -0.68)
+                + (t ** 3) * 0.34
+            )
+            curve.append((x, y))
+        _append_icon_polyline(segments, curve)
+        segments.extend((((-0.58, -0.34), (-0.31, 0.52)), ((0.58, 0.34), (0.31, -0.52))))
+    return segments
+
+
+def _world_tool_icon_dots(tool_id):
+    if tool_id == WORLD_TOOL_DENSITY:
+        return (
+            (-0.4, 0.42, 0.075),
+            (0.0, 0.5, 0.06),
+            (0.4, 0.34, 0.08),
+            (-0.48, 0.0, 0.055),
+            (-0.1, 0.08, 0.08),
+            (0.32, -0.04, 0.06),
+            (-0.33, -0.4, 0.08),
+            (0.1, -0.48, 0.055),
+            (0.45, -0.35, 0.075),
+        )
+    if tool_id == WORLD_TOOL_BEZIER:
+        return (
+            (-0.58, -0.34, 0.07),
+            (0.58, 0.34, 0.07),
+            (-0.31, 0.52, 0.055),
+            (0.31, -0.52, 0.055),
+        )
+    return ()
+
+
+def _point_segment_distance(point_x, point_y, start, end):
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length_squared = (delta_x * delta_x) + (delta_y * delta_y)
+    if length_squared <= 1.0e-12:
+        return math.hypot(point_x - start[0], point_y - start[1])
+    factor = (
+        ((point_x - start[0]) * delta_x) + ((point_y - start[1]) * delta_y)
+    ) / length_squared
+    factor = max(0.0, min(1.0, factor))
+    closest_x = start[0] + (delta_x * factor)
+    closest_y = start[1] + (delta_y * factor)
+    return math.hypot(point_x - closest_x, point_y - closest_y)
+
+
+def _world_tool_icon_coverage(signed_distance, antialias_width):
+    factor = max(0.0, min(1.0, 0.5 - (signed_distance / (2.0 * antialias_width))))
+    return factor * factor * (3.0 - (2.0 * factor))
+
+
+def _world_tool_icon_atlas_pixels():
+    cell_size = WORLD_TOOL_ICON_ATLAS_CELL_SIZE
+    icon_count = len(WORLD_TOOLBAR_SPECS)
+    atlas_width = cell_size * icon_count
+    coordinate_span = WORLD_TOOL_ICON_COORDINATE_SPAN
+    pixel_size = coordinate_span / cell_size
+    coordinate_min = coordinate_span * -0.5
+    coordinates = tuple(
+        coordinate_min + ((index + 0.5) * pixel_size)
+        for index in range(cell_size)
+    )
+    antialias_width = max(pixel_size, WORLD_TOOL_ICON_EDGE_SOFTNESS)
+    pixels = []
+    icon_geometry = tuple(
+        (_world_tool_icon_segments(tool_id), _world_tool_icon_dots(tool_id))
+        for tool_id, _label, _description, _icon in WORLD_TOOLBAR_SPECS
+    )
+    for point_y in coordinates:
+        for segments, dots in icon_geometry:
+            for point_x in coordinates:
+                signed_distance = float("inf")
+                for start, end in segments:
+                    signed_distance = min(
+                        signed_distance,
+                        _point_segment_distance(point_x, point_y, start, end)
+                        - WORLD_TOOL_ICON_STROKE_RADIUS,
+                    )
+                for center_x, center_y, radius in dots:
+                    signed_distance = min(
+                        signed_distance,
+                        math.hypot(point_x - center_x, point_y - center_y) - radius,
+                    )
+                alpha = _world_tool_icon_coverage(signed_distance, antialias_width)
+                pixels.extend((1.0, 1.0, 1.0, alpha))
+    return atlas_width, cell_size, pixels
+
+
+def _ensure_world_tool_icon_texture():
+    texture = _WORLD_STATE.get("tool_icon_texture")
+    if texture is not None:
+        return texture
+    atlas_width, atlas_height, pixels = _world_tool_icon_atlas_pixels()
+    buffer = gpu.types.Buffer('FLOAT', len(pixels), pixels)
+    texture = gpu.types.GPUTexture(
+        (atlas_width, atlas_height),
+        format='RGBA32F',
+        data=buffer,
+    )
+    texture.filter_mode(True)
+    texture.extend_mode('EXTEND')
+    _WORLD_STATE["tool_icon_texture"] = texture
+    return texture
+
+
+def _remove_world_tool_icon_texture():
+    _WORLD_STATE["tool_icon_texture"] = None
+
+
+def _draw_world_tool_icon(shader, texture, tool_id, x_min, y_min, x_max, y_max):
+    tool_ids = tuple(spec[0] for spec in WORLD_TOOLBAR_SPECS)
+    try:
+        icon_index = tool_ids.index(tool_id)
+    except ValueError:
+        return
+
+    icon_size = min(x_max - x_min, y_max - y_min) * 0.68
+    center_x = (x_min + x_max) * 0.5
+    center_y = (y_min + y_max) * 0.5
+    draw_x_min = center_x - (icon_size * 0.5)
+    draw_y_min = center_y - (icon_size * 0.5)
+    draw_x_max = center_x + (icon_size * 0.5)
+    draw_y_max = center_y + (icon_size * 0.5)
+    icon_count = len(tool_ids)
+    half_texel_u = 0.5 / (WORLD_TOOL_ICON_ATLAS_CELL_SIZE * icon_count)
+    half_texel_v = 0.5 / WORLD_TOOL_ICON_ATLAS_CELL_SIZE
+    tex_x_min = (icon_index / icon_count) + half_texel_u
+    tex_x_max = ((icon_index + 1) / icon_count) - half_texel_u
+    tex_y_min = half_texel_v
+    tex_y_max = 1.0 - half_texel_v
+    batch = batch_for_shader(
+        shader,
+        'TRI_FAN',
+        {
+            "pos": (
+                (draw_x_min, draw_y_min),
+                (draw_x_max, draw_y_min),
+                (draw_x_max, draw_y_max),
+                (draw_x_min, draw_y_max),
+            ),
+            "texCoord": (
+                (tex_x_min, tex_y_min),
+                (tex_x_max, tex_y_min),
+                (tex_x_max, tex_y_max),
+                (tex_x_min, tex_y_max),
+            ),
+        },
+    )
+    shader.bind()
+    shader.uniform_sampler("image", texture)
+    batch.draw(shader)
+
+
+def _theme_rgba(color, fallback):
+    try:
+        values = tuple(float(value) for value in color)
+    except Exception:
+        return fallback
+    if len(values) >= 4:
+        return values[:4]
+    if len(values) == 3:
+        return values + (1.0,)
+    return fallback
+
+
+def _draw_world_tool_tooltip(shader, operator, context, region, rail_items, ui_scale):
+    hover_tool = getattr(operator, "_tool_rail_hover_tool", "")
+    hover_started = float(getattr(operator, "_tool_rail_hover_started", 0.0) or 0.0)
+    if not hover_tool or time.perf_counter() - hover_started < WORLD_TOOL_RAIL_TOOLTIP_DELAY:
+        return
+
+    hovered_item = next((item for item in rail_items if item[0] == hover_tool), None)
+    if hovered_item is None:
+        return
+    _tool_id, label, description, _icon, button_x_min, button_y_min, button_x_max, button_y_max = hovered_item
+    font_id = 0
+    label_size = max(11, int(round(12.0 * ui_scale)))
+    description_size = max(10, int(round(11.0 * ui_scale)))
+    blf.size(font_id, label_size)
+    label_width, label_height = blf.dimensions(font_id, label)
+    blf.size(font_id, description_size)
+    description_width, description_height = blf.dimensions(font_id, description)
+
+    padding_x = 10.0 * ui_scale
+    padding_y = 8.0 * ui_scale
+    line_gap = 4.0 * ui_scale
+    tooltip_width = max(label_width, description_width) + (padding_x * 2.0)
+    tooltip_height = label_height + description_height + line_gap + (padding_y * 2.0)
+    tooltip_x_min = button_x_max + (10.0 * ui_scale)
+    if tooltip_x_min + tooltip_width > region.width - (8.0 * ui_scale):
+        tooltip_x_min = max(8.0 * ui_scale, button_x_min - tooltip_width - (10.0 * ui_scale))
+    tooltip_y_max = min(region.height - (8.0 * ui_scale), button_y_max)
+    tooltip_y_min = max(8.0 * ui_scale, tooltip_y_max - tooltip_height)
+    tooltip_y_max = tooltip_y_min + tooltip_height
+
+    widget = context.preferences.themes[0].user_interface.wcol_tooltip
+    fill_color = _theme_rgba(widget.inner, (0.04, 0.04, 0.04, 0.96))
+    outline_color = _theme_rgba(widget.outline, (0.35, 0.35, 0.35, 1.0))
+    text_color = _theme_rgba(widget.text, (0.9, 0.9, 0.9, 1.0))
+    _draw_rounded_rect(
+        shader,
+        tooltip_x_min,
+        tooltip_y_min,
+        tooltip_x_min + tooltip_width,
+        tooltip_y_max,
+        6.0 * ui_scale,
+        fill_color,
+        outline_color,
+    )
+
+    text_x = tooltip_x_min + padding_x
+    description_y = tooltip_y_min + padding_y
+    label_y = description_y + description_height + line_gap
+    blf.color(font_id, *text_color)
+    blf.size(font_id, label_size)
+    blf.position(font_id, text_x, label_y, 0.0)
+    blf.draw(font_id, label)
+    blf.size(font_id, description_size)
+    blf.position(font_id, text_x, description_y, 0.0)
+    blf.draw(font_id, description)
+
+
+def _draw_world_tool_rail(operator):
+    if (
+        not getattr(operator, "_running", False)
+        or not _WORLD_STATE.get("ui_active", False)
+        or _world_native_brush_ui_active(operator, bpy.context)
+        or getattr(operator, "_pick_source_hold_active", False)
+        or getattr(operator, "_entry_source_preview_active", False)
+    ):
+        return
+    context = bpy.context
+    area = getattr(context, "area", None)
+    region = getattr(context, "region", None)
+    if area is None or area.type != 'VIEW_3D' or region is None or region.type != 'WINDOW':
+        return
+    if region.width <= 0 or region.height <= 0:
+        return
+    invoke_area_pointer = getattr(operator, "_invoke_area_pointer", 0)
+    if invoke_area_pointer and area.as_pointer() != invoke_area_pointer:
+        return
+
+    widget = context.preferences.themes[0].user_interface.wcol_toolbar_item
+    active_tool = getattr(operator, "tool_id", "")
+    hover_tool = getattr(operator, "_tool_rail_hover_tool", "")
+    color_shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    image_shader = gpu.shader.from_builtin('IMAGE')
+    icon_texture = _ensure_world_tool_icon_texture()
+    ui_scale = max(0.5, float(getattr(context.preferences.system, "ui_scale", 1.0)))
+    rail_items = _world_tool_rail_rects(context, region)
+    projection = Matrix((
+        (2.0 / region.width, 0.0, 0.0, -1.0),
+        (0.0, 2.0 / region.height, 0.0, -1.0),
+        (0.0, 0.0, -1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    ))
+    gpu.state.blend_set('ALPHA')
+    gpu.state.line_width_set(max(1.0, ui_scale))
+    try:
+        with gpu.matrix.push_pop(), gpu.matrix.push_pop_projection():
+            gpu.matrix.load_identity()
+            gpu.matrix.load_projection_matrix(projection)
+            for tool_id, _label, _description, _icon, x_min, y_min, x_max, y_max in rail_items:
+                selected = tool_id == active_tool
+                hovered = tool_id == hover_tool
+                normal_fill = _theme_rgba(widget.inner, (0.08, 0.09, 0.09, 0.92))
+                selected_fill = _theme_rgba(widget.inner_sel, (0.03, 0.55, 0.4, 1.0))
+                fill_color = selected_fill if selected else normal_fill
+                if hovered and not selected:
+                    fill_color = tuple(
+                        ((normal_fill[index] * 0.55) + (selected_fill[index] * 0.45))
+                        for index in range(4)
+                    )
+                outline_color = _theme_rgba(
+                    widget.outline_sel if selected or hovered else widget.outline,
+                    (0.0, 0.7, 0.52, 1.0) if selected or hovered else (0.25, 0.25, 0.25, 1.0),
+                )
+                outline_color = _color_with_alpha(
+                    outline_color,
+                    0.95 if selected or hovered else 0.58,
+                )
+                _draw_rounded_rect(
+                    color_shader,
+                    x_min,
+                    y_min,
+                    x_max,
+                    y_max,
+                    8.0 * ui_scale,
+                    fill_color,
+                    outline_color,
+                )
+                _draw_world_tool_icon(image_shader, icon_texture, tool_id, x_min, y_min, x_max, y_max)
+            _draw_world_tool_tooltip(color_shader, operator, context, region, rail_items, ui_scale)
+    finally:
+        gpu.state.line_width_set(1.0)
+        gpu.state.blend_set('NONE')
+
+
+def _install_world_tool_rail(operator):
+    if getattr(operator, "_tool_rail_draw_handle", None) is not None:
+        return
+    operator._tool_rail_draw_handle = bpy.types.SpaceView3D.draw_handler_add(
+        _draw_world_tool_rail,
+        (operator,),
+        'WINDOW',
+        'POST_VIEW',
+    )
+
+
+def _remove_world_tool_rail(operator):
+    draw_handle = getattr(operator, "_tool_rail_draw_handle", None)
+    if draw_handle is None:
+        return
+    try:
+        bpy.types.SpaceView3D.draw_handler_remove(draw_handle, 'WINDOW')
+    except (ReferenceError, RuntimeError, ValueError):
+        pass
+    operator._tool_rail_draw_handle = None
+
+
+def _world_tool_rail_tool_from_event(operator, context, event):
+    if (
+        _world_native_brush_ui_active(operator, context)
+        or getattr(operator, "_pick_source_hold_active", False)
+        or getattr(operator, "_entry_source_preview_active", False)
+    ):
+        return ""
+    _area, region, _space = _view3d_area_data(
+        context,
+        getattr(operator, "_invoke_area_pointer", 0),
+    )
+    mouse_x = getattr(event, "mouse_x", None)
+    mouse_y = getattr(event, "mouse_y", None)
+    if (
+        region is None
+        or mouse_x is None
+        or mouse_y is None
+        or not _region_contains_xy(region, mouse_x, mouse_y)
+    ):
+        return ""
+    local_x = float(mouse_x - region.x)
+    local_y = float(mouse_y - region.y)
+    for tool_id, _label, _description, _icon, x_min, y_min, x_max, y_max in _world_tool_rail_rects(
+        context,
+        region,
+    ):
+        if x_min <= local_x <= x_max and y_min <= local_y <= y_max:
+            return tool_id
+    return ""
+
+
+def _update_world_tool_rail_hover(operator, context, tool_id):
+    previous_tool = getattr(operator, "_tool_rail_hover_tool", "")
+    if tool_id == previous_tool:
+        return
+    operator._tool_rail_hover_tool = tool_id
+    operator._tool_rail_hover_started = time.perf_counter() if tool_id else 0.0
+    operator._tool_rail_hover_token = getattr(operator, "_tool_rail_hover_token", 0) + 1
+    hover_token = operator._tool_rail_hover_token
+    _tag_redraw_view3d_areas(context)
+    if not tool_id:
+        return
+
+    def reveal_tooltip():
+        try:
+            if (
+                _world_operator() is operator
+                and getattr(operator, "_running", False)
+                and getattr(operator, "_tool_rail_hover_token", -1) == hover_token
+                and getattr(operator, "_tool_rail_hover_tool", "") == tool_id
+            ):
+                _tag_redraw_view3d_areas(bpy.context)
+        except (AttributeError, ReferenceError):
+            pass
+        return None
+
+    try:
+        bpy.app.timers.register(reveal_tooltip, first_interval=WORLD_TOOL_RAIL_TOOLTIP_DELAY)
+    except ValueError:
+        pass
+
+
+def _hide_native_world_toolbar(operator, context):
+    area, space = _world_toolbar_area_space(operator, context)
+    if area is not None and space is not None:
+        native_brush_ui_active = _world_native_brush_ui_active(operator, context)
+        try:
+            space.show_region_header = True
+            space.show_region_tool_header = True
+            space.show_region_toolbar = native_brush_ui_active
+        except (AttributeError, TypeError):
+            pass
+
+
+def _ensure_exclusive_world_toolbar(operator, context):
+    _install_world_tool_rail(operator)
+    _hide_native_world_toolbar(operator, context)
+
+
+def _schedule_exclusive_world_toolbar_refresh(operator):
+    if getattr(operator, "_exclusive_toolbar_refresh_running", False):
+        return
+    operator._exclusive_toolbar_refresh_running = True
+
+    def refresh():
+        if (
+            _world_operator() is not operator
+            or not _WORLD_STATE.get("ui_active", False)
+            or not getattr(operator, "_exclusive_toolbar_refresh_running", False)
+        ):
+            try:
+                operator._exclusive_toolbar_refresh_running = False
+            except ReferenceError:
+                pass
+            return None
+        try:
+            _ensure_exclusive_world_toolbar(operator, bpy.context)
+            _hide_native_world_toolbar(operator, bpy.context)
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+        return 0.05
+
+    try:
+        bpy.app.timers.register(refresh, first_interval=0.01)
+    except ValueError:
+        operator._exclusive_toolbar_refresh_running = False
+
+
 def _begin_world_ui(operator, context):
-    if _WORLD_STATE["ui_hijacked"]:
+    if _WORLD_STATE["ui_active"]:
         return
 
     operator._invoke_area_pointer = context.area.as_pointer() if context.area else 0
@@ -19267,7 +16910,7 @@ def _begin_world_ui(operator, context):
             "show_stats": getattr(space.overlay, "show_stats", True),
         }
         space.show_region_header = True
-        space.show_region_toolbar = True
+        space.show_region_toolbar = False
         space.show_region_tool_header = True
         space.overlay.show_text = False
         space.overlay.show_stats = False
@@ -19277,14 +16920,10 @@ def _begin_world_ui(operator, context):
 
     operator._saved_workspace_tool_id = ""
 
-    _WORLD_STATE["header_draw_original"] = bpy.types.VIEW3D_HT_header.draw
-    bpy.types.VIEW3D_HT_header.draw = _draw_secret_paint_mode_header
-    _WORLD_STATE["tool_header_draw_original"] = bpy.types.VIEW3D_HT_tool_header.draw
-    bpy.types.VIEW3D_HT_tool_header.draw = _draw_secret_paint_mode_tool_header
-    _hijack_world_toolbar()
-    _set_world_keymap_conflicts_enabled(context, False)
-    _remove_stale_shift_delete_native_keymaps(context)
-    _WORLD_STATE["ui_hijacked"] = True
+    _WORLD_STATE["ui_active"] = True
+    _install_world_tool_rail(operator)
+    _hide_native_world_toolbar(operator, context)
+    _schedule_exclusive_world_toolbar_refresh(operator)
     if operator._density_uses_native_ui():
         _tag_view3d_tool_ui_regions(context, area_pointer=operator._invoke_area_pointer)
     else:
@@ -19292,18 +16931,10 @@ def _begin_world_ui(operator, context):
 
 
 def _restore_world_ui(operator, context):
-    if not _WORLD_STATE["ui_hijacked"]:
+    operator._exclusive_toolbar_refresh_running = False
+    _remove_world_tool_rail(operator)
+    if not _WORLD_STATE["ui_active"]:
         return
-
-    original_draw = _WORLD_STATE.get("header_draw_original")
-    if original_draw is not None:
-        bpy.types.VIEW3D_HT_header.draw = original_draw
-    _WORLD_STATE["header_draw_original"] = None
-    original_tool_header_draw = _WORLD_STATE.get("tool_header_draw_original")
-    if original_tool_header_draw is not None:
-        bpy.types.VIEW3D_HT_tool_header.draw = original_tool_header_draw
-    _WORLD_STATE["tool_header_draw_original"] = None
-    _restore_world_toolbar()
 
     area, _region, space = _view3d_area_data(context, getattr(operator, "_invoke_area_pointer", 0))
     saved_state = getattr(operator, "_saved_view3d_state", {}) or {}
@@ -19317,16 +16948,30 @@ def _restore_world_ui(operator, context):
         except Exception:
             pass
 
-    _set_world_keymap_conflicts_enabled(context, True)
-    _set_world_paint_shortcuts_enabled(context, True)
-    _WORLD_STATE["ui_hijacked"] = False
+    _WORLD_STATE["ui_active"] = False
     _tag_redraw_view3d_areas(context)
+
+
+def _finish_active_world_adjust(operator, context):
+    adjust_mode = getattr(operator, "adjust_mode", "")
+    if not adjust_mode:
+        return False
+    if getattr(operator, "_native_density_adjust_passthrough", False):
+        try:
+            operator._sync_native_density_adjust_result(context, adjust_mode)
+        except Exception:
+            pass
+        operator._native_density_pending_adjust_mode = ""
+        operator._native_density_adjust_passthrough = False
+    operator._end_adjust(context)
+    return True
 
 
 def _execute_world_tool_choice(context, tool_id):
     operator = _world_operator()
     if operator is None:
         return {'CANCELLED'}
+    _finish_active_world_adjust(operator, context)
     if tool_id == WORLD_TOOL_BEZIER:
         return {'FINISHED'} if operator._handoff_to_bezier_curve_edit(context, force_new_curve=True) else {'CANCELLED'}
     operator._set_tool(context, tool_id, sync_workspace=True)
@@ -19486,11 +17131,15 @@ class secret_world_paint_toggle_align_to_normal(_secret_world_paint_fixed_flag_o
 
 
 def _execute_world_adjust(context, adjust_mode, event=None, *, confirm_on_release=False):
-    if adjust_mode == "SIZE" and not WORLD_SIZE_ADJUST_SHORTCUT_ENABLED:
+    if adjust_mode == "SIZE" and not WORLD_SIZE_ADJUST_ENABLED:
         return {'PASS_THROUGH'}
     operator = _world_operator()
     if operator is None:
         return {'CANCELLED'}
+    if operator.adjust_mode:
+        if operator.adjust_mode == adjust_mode:
+            return {'FINISHED'}
+        _finish_active_world_adjust(operator, context)
     return {'FINISHED'} if operator._begin_adjust(
         context,
         adjust_mode,
@@ -19499,12 +17148,35 @@ def _execute_world_adjust(context, adjust_mode, event=None, *, confirm_on_releas
     ) else {'CANCELLED'}
 
 
+def _execute_world_adjust_release(context, adjust_mode, event=None):
+    operator = _world_operator()
+    if operator is None or operator.adjust_mode != adjust_mode:
+        return {'CANCELLED'}
+    if not bool(getattr(operator, "_native_density_adjust_confirm_on_release", False)):
+        return {'CANCELLED'}
+
+    if getattr(operator, "_native_density_adjust_passthrough", False):
+        if adjust_mode == "STRENGTH" and WORLD_NATIVE_DENSITY_MODAL_ADJUST_ENABLED:
+            operator._cache_native_density_adjust_spacing_from_event(context, event)
+            operator._finalize_native_density_adjust_release(context)
+            return {'FINISHED'}
+        if adjust_mode == "SIZE":
+            operator._request_native_size_adjust_confirm(
+                delay=0.0,
+                reason="registered_release",
+            )
+            return {'FINISHED'}
+
+    operator._confirm_adjust_from_event(context, event)
+    return {'FINISHED'}
+
+
 class _secret_world_paint_fixed_adjust_operator:
     world_adjust_mode = ""
 
     @classmethod
     def poll(cls, context):
-        if cls.world_adjust_mode == "SIZE" and not WORLD_SIZE_ADJUST_SHORTCUT_ENABLED:
+        if cls.world_adjust_mode == "SIZE" and not WORLD_SIZE_ADJUST_ENABLED:
             return False
         return is_world_paint_running()
 
@@ -19546,6 +17218,96 @@ class secret_world_paint_adjust_strength(_secret_world_paint_fixed_adjust_operat
         description="Confirm the density adjustment when the Alt+F shortcut is released",
         default=False,
     )
+
+
+class secret_world_paint_end_adjust(bpy.types.Operator):
+    bl_idname = "secret.world_paint_end_adjust"
+    bl_label = "Finish World Paint Adjustment"
+
+    adjust_mode: bpy.props.EnumProperty(
+        items=(
+            ("SIZE", "Size", "Finish adjusting brush size"),
+            ("STRENGTH", "Strength", "Finish adjusting brush strength or density"),
+        )
+    )
+
+    @classmethod
+    def poll(cls, context):
+        operator = _world_operator()
+        return bool(operator and operator.adjust_mode)
+
+    def invoke(self, context, event):
+        return _execute_world_adjust_release(context, self.adjust_mode, event=event)
+
+    def execute(self, context):
+        return _execute_world_adjust_release(context, self.adjust_mode)
+
+
+class secret_world_paint_end_pick_source(bpy.types.Operator):
+    bl_idname = "secret.world_paint_end_pick_source"
+    bl_label = "Finish Picking World Paint Source"
+
+    @classmethod
+    def poll(cls, context):
+        operator = _world_operator()
+        return bool(
+            operator
+            and (
+                getattr(operator, "_entry_source_preview_active", False)
+                or getattr(operator, "_pick_source_hold_active", False)
+            )
+        )
+
+    def invoke(self, context, event):
+        operator = _world_operator()
+        if operator is None:
+            return {'CANCELLED'}
+        if getattr(operator, "_entry_source_preview_active", False):
+            operator._end_entry_source_preview(context, event)
+            return {'FINISHED'}
+        if getattr(operator, "_pick_source_hold_active", False):
+            operator._end_pick_source_hold(context, event, commit=True)
+            return {'FINISHED'}
+        return {'CANCELLED'}
+
+    def execute(self, context):
+        return self.invoke(context, None)
+
+
+class secret_world_paint_undo_source_pick(bpy.types.Operator):
+    bl_idname = "secret.world_paint_undo_source_pick"
+    bl_label = "Undo World Paint Source Pick"
+
+    @classmethod
+    def poll(cls, context):
+        operator = _world_operator()
+        return bool(operator and not operator.adjust_mode and operator._source_switch_history)
+
+    def execute(self, context):
+        operator = _world_operator()
+        if operator is None or not operator._source_switch_history:
+            return {'CANCELLED'}
+        if operator.stroke_active:
+            operator._finish_stroke(context, None)
+        return {'FINISHED'} if operator._restore_previous_source_pick(context) else {'CANCELLED'}
+
+
+class secret_world_paint_ignore_size_adjust(bpy.types.Operator):
+    bl_idname = "secret.world_paint_ignore_size_adjust"
+    bl_label = "Ignore Disabled World Paint Size Adjustment"
+
+    @classmethod
+    def poll(cls, context):
+        operator = _world_operator()
+        return bool(
+            operator
+            and not WORLD_SIZE_ADJUST_ENABLED
+            and operator._density_uses_native_ui()
+            and not operator.adjust_mode
+        )
+
+    def execute(self, context):
+        return {'FINISHED'}
 
 
 class secret_world_paint_set_tool(bpy.types.Operator):
@@ -19700,14 +17462,9 @@ class secret_world_paint_exit(bpy.types.Operator):
 
 
 def register_secret_paint_world_paint_runtime():
-    try:
-        _sanitize_sculpt_curves_tool_before_world_exit(bpy.context)
-    except Exception:
-        pass
-    try:
-        _remove_world_right_delete_brush_keymap(bpy.context)
-    except Exception:
-        pass
+    bpy.types.VIEW3D_HT_header.prepend(_draw_secret_paint_mode_header)
+    bpy.types.VIEW3D_HT_tool_header.prepend(_draw_secret_paint_mode_tool_header)
+
     if not hasattr(bpy.types.WindowManager, "secret_paint_world_asset_scale"):
         bpy.types.WindowManager.secret_paint_world_asset_scale = bpy.props.FloatProperty(
             name="Asset Scale",
@@ -19762,6 +17519,9 @@ def register_secret_paint_world_paint_runtime():
 
 
 def unregister_secret_paint_world_paint_runtime():
+    bpy.types.VIEW3D_HT_tool_header.remove(_draw_secret_paint_mode_tool_header)
+    bpy.types.VIEW3D_HT_header.remove(_draw_secret_paint_mode_header)
+
     operator = _world_operator()
     if operator is not None:
         try:
@@ -19773,10 +17533,11 @@ def unregister_secret_paint_world_paint_runtime():
         except ReferenceError:
             pass
     _WORLD_STATE["operator"] = None
+    _remove_world_tool_icon_texture()
     _remove_stable_ids_load_handlers()
     if _stable_ids_on_depsgraph_update_post in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(_stable_ids_on_depsgraph_update_post)
-    if _WORLD_STATE["ui_hijacked"]:
+    if _WORLD_STATE["ui_active"]:
         dummy_operator = operator if operator is not None else type("SecretPaintDummy", (), {
             "_invoke_area_pointer": 0,
             "_saved_workspace_tool_id": "",
@@ -19784,14 +17545,6 @@ def unregister_secret_paint_world_paint_runtime():
             "_saved_view3d_state": {},
         })()
         _restore_world_ui(dummy_operator, bpy.context)
-    try:
-        _sanitize_sculpt_curves_tool_before_world_exit(bpy.context)
-    except Exception:
-        pass
-    try:
-        _remove_world_right_delete_brush_keymap(bpy.context)
-    except Exception:
-        pass
     shared.secret_paint_enable_sculpt_curves_cage(bpy.context)
     _WORLD_STATE["runtime_registered"] = False
     if hasattr(bpy.types.WindowManager, "secret_paint_world_asset_scale"):
