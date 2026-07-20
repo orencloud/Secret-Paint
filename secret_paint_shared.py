@@ -23,7 +23,7 @@ from mathutils import Vector
 blender_version = bpy.app.version_string
 
 auto_updater_status = True
-addon_path = []
+addon_path = ""
 for mod in addon_utils.modules():
     if hasattr(mod, 'bl_info') and mod.bl_info.get("name") == "Secret Paint":  # if mod.bl_info.get("name") == "Secret Paint":
         addon_path = os.path.dirname(mod.__file__)
@@ -95,7 +95,7 @@ SECRET_PAINT_PANEL_CHAIN_PROPS = (
     SECRET_PAINT_PANEL_BOUNDS_PROP,
     SECRET_PAINT_PANEL_MASK_PROP,
 )
-SECRET_PAINT_BRUSH_SIZE_TRACE_PATH = None
+SECRET_PAINT_BRUSH_SIZE_TRACE_PATH = ""
 SECRET_PAINT_BRUSH_SIZE_TRACE_ENABLED = False
 
 
@@ -4483,7 +4483,13 @@ class orencurvepanel(bpy.types.Panel):
 
             if row_entry["vertex_attribute_name"] and procedural_enabled: row.alert = True
             else: row.alert = False
-            action_prop(row, action_row, sibling, SECRET_PAINT_PANEL_VERTEX_PROP, icon='MOD_VERTEX_WEIGHT' if row_entry["vertex_use_attribute"] else 'GROUP_VERTEX')
+            vertex_button = action_button(
+                row,
+                action_row,
+                "secret.vertexgrouppaint",
+                icon='MOD_VERTEX_WEIGHT' if row_entry["vertex_use_attribute"] else 'GROUP_VERTEX',
+            )
+            vertex_button.object_name = sibling_name
 
             row.alert = row_entry["render_alert"]
             render_icon = row_entry["render_icon"]
@@ -8172,12 +8178,6 @@ def recurLayerCollection(layerColl, collName):  #paint. conversion
         found = recurLayerCollection(layer, collName)
         if found:
             return found
-def getChildren(parentobj):
-    children = []
-    for ob in bpy.data.objects:
-        if ob.parent == parentobj:
-            children.append(ob)
-    return children
 def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,calledfrom_button=False, force_new_maskObj=False
 
     importpainting_multiple_assets = kwargs.get("importpainting_multiple_assets") if "importpainting_multiple_assets" in kwargs else False
@@ -8428,12 +8428,6 @@ class collectionofactiveobj(bpy.types.Operator):
             bpy.context.view_layer.active_layer_collection = layerColl
         return {'FINISHED'}
 
-def getChildren(myObject):
-    children = []
-    for ob in bpy.data.objects:
-        if ob.parent == myObject:
-            children.append(ob)
-    return children
 def select_biome_all_function(context):
     activeobj = bpy.context.active_object
     brushobj = []
@@ -10400,13 +10394,15 @@ class vertexgrouppaint(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_name: bpy.props.StringProperty()
     def invoke(self, context, event):
-
-        _secret_paint_panel_exit_paint_mode(context)
-        secretpaint_update_modifier_f(context,upadte_provenance="secret.vertexgrouppaint")
-
-        if event.alt: remove_vgroup=True  #REMOVE VGROUP
-        else: remove_vgroup=False  #REMOVE VGROUP
-        vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton=True, activeobj=bpy.data.objects.get(self.object_name), remove_vgroup=remove_vgroup)
+        buttonobj = bpy.data.objects.get(self.object_name)
+        if buttonobj is None:
+            self.report({'WARNING'}, "Paint system no longer exists")
+            return {'CANCELLED'}
+        _secret_paint_panel_defer_vertex_action(
+            context,
+            buttonobj,
+            remove_vgroup=bool(event.alt),
+        )
         return {'FINISHED'}
 class vertexgrouppaint_biome(bpy.types.Operator):
     """Weight Paint Mask. Share it with all Biome (or press Q in the viewport). Alt+Click to remove it"""
@@ -12405,9 +12401,6 @@ def paint_from_library_function(self, context, event, **kwargs):
                     ))
             for obj in movable_import_roots:
                 obj.location += relocation_delta
-                if False:
-                    obj.location += target_location - Vector(center) #ONLY MOVE OBJS THAT HAVE NO PARENT                    # print("JUST MOOVEEEEEED",obj.name)
-                    obs_without_parent_for_recenter_coll_origin.append(obj)
             biome_to_use_as_paint=[]
             terrains_with_hair=[]
             for obj in new_obs:

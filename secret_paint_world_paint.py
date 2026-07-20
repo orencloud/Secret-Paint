@@ -2,6 +2,7 @@ import json
 import math
 import random
 import time
+from typing import Any
 
 import blf
 import bpy
@@ -123,7 +124,7 @@ WORLD_FLAG_ITEMS = (
     ("ALIGN_TO_NORMAL", "Align To Normal", "Toggle align-to-normal on the active system"),
 )
 
-_WORLD_STATE = {
+_WORLD_STATE: dict[str, Any] = {
     "operator": None,
     "runtime_registered": False,
     "ui_active": False,
@@ -140,6 +141,7 @@ _WORLD_STATE = {
     "source_curve_candidates_cache": {},
     "source_system_candidates_cache": {},
     "tool_icon_texture": None,
+    "mode_set_running": False,
 }
 
 WORLD_WORKSPACE_TOOL_IDS = {
@@ -439,6 +441,118 @@ def _world_operator():
         return None
     _WORLD_STATE["operator"] = None
     return None
+
+
+_WORLD_CONTEXT_MODE_TO_MODE_SET = {
+    "OBJECT": "OBJECT",
+    "EDIT_MESH": "EDIT",
+    "EDIT_CURVE": "EDIT",
+    "EDIT_CURVES": "EDIT",
+    "EDIT_SURFACE": "EDIT",
+    "EDIT_TEXT": "EDIT",
+    "EDIT_ARMATURE": "EDIT",
+    "EDIT_METABALL": "EDIT",
+    "EDIT_LATTICE": "EDIT",
+    "EDIT_GREASE_PENCIL": "EDIT",
+    "EDIT_POINTCLOUD": "EDIT",
+    "POSE": "POSE",
+    "SCULPT": "SCULPT",
+    "PAINT_WEIGHT": "WEIGHT_PAINT",
+    "PAINT_VERTEX": "VERTEX_PAINT",
+    "PAINT_TEXTURE": "TEXTURE_PAINT",
+    "PARTICLE": "PARTICLE_EDIT",
+    "PAINT_GPENCIL": "PAINT_GREASE_PENCIL",
+    "EDIT_GPENCIL": "EDIT_GPENCIL",
+    "SCULPT_GPENCIL": "SCULPT_GREASE_PENCIL",
+    "WEIGHT_GPENCIL": "WEIGHT_GREASE_PENCIL",
+    "VERTEX_GPENCIL": "VERTEX_GREASE_PENCIL",
+    "SCULPT_CURVES": "SCULPT_CURVES",
+    "PAINT_GREASE_PENCIL": "PAINT_GREASE_PENCIL",
+    "SCULPT_GREASE_PENCIL": "SCULPT_GREASE_PENCIL",
+    "WEIGHT_GREASE_PENCIL": "WEIGHT_GREASE_PENCIL",
+    "VERTEX_GREASE_PENCIL": "VERTEX_GREASE_PENCIL",
+}
+
+
+def _remember_world_paint_context_mode(context, fallback_mode=""):
+    operator = _world_operator()
+    if operator is None:
+        return
+    context_mode = getattr(context, "mode", "") or fallback_mode
+    if context_mode:
+        operator._expected_context_mode = context_mode
+
+
+def _world_paint_context_mode_changed_externally(operator, context):
+    if operator is None or not getattr(operator, "_running", False):
+        return False
+    if _WORLD_STATE.get("mode_set_running", False):
+        return False
+    context_mode = getattr(context, "mode", "") or ""
+    expected_mode = getattr(operator, "_expected_context_mode", "") or ""
+    if not expected_mode:
+        operator._expected_context_mode = context_mode
+        return False
+    return bool(context_mode and context_mode != expected_mode)
+
+
+def _restore_external_context_mode(context, context_mode, active_name, selected_names):
+    mode = _WORLD_CONTEXT_MODE_TO_MODE_SET.get(context_mode, "")
+    if not mode or mode == 'OBJECT':
+        return mode == 'OBJECT'
+
+    view_layer = getattr(context, "view_layer", None)
+    if view_layer is None:
+        return False
+    try:
+        for obj in list(getattr(context, "selected_objects", [])):
+            obj.select_set(False)
+    except Exception:
+        pass
+    for name in selected_names:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        try:
+            if obj.name in view_layer.objects:
+                obj.select_set(True)
+        except Exception:
+            pass
+    active_obj = bpy.data.objects.get(active_name) if active_name else None
+    if active_obj is None:
+        return False
+    try:
+        if active_obj.name not in view_layer.objects:
+            return False
+        active_obj.select_set(True)
+        view_layer.objects.active = active_obj
+        view_layer.update()
+    except Exception:
+        return False
+    return _set_mode(mode)
+
+
+def _finish_world_paint_for_external_mode_change(operator, context):
+    if not _world_paint_context_mode_changed_externally(operator, context):
+        return False
+
+    context_mode = getattr(context, "mode", "") or "OBJECT"
+    active_obj = getattr(context, "active_object", None)
+    active_name = getattr(active_obj, "name", "") if active_obj is not None else ""
+    try:
+        selected_names = [obj.name for obj in context.selected_objects]
+    except Exception:
+        selected_names = []
+
+    operator._preserve_external_mode_on_finish = True
+    try:
+        operator.finish_world_paint(context)
+    finally:
+        operator._preserve_external_mode_on_finish = False
+    if context_mode != 'OBJECT':
+        _restore_external_context_mode(context, context_mode, active_name, selected_names)
+    return True
+
 
 def is_world_paint_running():
     return _world_operator() is not None
@@ -892,10 +1006,26 @@ def _curves_brush_matches_type(brush, brush_type):
 
 
 def _set_mode(mode):
+    context = bpy.context
+    active_obj = getattr(context, "active_object", None)
+    context_mode = getattr(context, "mode", "") or ""
+    active_mode = getattr(active_obj, "mode", "") if active_obj is not None else ""
+    if context_mode == mode and (active_obj is None or active_mode == mode):
+        _remember_world_paint_context_mode(context, mode)
+        return True
+    if _WORLD_STATE.get("mode_set_running", False):
+        return False
+
+    _WORLD_STATE["mode_set_running"] = True
     try:
-        return _operator_result_ok(bpy.ops.object.mode_set(mode=mode))
+        mode_set_ok = _operator_result_ok(bpy.ops.object.mode_set(mode=mode))
+        if mode_set_ok:
+            _remember_world_paint_context_mode(context, mode)
+        return mode_set_ok
     except Exception:
         return False
+    finally:
+        _WORLD_STATE["mode_set_running"] = False
 
 
 def _force_object_mode_after_world_paint(context=None):
@@ -6840,6 +6970,8 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._selection_names = []
         self._active_name = ""
         self._original_mode = "OBJECT"
+        self._expected_context_mode = ""
+        self._preserve_external_mode_on_finish = False
         self._invoke_area_pointer = 0
         self._saved_workspace_tool_id = ""
         self._saved_workspace_tool_mode = ""
@@ -9798,6 +9930,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
         except Exception:
             pass
+        _remember_world_paint_context_mode(context)
         _keep_active_system_object(context, system_obj)
 
         if context.mode != 'SCULPT_CURVES':
@@ -11893,6 +12026,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             )
         except Exception:
             pass
+        _remember_world_paint_context_mode(context)
         try:
             if context.mode != 'SCULPT_CURVES':
                 _set_mode('SCULPT_CURVES')
@@ -14991,6 +15125,9 @@ class secret_world_paint_mode(bpy.types.Operator):
 
     def _finish_world_paint_cleanup(self, context, guard_system_names):
         context = context or bpy.context
+        preserve_external_mode = bool(
+            getattr(self, "_preserve_external_mode_on_finish", False)
+        )
         self.adjust_mode = ""
         self.adjust_origin_x = None
         self._native_density_adjust_passthrough = False
@@ -15016,7 +15153,8 @@ class secret_world_paint_mode(bpy.types.Operator):
             pass
         self._remove_draw_handlers()
         try:
-            _mark_world_paint_object_mode_guard(guard_system_names, duration=0.5)
+            if not preserve_external_mode:
+                _mark_world_paint_object_mode_guard(guard_system_names, duration=0.5)
             if (getattr(context, "mode", "") or "") != 'OBJECT':
                 _set_mode('OBJECT')
             _force_system_names_object_mode_after_world_paint(context, guard_system_names)
@@ -15025,7 +15163,8 @@ class secret_world_paint_mode(bpy.types.Operator):
                 getattr(self, "_session_empty_auto_delete_system_names", set()),
             )
             _force_object_select_tool_after_world_paint(context)
-            _schedule_object_mode_after_world_paint_cleanup()
+            if not preserve_external_mode:
+                _schedule_object_mode_after_world_paint_cleanup()
         except Exception:
             pass
         try:
@@ -15271,6 +15410,7 @@ class secret_world_paint_mode(bpy.types.Operator):
             self._sync_tool_ui_mode(context)
         self._viewport_navigation_last_state_key = _viewport_navigation_state_key(self, context)
         context.window_manager.modal_handler_add(self)
+        _remember_world_paint_context_mode(context)
         _q_debug_log("world_paint_mode.invoke.ready", context)
         shared.secret_paint_world_perf_log(
             "world.invoke.ready",
@@ -15292,6 +15432,8 @@ class secret_world_paint_mode(bpy.types.Operator):
                 event_type=getattr(event, "type", ""),
                 event_value=getattr(event, "value", ""),
             )
+            return {'CANCELLED', 'PASS_THROUGH'}
+        if _finish_world_paint_for_external_mode_change(self, context):
             return {'CANCELLED', 'PASS_THROUGH'}
         event_type = getattr(event, "type", "")
         event_value = getattr(event, "value", "")
@@ -16879,6 +17021,8 @@ def _schedule_exclusive_world_toolbar_refresh(operator):
                 pass
             return None
         try:
+            if _finish_world_paint_for_external_mode_change(operator, bpy.context):
+                return None
             _ensure_exclusive_world_toolbar(operator, bpy.context)
             _hide_native_world_toolbar(operator, bpy.context)
         except (AttributeError, ReferenceError, RuntimeError):

@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 0, 4),
+    "version": (2, 0, 5),
     "blender": (4, 2, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -14,9 +14,9 @@ import importlib
 import re
 from pathlib import Path
 
-import addon_utils
 import bpy
 
+addon_utils = importlib.import_module("addon_utils")
 blender_version = bpy.app.version_string
 
 
@@ -31,7 +31,7 @@ def _secret_paint_bl_info():
         version_match = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', manifest_text)
         if version_match:
             version = tuple(int(part) for part in version_match.group(1).split("."))
-    except Exception:
+    except (OSError, ValueError):
         pass
 
     return {
@@ -59,7 +59,7 @@ auto_updater_disabled_reason = ""
 
 auto_updater_status = True
 addon_updater_ops = None
-if auto_updater_status == True:
+if auto_updater_status:
     try:
         _addon_updater_ops = importlib.import_module(".addon_updater_ops", __package__)
     except Exception as ex:
@@ -102,7 +102,7 @@ class MyPropertiesClass(bpy.types.PropertyGroup):
 
 addon_keymaps = []
 
-class secret_menu(bpy.types.AddonPreferences):
+class SecretPaintPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     __annotations__ = shared_secret_paint_preference_annotations(
@@ -133,7 +133,7 @@ class secret_menu(bpy.types.AddonPreferences):
 
 
 classes = [
-    secret_menu,
+    SecretPaintPreferences,
     MyPropertiesClass,
     *SHARED_SECRET_PAINT_CLASSES,
     ]
@@ -149,7 +149,7 @@ def _unregister_temp_disabled_secret_paint_classes():
     for cls in _TEMP_DISABLED_SECRET_PAINT_CLASSES:
         try:
             bpy.utils.unregister_class(cls)
-        except Exception:
+        except RuntimeError:
             pass
 
 
@@ -233,22 +233,22 @@ def register_keymaps():
         ("secret.world_paint_toggle_wire_bounds_surfaces", "TWO", {}),
         ("secret.world_paint_toggle_interpolate", "THREE", {}),
     )
-    for operator_id, event_type, event_options in world_keymaps:
+    for world_operator_id, world_event_type, world_event_options in world_keymaps:
         add_keymap(
             "3D View",
-            operator_id,
-            event_type,
+            world_operator_id,
+            world_event_type,
             "PRESS",
             space_type='VIEW_3D',
-            **event_options,
+            **world_event_options,
         )
 
-    for operator_id, event_type in (
+    for toggle_operator_id, toggle_event_type in (
         ("secret.world_paint_toggle_lock_surface", "ONE"),
         ("secret.world_paint_toggle_wire_bounds_surfaces", "TWO"),
         ("secret.world_paint_toggle_interpolate", "THREE"),
     ):
-        add_keymap("Sculpt Curves", operator_id, event_type, "PRESS")
+        add_keymap("Sculpt Curves", toggle_operator_id, toggle_event_type, "PRESS")
 
     if SECRET_PAINT_WORLD_TARGET_SURFACE_ENABLED:
         add_keymap(
@@ -292,24 +292,24 @@ def register_keymaps():
             "PRESS",
             properties=adjust_properties,
         )
-        for keymap_name, space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
+        for keymap_name, keymap_space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
             add_keymap(
                 keymap_name,
                 "secret.world_paint_end_adjust",
                 "F",
                 "RELEASE",
-                space_type=space_type,
+                space_type=keymap_space_type,
                 properties={"adjust_mode": "SIZE"},
             )
     else:
-        for keymap_name, space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
-            for event_value in ("PRESS", "RELEASE"):
+        for keymap_name, keymap_space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
+            for key_event_value in ("PRESS", "RELEASE"):
                 add_keymap(
                     keymap_name,
                     "secret.world_paint_ignore_size_adjust",
                     "F",
-                    event_value,
-                    space_type=space_type,
+                    key_event_value,
+                    space_type=keymap_space_type,
                 )
     add_keymap(
         "3D View",
@@ -328,23 +328,23 @@ def register_keymaps():
         properties=adjust_properties,
         alt=True,
     )
-    for keymap_name, space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
+    for keymap_name, keymap_space_type in (("3D View", 'VIEW_3D'), ("Sculpt Curves", 'EMPTY')):
         add_keymap(
             keymap_name,
             "secret.world_paint_end_adjust",
             "F",
             "RELEASE",
-            space_type=space_type,
+            space_type=keymap_space_type,
             properties={"adjust_mode": "STRENGTH"},
             alt=True,
         )
-        for event_type in ("LEFT_ALT", "RIGHT_ALT"):
+        for modifier_event_type in ("LEFT_ALT", "RIGHT_ALT"):
             add_keymap(
                 keymap_name,
                 "secret.world_paint_end_adjust",
-                event_type,
+                modifier_event_type,
                 "RELEASE",
-                space_type=space_type,
+                space_type=keymap_space_type,
                 properties={"adjust_mode": "STRENGTH"},
             )
         add_keymap(
@@ -352,7 +352,7 @@ def register_keymaps():
             "secret.world_paint_undo_source_pick",
             "Z",
             "PRESS",
-            space_type=space_type,
+            space_type=keymap_space_type,
             ctrl=True,
         )
     add_keymap(
@@ -391,9 +391,9 @@ def unregister_keymaps():
 
 
 def register():
-    bl_info = _secret_paint_bl_info()
+    addon_metadata = _secret_paint_bl_info()
     if addon_updater_ops is not None:
-        addon_updater_ops.register(bl_info)
+        addon_updater_ops.register(addon_metadata)
     register_secret_paint_cli_commands()
 
     unregister_secret_paint_disabled_world_paint_operator_stubs()
@@ -423,9 +423,13 @@ def unregister():
         bpy.utils.unregister_class(cls)
     _unregister_temp_disabled_secret_paint_classes()
 
-    del bpy.types.Scene.mypropertieslist
+    if hasattr(bpy.types.Scene, "mypropertieslist"):
+        del bpy.types.Scene.mypropertieslist
 
-    bpy.types.FILEBROWSER_HT_header.remove(checkboxImportWithoutPainting_f)
+    try:
+        bpy.types.FILEBROWSER_HT_header.remove(checkboxImportWithoutPainting_f)
+    except ValueError:
+        pass
 
 
 if __name__ == "__main__":
