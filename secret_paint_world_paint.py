@@ -11484,10 +11484,6 @@ class secret_world_paint_mode(bpy.types.Operator):
             and WORLD_NATIVE_DENSITY_MODAL_ADJUST_ENABLED
         )
 
-    def _send_native_adjust_confirm_key_event(self):
-        return False
-
-
     def _sync_workspace_tool(self, context):
         if self.tool_id == WORLD_TOOL_DENSITY and self._native_density_stroke_erase:
             _shift_delete_debug_log("sync_workspace.delete_enter", context, self, force=True)
@@ -14427,10 +14423,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         except Exception:
             return None
 
-    def _send_native_adjust_confirm_event(self):
-        return False
-
-
     def _finalize_native_density_adjust_release(self, context):
         if not (
             self.adjust_mode == "STRENGTH"
@@ -14452,17 +14444,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._stop_live_native_adjust_control_sync()
         if not native_release_confirm and self._request_native_density_adjust_confirm(delay=0.03):
             return True
-        if not native_release_confirm:
-            sent = False
-            try:
-                sent = bool(self._send_native_adjust_confirm_event())
-            except Exception:
-                pass
-            if not sent:
-                try:
-                    self._send_native_adjust_confirm_key_event()
-                except Exception:
-                    pass
         try:
             self._schedule_native_density_adjust_result_sync(
                 "STRENGTH",
@@ -14500,16 +14481,6 @@ class secret_world_paint_mode(bpy.types.Operator):
                 and getattr(operator, "_native_density_adjust_passthrough", False)
             ):
                 return None
-            sent = False
-            try:
-                sent = bool(operator._send_native_adjust_confirm_event())
-            except Exception:
-                pass
-            if not sent:
-                try:
-                    operator._send_native_adjust_confirm_key_event()
-                except Exception:
-                    pass
             try:
                 operator._schedule_native_density_adjust_result_sync(
                     "STRENGTH",

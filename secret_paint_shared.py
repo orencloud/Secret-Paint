@@ -10886,23 +10886,9 @@ def _secret_paint_cli_arg_value(argv, option_name):
 def _secret_paint_cli_bootstrap_expression():
     return (
         "import addon_utils\n"
-        "import importlib.util\n"
-        "import pathlib\n"
-        "import sys\n"
-        "import types\n"
         "for mod in addon_utils.modules():\n"
         "    if getattr(mod, 'bl_info', {}).get('name') == 'Secret Paint':\n"
-        "        addon_dir = pathlib.Path(mod.__file__).resolve().parent\n"
-        "        package_name = '_secret_paint_export_cli_package'\n"
-        "        package = types.ModuleType(package_name)\n"
-        "        package.__path__ = [str(addon_dir)]\n"
-        "        sys.modules[package_name] = package\n"
-        "        shared_path = addon_dir / 'secret_paint_shared.py'\n"
-        "        spec = importlib.util.spec_from_file_location(package_name + '.secret_paint_shared', str(shared_path))\n"
-        "        shared = importlib.util.module_from_spec(spec)\n"
-        "        sys.modules[spec.name] = shared\n"
-        "        spec.loader.exec_module(shared)\n"
-        "        shared.register_secret_paint_cli_commands()\n"
+        "        addon_utils.enable(mod.__name__, default_set=False)\n"
         "        break\n"
     )
 
