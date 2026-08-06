@@ -16963,9 +16963,14 @@ def _hide_native_world_toolbar(operator, context):
     if area is not None and space is not None:
         native_brush_ui_active = _world_native_brush_ui_active(operator, context)
         try:
-            space.show_region_header = True
-            space.show_region_tool_header = True
-            space.show_region_toolbar = native_brush_ui_active
+            desired_visibility = {
+                "show_region_header": True,
+                "show_region_tool_header": True,
+                "show_region_toolbar": native_brush_ui_active,
+            }
+            for property_name, desired_value in desired_visibility.items():
+                if getattr(space, property_name, None) != desired_value:
+                    setattr(space, property_name, desired_value)
         except (AttributeError, TypeError):
             pass
 
