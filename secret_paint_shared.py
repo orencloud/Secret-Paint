@@ -1182,14 +1182,18 @@ def _compute_side_panel_instance_count(sibling):
     try:
         modifier = sibling.modifiers[0]
         n_of_instances = 0
-        if modifier["Input_69"] == False:
+        procedural_enabled = bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False))
+        density = float(_secret_paint_modifier_input_by_name(modifier, "Input_68", 0.0))
+        scale_compensation = float(_secret_paint_modifier_input_by_name(modifier, "Input_100", 0.0))
+        spread = float(_secret_paint_modifier_input_by_name(modifier, "Input_72", 0.0))
+        if not procedural_enabled:
             n_of_instances = len(sibling.data.curves)
-        elif modifier["Input_68"] > 0 and sibling.parent and getattr(sibling.parent, "data", None):
-            spacing = (modifier["Input_68"] ** 0.5) * modifier["Input_100"]
+        elif density > 0 and sibling.parent and getattr(sibling.parent, "data", None):
+            spacing = (density ** 0.5) * scale_compensation
             if spacing > 0:
                 density_square = (1 / spacing) ** 2
                 total_area = sum(face.area for face in sibling.parent.data.polygons)
-                n_of_instances = int(total_area / density_square * modifier["Input_72"] / 100)
+                n_of_instances = int(total_area / density_square * spread / 100)
         return n_of_instances, _format_side_panel_instance_count_label(n_of_instances)
     except Exception:
         return 0, "0.0k"
@@ -1393,10 +1397,7 @@ def _secret_paint_system_is_procedural(obj):
     modifier = _secret_paint_system_modifier(obj)
     if modifier is None:
         return False
-    try:
-        return bool(modifier["Input_69"])
-    except Exception:
-        return False
+    return bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False))
 
 
 def _secret_paint_world_paint_enabled(context):
@@ -1567,10 +1568,10 @@ def _side_panel_instance_count_signature(sibling):
             sibling.data.as_pointer() if getattr(sibling, "data", None) else 0,
             parent.as_pointer() if parent else 0,
             parent_data.as_pointer() if parent_data else 0,
-            bool(modifier.get("Input_69", False)),
-            float(modifier.get("Input_68", 0.0)),
-            float(modifier.get("Input_72", 0.0)),
-            float(modifier.get("Input_100", 0.0)),
+            bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False)),
+            float(_secret_paint_modifier_input_by_name(modifier, "Input_68", 0.0)),
+            float(_secret_paint_modifier_input_by_name(modifier, "Input_72", 0.0)),
+            float(_secret_paint_modifier_input_by_name(modifier, "Input_100", 0.0)),
         )
     except Exception:
         return None
@@ -1608,13 +1609,7 @@ def _get_side_panel_instance_count_cached(sibling):
 
 
 def _safe_side_panel_modifier_value(modifier, key, default=None):
-    try:
-        value = modifier[key]
-        if value is None:
-            return default
-        return value
-    except Exception:
-        return default
+    return _secret_paint_modifier_input_by_name(modifier, key, default)
 
 
 def _side_panel_order_value(obj):
@@ -1767,22 +1762,15 @@ def _build_side_panel_row_model(sibling):
 
     render_alert = False
     render_icon = "RESTRICT_RENDER_OFF"
-    try:
-        socket_15 = bool(modifier["Socket_15"])
-        socket_14 = bool(modifier["Socket_14"])
-        socket_2 = bool(modifier["Socket_2"])
-        input_99 = bool(modifier["Input_99"])
-        render_alert = socket_15 or socket_14 or socket_2 or input_99
-        if input_99:
-            render_icon = "RESTRICT_RENDER_ON"
-        elif socket_14:
-            render_icon = "RESTRICT_VIEW_ON"
-    except Exception:
-        socket_2 = bool(_safe_side_panel_modifier_value(modifier, "Socket_2", False))
-        input_99 = bool(_safe_side_panel_modifier_value(modifier, "Input_99", False))
-        render_alert = socket_2 or input_99
-        if input_99:
-            render_icon = "RESTRICT_RENDER_ON"
+    socket_15 = bool(_safe_side_panel_modifier_value(modifier, "Socket_15", False))
+    socket_14 = bool(_safe_side_panel_modifier_value(modifier, "Socket_14", False))
+    socket_2 = bool(_safe_side_panel_modifier_value(modifier, "Socket_2", False))
+    input_99 = bool(_safe_side_panel_modifier_value(modifier, "Input_99", False))
+    render_alert = socket_15 or socket_14 or socket_2 or input_99
+    if input_99:
+        render_icon = "RESTRICT_RENDER_ON"
+    elif socket_14:
+        render_icon = "RESTRICT_VIEW_ON"
 
     display_type = getattr(sibling, "display_type", "TEXTURED")
     bounds_alert = display_type == "BOUNDS"
@@ -1881,23 +1869,15 @@ def _build_side_panel_biome_model(bgroup, row_entries):
             modifier = row_entries[0]["object"].modifiers[0]
         except (ReferenceError, RuntimeError, IndexError):
             modifier = None
-        try:
-            if modifier is not None and modifier["Socket_2"]:
-                render_icon = "RESTRICT_RENDER_ON"
-                render_alert = True
-            elif modifier is not None and modifier["Socket_15"]:
-                render_icon = "RESTRICT_VIEW_ON"
-                render_alert = True
-            else:
-                render_icon = "RESTRICT_RENDER_OFF"
-                render_alert = False
-        except Exception:
-            if _safe_side_panel_modifier_value(modifier, "Socket_2", False):
-                render_icon = "RESTRICT_RENDER_ON"
-                render_alert = True
-            else:
-                render_icon = "RESTRICT_RENDER_OFF"
-                render_alert = False
+        if _safe_side_panel_modifier_value(modifier, "Socket_2", False):
+            render_icon = "RESTRICT_RENDER_ON"
+            render_alert = True
+        elif _safe_side_panel_modifier_value(modifier, "Socket_15", False):
+            render_icon = "RESTRICT_VIEW_ON"
+            render_alert = True
+        else:
+            render_icon = "RESTRICT_RENDER_OFF"
+            render_alert = False
     else:
         render_icon = "RESTRICT_RENDER_OFF"
         render_alert = False
@@ -1931,9 +1911,16 @@ def _build_side_panel_layout_model(context, obj):
             for hayr in bpy.context.scene.objects:
                 if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                     for modifier in hayr.modifiers:
-                        if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and hayr.modifiers[0]["Input_97"] == obj \
-                        or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and hayr.modifiers[0]["Input_2"] == obj \
-                        or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and hayr.modifiers[0]["Input_73"] == obj:
+                        if (
+                            modifier.type == 'NODES'
+                            and modifier.node_group
+                            and modifier.node_group.name == "Secret Paint"
+                            and (
+                                _safe_side_panel_modifier_value(modifier, "Input_97") == obj
+                                or _safe_side_panel_modifier_value(modifier, "Input_2") == obj
+                                or _safe_side_panel_modifier_value(modifier, "Input_73") == obj
+                            )
+                        ):
                             hair.append((hayr, _safe_side_panel_modifier_value(hayr.modifiers[0], "Input_2") if _safe_side_panel_modifier_value(hayr.modifiers[0], "Input_2") else _safe_side_panel_modifier_value(hayr.modifiers[0], "Input_9")))
     except ReferenceError:
         pass
@@ -2436,21 +2423,66 @@ def _secret_paint_node_group_input_identifier(node_group, socket_name):
                 continue
             if getattr(item, "in_out", None) != 'INPUT':
                 continue
-            if getattr(item, "name", "") == socket_name:
+            if (
+                getattr(item, "name", "") == socket_name
+                or getattr(item, "identifier", "") == socket_name
+            ):
                 return getattr(item, "identifier", None)
     except Exception:
         pass
 
     try:
         for socket in node_group.inputs:
-            if getattr(socket, "name", "") == socket_name:
+            if (
+                getattr(socket, "name", "") == socket_name
+                or getattr(socket, "identifier", "") == socket_name
+            ):
                 return getattr(socket, "identifier", None)
     except Exception:
         pass
     return None
 
 
+def _secret_paint_modifier_input_rna(modifier, socket_name):
+    """Return a Blender 5.2+ Geometry Nodes input property, when available."""
+    if modifier is None:
+        return None
+    identifier = _secret_paint_node_group_input_identifier(
+        getattr(modifier, "node_group", None),
+        socket_name,
+    )
+    if not identifier:
+        return None
+    try:
+        properties = getattr(modifier, "properties", None)
+        inputs = getattr(properties, "inputs", None)
+        if inputs is None:
+            return None
+        return getattr(inputs, identifier)
+    except Exception:
+        return None
+
+
 def _secret_paint_modifier_input_by_name(modifier, socket_name, default=None):
+    attribute_mode = socket_name.endswith("_use_attribute")
+    attribute_name = socket_name.endswith("_attribute_name")
+    base_socket_name = socket_name
+    if attribute_mode:
+        base_socket_name = socket_name[:-len("_use_attribute")]
+    elif attribute_name:
+        base_socket_name = socket_name[:-len("_attribute_name")]
+
+    input_rna = _secret_paint_modifier_input_rna(modifier, base_socket_name)
+    if input_rna is not None:
+        try:
+            if attribute_mode:
+                return getattr(input_rna, "type") == 'ATTRIBUTE'
+            if attribute_name:
+                return getattr(input_rna, "attribute_name")
+            return input_rna.value
+        except Exception:
+            pass
+
     identifier = _secret_paint_node_group_input_identifier(getattr(modifier, "node_group", None), socket_name)
     for key in (identifier, socket_name):
         if not key:
@@ -2463,6 +2495,28 @@ def _secret_paint_modifier_input_by_name(modifier, socket_name, default=None):
 
 
 def _secret_paint_set_modifier_input_by_name(modifier, socket_name, value):
+    attribute_mode = socket_name.endswith("_use_attribute")
+    attribute_name = socket_name.endswith("_attribute_name")
+    base_socket_name = socket_name
+    if attribute_mode:
+        base_socket_name = socket_name[:-len("_use_attribute")]
+    elif attribute_name:
+        base_socket_name = socket_name[:-len("_attribute_name")]
+
+    input_rna = _secret_paint_modifier_input_rna(modifier, base_socket_name)
+    if input_rna is not None:
+        try:
+            if attribute_mode:
+                input_rna.type = 'ATTRIBUTE' if bool(value) else 'VALUE'
+                return True
+            if attribute_name:
+                input_rna.attribute_name = str(value or "")
+                return True
+            input_rna.value = value
+            return True
+        except Exception:
+            pass
+
     identifier = _secret_paint_node_group_input_identifier(getattr(modifier, "node_group", None), socket_name)
     for key in (identifier, socket_name):
         if not key:
@@ -2473,6 +2527,70 @@ def _secret_paint_set_modifier_input_by_name(modifier, socket_name, value):
         except Exception:
             pass
     return False
+
+
+def _secret_paint_copy_modifier_inputs(source_modifier, target_modifier):
+    """Copy Geometry Nodes inputs using either Blender's 5.1 or 5.2 API."""
+    source_group = getattr(source_modifier, "node_group", None)
+    target_group = getattr(target_modifier, "node_group", None)
+    if source_group is None or target_group is None:
+        return False
+
+    try:
+        source_items = source_group.interface.items_tree
+    except Exception:
+        try:
+            source_items = source_group.inputs
+        except Exception:
+            return False
+
+    copied = False
+    missing = object()
+    for item in source_items:
+        if getattr(item, "item_type", "SOCKET") == 'PANEL':
+            continue
+        if getattr(item, "in_out", "INPUT") != 'INPUT':
+            continue
+        socket_identifier = getattr(item, "identifier", "")
+        socket_name = getattr(item, "name", "")
+        socket_keys = tuple(dict.fromkeys(
+            key for key in (socket_identifier, socket_name) if key
+        ))
+        if not socket_keys:
+            continue
+        source_input = next((
+            input_rna
+            for socket_key in socket_keys
+            for input_rna in (_secret_paint_modifier_input_rna(source_modifier, socket_key),)
+            if input_rna is not None
+        ), None)
+        target_input = next((
+            input_rna
+            for socket_key in socket_keys
+            for input_rna in (_secret_paint_modifier_input_rna(target_modifier, socket_key),)
+            if input_rna is not None
+        ), None)
+        if source_input is not None and target_input is not None:
+            for attribute_name in ("value", "type", "attribute_name"):
+                try:
+                    setattr(target_input, attribute_name, getattr(source_input, attribute_name))
+                    copied = True
+                except Exception:
+                    pass
+            continue
+
+        value = missing
+        for socket_key in socket_keys:
+            value = _secret_paint_modifier_input_by_name(source_modifier, socket_key, missing)
+            if value is not missing:
+                break
+        if value is missing:
+            continue
+        for socket_key in socket_keys:
+            if _secret_paint_set_modifier_input_by_name(target_modifier, socket_key, value):
+                copied = True
+                break
+    return copied
 
 
 def _secret_paint_modifier_legacy_procedural_ids(modifier):
@@ -2493,13 +2611,13 @@ def _secret_paint_system_uses_object_as_source(system_obj, source_obj):
         return False
 
     try:
-        if modifier["Input_2"] == source_obj:
+        if _secret_paint_modifier_input_by_name(modifier, "Input_2") == source_obj:
             return True
     except Exception:
         pass
 
     try:
-        brush_collection = modifier["Input_9"]
+        brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
     except Exception:
         brush_collection = None
     if brush_collection is None:
@@ -3057,6 +3175,8 @@ def _secret_paint_apply_geometry_nodes_modifier(context, obj, modifier, restore_
 def _secret_paint_copy_modifier_properties(source_modifier, target_modifier):
     if source_modifier is None or target_modifier is None:
         return
+    if _secret_paint_copy_modifier_inputs(source_modifier, target_modifier):
+        return
     for key in source_modifier.keys():
         try:
             target_modifier[key] = source_modifier[key]
@@ -3103,6 +3223,8 @@ def _secret_paint_create_procedural_curve_extract_node_group(source_modifier):
 
 def _secret_paint_set_apply_ids_seed(modifier, seed_value):
     if modifier is None:
+        return
+    if _secret_paint_set_modifier_input_by_name(modifier, "Input_2", int(seed_value)):
         return
     try:
         modifier["Input_2"] = int(seed_value)
@@ -3960,7 +4082,7 @@ def _secret_paint_prepare_legacy_node_upgrade(context):
         if modifier is None:
             continue
         try:
-            is_procedural = bool(modifier["Input_69"])
+            is_procedural = bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False))
         except Exception:
             is_procedural = False
         if should_migrate_curve_ids:
@@ -4014,7 +4136,7 @@ def _secret_paint_disable_obsolete_manual_baked_transforms():
         if modifier is None:
             continue
         try:
-            is_procedural = bool(modifier["Input_69"])
+            is_procedural = bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False))
         except Exception:
             is_procedural = False
         if is_procedural:
@@ -4271,7 +4393,10 @@ def _secret_paint_reapply_conversion_stable_ids(context, converted_objects):
             _secret_paint_remove_attribute_if_present(obj.data, SECRET_PAINT_STABLE_ROOT_POSITION_ATTRIBUTE)
             apply_ids_modifier = obj.modifiers.new(name="GeometryNodes", type='NODES')
             apply_ids_modifier.node_group = bpy.data.node_groups.get(apply_ids_node.name)
-            _secret_paint_set_apply_ids_seed(apply_ids_modifier, obj.modifiers[0]["Input_80"])
+            _secret_paint_set_apply_ids_seed(
+                apply_ids_modifier,
+                _secret_paint_modifier_input_by_name(obj.modifiers[0], "Input_80", 0),
+            )
             if bpy.app.version_string >= "4.0.0":
                 obj.modifiers.move(len(obj.modifiers) - 1, 0)
             elif bpy.app.version_string < "4.0.0":
@@ -4296,8 +4421,8 @@ def _secret_paint_reapply_conversion_stable_ids(context, converted_objects):
                 SECRET_PAINT_LEGACY_PROCEDURAL_IDS_SOCKET,
                 keep_legacy_procedural_ids,
             )
-            obj.modifiers[0]["Input_98"] = False
-            obj.modifiers[0]["Input_97"] = None
+            _secret_paint_set_modifier_input_by_name(obj.modifiers[0], "Input_98", False)
+            _secret_paint_set_modifier_input_by_name(obj.modifiers[0], "Input_97", None)
         except Exception:
             pass
         curve_count, point_count = _secret_paint_get_curves_counts(obj.data)
@@ -4908,8 +5033,9 @@ def apply_paint(self,context, **kwargs):
         conversion_dummy_curve_added = False
         conversion_dummy_curve_removed = 0
         procedural_instances_present = False
-        was_procedural_before_apply = bool(obj.modifiers[0]["Input_69"])
-        use_legacy_procedural_ids = _secret_paint_modifier_legacy_procedural_ids(obj.modifiers[0])
+        source_modifier = obj.modifiers[0]
+        was_procedural_before_apply = bool(_secret_paint_modifier_input_by_name(source_modifier, "Input_69", False))
+        use_legacy_procedural_ids = _secret_paint_modifier_legacy_procedural_ids(source_modifier)
         procedural_ids_before_apply = []
         if (
             was_procedural_before_apply
@@ -4945,7 +5071,7 @@ def apply_paint(self,context, **kwargs):
                         detail=f"skipped_apply_ids=True; reason={apply_ids_reason}",
                     )
                 continue
-        if not applyIDs and obj.modifiers[0]["Input_69"] == False and not SECRET_PAINT_ENABLE_APPLY_IDS_MODIFIER:
+        if not applyIDs and not _secret_paint_modifier_input_by_name(source_modifier, "Input_69", False) and not SECRET_PAINT_ENABLE_APPLY_IDS_MODIFIER:
             curve_count, point_count = _secret_paint_get_curves_counts(obj.data)
             _secret_paint_store_id_cache(obj.data, curve_count, point_count)
             apply_ids_reason = "feature_disabled"
@@ -5013,9 +5139,9 @@ def apply_paint(self,context, **kwargs):
                     stable_curve_values = list(range(raw_curve_count))
 
                 try:
-                    obj.modifiers[0]["Input_69"] = False
-                    obj.modifiers[0]["Input_98"] = False
-                    obj.modifiers[0]["Input_97"] = None
+                    _secret_paint_set_modifier_input_by_name(source_modifier, "Input_69", False)
+                    _secret_paint_set_modifier_input_by_name(source_modifier, "Input_98", False)
+                    _secret_paint_set_modifier_input_by_name(source_modifier, "Input_97", None)
                 except Exception:
                     pass
 
@@ -5055,7 +5181,7 @@ def apply_paint(self,context, **kwargs):
                         detail="converted_existing_procedural_curves=True",
                     )
                 continue
-        if applyIDs or obj.modifiers[0]["Input_69"] == False:
+        if applyIDs or not _secret_paint_modifier_input_by_name(source_modifier, "Input_69", False):
             node_to_use = _secret_paint_get_apply_ids_node_group()
 
         elif applyIDs == False:
@@ -5063,9 +5189,7 @@ def apply_paint(self,context, **kwargs):
                 raw_curve_count_for_conversion, _raw_point_count_for_conversion = _secret_paint_get_curves_counts(obj.data)
                 if raw_curve_count_for_conversion == 0:
                     conversion_dummy_curve_added = _secret_paint_add_temporary_conversion_curve(obj)
-                node_to_use = _secret_paint_create_procedural_curve_extract_node_group(
-                    obj.modifiers[0],
-                )
+                node_to_use = _secret_paint_create_procedural_curve_extract_node_group(source_modifier)
                 if node_to_use is not None:
                     extracted_procedural_curves = True
                     temporary_conversion_node_tree = node_to_use
@@ -5080,9 +5204,12 @@ def apply_paint(self,context, **kwargs):
         modifier.node_group = node_to_use
         is_apply_ids_node = bool(node_to_use and node_to_use.name == "Secret Paint Apply IDs")
         if is_apply_ids_node:
-            _secret_paint_set_apply_ids_seed(modifier, obj.modifiers[0]["Input_80"])
+            _secret_paint_set_apply_ids_seed(
+                modifier,
+                _secret_paint_modifier_input_by_name(source_modifier, "Input_80", 0),
+            )
         elif extracted_procedural_curves:
-            _secret_paint_copy_modifier_properties(obj.modifiers[0], modifier)
+            _secret_paint_copy_modifier_properties(source_modifier, modifier)
             _secret_paint_set_modifier_input_by_name(
                 modifier,
                 SECRET_PAINT_BAKED_PROCEDURAL_TRANSFORMS_SOCKET,
@@ -5094,30 +5221,30 @@ def apply_paint(self,context, **kwargs):
                 SECRET_PAINT_LEGACY_PROCEDURAL_IDS_SOCKET,
                 use_legacy_procedural_ids,
             )
-            modifier["Input_2"] = obj.parent  #.data.surface #surface
-            modifier["Input_15"] = obj.modifiers[0]["Input_68"]*(obj.modifiers[0]["Input_100"]**2) #scatterdensity + compensate for scale
-            modifier["Input_14"] = obj.modifiers[0]["Input_83"] #attribute mask
-            modifier["Input_16"] = obj.modifiers[0]["Input_80"] #seed
-            modifier["Input_19"] = obj.modifiers[0]["Input_79"] #mask texture
-            modifier["Input_30"] = obj.modifiers[0]["Input_78"] #uvmap
-            modifier["Input_33"] = obj.modifiers[0]["Input_70"]*obj.modifiers[0]["Input_100"] #noise scale + compensate for scale
-            modifier["Input_31"] = obj.modifiers[0]["Input_72"] #spread
-            modifier["Input_32"] = obj.modifiers[0]["Input_82"] #blur
-            modifier["Input_34"] = obj.modifiers[0]["Input_71"] #noiseW
-            modifier["Input_39"] = obj.modifiers[0]["Input_89"] #slope inverted
-            modifier["Input_40"] = obj.modifiers[0]["Input_16"] #curvetype
-            modifier["Input_41"] = obj.modifiers[0]["Input_86"] #slope
-            modifier["Input_42"] = obj.modifiers[0]["Input_91"] #height
-            modifier["Input_43"] = obj.modifiers[0]["Input_92"] #height inverted
-            modifier["Input_44"] = obj.modifiers[0]["Input_95"] #mask obj
-            modifier["Input_45"] = obj.modifiers[0]["Input_85"] #viewport
-            modifier["Input_47"] = obj.modifiers[0]["Input_98"] #mask obj in viewport
-            modifier["Input_48"] = obj.modifiers[0]["Input_97"] #mask viewport obj
-            modifier["Socket_0"] = bool(obj.modifiers[0]["Socket_0"]) #faster viewport mask
-            if obj.modifiers[0]["Input_83_attribute_name"] and obj.modifiers[0]["Input_83_use_attribute"]:
-                modifier["Input_14_attribute_name"] = obj.modifiers[0]["Input_83_attribute_name"] #weight mask
-                modifier["Input_14_use_attribute"] = True #weight mask turn on
-            obj.modifiers[0]["Input_69"] = False #turn off noise scattering
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_2", obj.parent)
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_15", _secret_paint_modifier_input_by_name(source_modifier, "Input_68", 0.0) * (_secret_paint_modifier_input_by_name(source_modifier, "Input_100", 0.0) ** 2))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_14", _secret_paint_modifier_input_by_name(source_modifier, "Input_83"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_16", _secret_paint_modifier_input_by_name(source_modifier, "Input_80"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_19", _secret_paint_modifier_input_by_name(source_modifier, "Input_79"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_30", _secret_paint_modifier_input_by_name(source_modifier, "Input_78"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_33", _secret_paint_modifier_input_by_name(source_modifier, "Input_70", 0.0) * _secret_paint_modifier_input_by_name(source_modifier, "Input_100", 0.0))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_31", _secret_paint_modifier_input_by_name(source_modifier, "Input_72"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_32", _secret_paint_modifier_input_by_name(source_modifier, "Input_82"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_34", _secret_paint_modifier_input_by_name(source_modifier, "Input_71"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_39", _secret_paint_modifier_input_by_name(source_modifier, "Input_89"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_40", _secret_paint_modifier_input_by_name(source_modifier, "Input_16"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_41", _secret_paint_modifier_input_by_name(source_modifier, "Input_86"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_42", _secret_paint_modifier_input_by_name(source_modifier, "Input_91"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_43", _secret_paint_modifier_input_by_name(source_modifier, "Input_92"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_44", _secret_paint_modifier_input_by_name(source_modifier, "Input_95"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_45", _secret_paint_modifier_input_by_name(source_modifier, "Input_85"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_47", _secret_paint_modifier_input_by_name(source_modifier, "Input_98"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_48", _secret_paint_modifier_input_by_name(source_modifier, "Input_97"))
+            _secret_paint_set_modifier_input_by_name(modifier, "Socket_0", bool(_secret_paint_modifier_input_by_name(source_modifier, "Socket_0", False)))
+            if _secret_paint_modifier_input_by_name(source_modifier, "Input_83_attribute_name", "") and _secret_paint_modifier_input_by_name(source_modifier, "Input_83_use_attribute", False):
+                _secret_paint_set_modifier_input_by_name(modifier, "Input_14_attribute_name", _secret_paint_modifier_input_by_name(source_modifier, "Input_83_attribute_name"))
+                _secret_paint_set_modifier_input_by_name(modifier, "Input_14_use_attribute", True)
+            _secret_paint_set_modifier_input_by_name(source_modifier, "Input_69", False)
         if bpy.app.version_string >= "4.0.0":
             obj.modifiers.move(len(obj.modifiers) - 1, 0)
         elif bpy.app.version_string < "4.0.0":
@@ -5159,7 +5286,7 @@ def apply_paint(self,context, **kwargs):
                 _secret_paint_store_id_cache(obj.data, curve_count, point_count)
             else:
                 if was_procedural_before_apply and extracted_procedural_curves:
-                    obj.modifiers[0]["Input_69"] = False
+                    _secret_paint_set_modifier_input_by_name(source_modifier, "Input_69", False)
                     curve_count, _point_count = _secret_paint_get_curves_counts(obj.data)
                     stable_curve_values = _secret_paint_curve_seed_values_from_attribute(
                         obj.data,
@@ -5215,7 +5342,10 @@ def apply_paint(self,context, **kwargs):
                         apply_ids_node = _secret_paint_get_apply_ids_node_group()
                         apply_ids_modifier = obj.modifiers.new(name="GeometryNodes", type='NODES')
                         apply_ids_modifier.node_group = bpy.data.node_groups.get(apply_ids_node.name)
-                        _secret_paint_set_apply_ids_seed(apply_ids_modifier, obj.modifiers[0]["Input_80"])
+                        _secret_paint_set_apply_ids_seed(
+                            apply_ids_modifier,
+                            _secret_paint_modifier_input_by_name(source_modifier, "Input_80", 0),
+                        )
                         if bpy.app.version_string >= "4.0.0":
                             obj.modifiers.move(len(obj.modifiers) - 1, 0)
                         elif bpy.app.version_string < "4.0.0":
@@ -5254,8 +5384,8 @@ def apply_paint(self,context, **kwargs):
                     obj.data[SECRET_PAINT_MANUAL_LEGACY_IDS_PROP] = bool(use_legacy_procedural_ids)
                     ensure_secret_paint_system_stable_root_positions(obj)
                     try:
-                        obj.modifiers[0]["Input_98"] = False
-                        obj.modifiers[0]["Input_97"] = None
+                        _secret_paint_set_modifier_input_by_name(source_modifier, "Input_98", False)
+                        _secret_paint_set_modifier_input_by_name(source_modifier, "Input_97", None)
                     except Exception:
                         pass
                     curve_count, point_count = _secret_paint_get_curves_counts(obj.data)
@@ -5371,7 +5501,11 @@ class toggle_procedural(bpy.types.Operator):
 
         if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
         activeobj= bpy.data.objects.get(self.object_name)
-        checkbox_state = activeobj.modifiers[0]["Input_69"]
+        active_modifier = _secret_paint_modifier(activeobj)
+        if active_modifier is None:
+            self.report({'ERROR'}, "Secret Paint modifier not found")
+            return {'CANCELLED'}
+        checkbox_state = bool(_secret_paint_modifier_input_by_name(active_modifier, "Input_69", False))
         objselection = bpy.context.selected_objects
         if activeobj not in objselection: objselection.append(activeobj)
         if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
@@ -5380,14 +5514,18 @@ class toggle_procedural(bpy.types.Operator):
             if obj.type == "CURVES" and obj.modifiers:
                 for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint"):
-                        if obj.type == "CURVES" and obj.modifiers[0]["Input_69"] == False and obj.modifiers[0]["Input_68"] > 0:
+                        obj_modifier = _secret_paint_modifier(obj)
+                        procedural_enabled = bool(_secret_paint_modifier_input_by_name(obj_modifier, "Input_69", False))
+                        density = float(_secret_paint_modifier_input_by_name(obj_modifier, "Input_68", 0.0))
+                        scale_compensation = float(_secret_paint_modifier_input_by_name(obj_modifier, "Input_100", 0.0))
+                        if obj.type == "CURVES" and not procedural_enabled and density > 0 and obj.parent and getattr(obj.parent, "data", None):
                             allTerrainArea = sum(face.area for face in obj.parent.data.polygons)  #area of mesh surface
-                            if (allTerrainArea/   (   (1/   ((obj.modifiers[0]["Input_68"] ** 0.5) * (obj.modifiers[0]["Input_100"]))   )   **2))   > _secret_paint_pref("trigger_viewport_mask", 15000):
-                                obj.modifiers[0]["Input_98"] = False  # clean mask slots so that the function doesn't toggle the mask settings
-                                obj.modifiers[0]["Input_97"] = None
+                            if scale_compensation > 0 and (allTerrainArea / ((1 / ((density ** 0.5) * scale_compensation)) ** 2)) > _secret_paint_pref("trigger_viewport_mask", 15000):
+                                _secret_paint_set_modifier_input_by_name(obj_modifier, "Input_98", False)  # clean mask slots so that the function doesn't toggle the mask settings
+                                _secret_paint_set_modifier_input_by_name(obj_modifier, "Input_97", None)
                                 secretpaint_viewport_mask_function(self, context, objselection=[obj], activeobj=obj)
 
-                        obj.modifiers[0]["Input_69"] = not checkbox_state  #invert procedural vs manual
+                        _secret_paint_set_modifier_input_by_name(obj_modifier, "Input_69", not checkbox_state)  #invert procedural vs manual
                         obj.location = obj.location #update modifier
         return {'FINISHED'}
 
@@ -5431,8 +5569,8 @@ class SelectObjectOperator(bpy.types.Operator):
                         bpy.context.view_layer.active_layer_collection = Coll_of_Active
                     newobj = obj.copy()
                     newobj.data = obj.data.copy()
-                    newobj.modifiers[0]["Input_99"] = True
-                    obj.modifiers[0]["Input_99"] = False
+                    _secret_paint_set_modifier_input_by_name(newobj.modifiers[0], "Input_99", True)
+                    _secret_paint_set_modifier_input_by_name(obj.modifiers[0], "Input_99", False)
                     bpy.context.collection.objects.link(newobj)
                     bpy.data.objects[newobj.name].select_set(False)
                     obj.location=obj.location
@@ -5514,20 +5652,28 @@ class biome_delete(bpy.types.Operator):
                     if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
                         for modifier in hai.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-                                hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
+                                source_modifier = _secret_paint_modifier(hai)
+                                brush_object = _secret_paint_modifier_input_by_name(source_modifier, "Input_2")
+                                brush_collection = _secret_paint_modifier_input_by_name(source_modifier, "Input_9")
+                                hair.append((hai, brush_object if brush_object else brush_collection))
             elif obj.type=="MESH" or obj.type=="EMPTY":
                 for hayr in bpy.context.scene.objects:
                     if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                         for modifier in hayr.modifiers: #if mask selected, if brush obj selected, if terrain selected
-                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
-                                hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
+                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and (
+                                _secret_paint_modifier_input_by_name(modifier, "Input_97") == obj
+                                or _secret_paint_modifier_input_by_name(modifier, "Input_2") == obj
+                                or _secret_paint_modifier_input_by_name(modifier, "Input_73") == obj
+                            ):
+                                brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                                brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                                hair.append((hayr, brush_object if brush_object else brush_collection))
 
             all_bgroups=[]
             for hayr in hair[:]:
-                if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
-            hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
+                biome_number = _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0", 0)
+                if biome_number not in all_bgroups: all_bgroups.append(biome_number)
+            hair_in_bgroup = [hayr[0] for hayr in hair[:] if _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0", 0) == int(self.object_biome)]
 
         if not hair_in_bgroup:
             _clear_side_panel_count_cache(reason="biome_delete_empty")
@@ -5784,26 +5930,39 @@ def find_all_listed_paintsystems(context,**kwargs):
             if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
                 for modifier in hai.modifiers:
                     if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-                        listed_hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
+                        brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                        brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                        listed_hair.append((hai, brush_object if brush_object else brush_collection))
     elif activeobj.type=="MESH" or activeobj.type=="EMPTY":
         for hayr in bpy.context.scene.objects:
             if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                 for modifier in hayr.modifiers: #if mask selected, if brush activeobj selected, if terrain selected
-                    if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == activeobj \
-                    or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == activeobj \
-                    or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == activeobj:
-                        listed_hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
+                    if (
+                        modifier.type == 'NODES'
+                        and modifier.node_group
+                        and modifier.node_group.name == "Secret Paint"
+                        and (
+                            _secret_paint_modifier_input_by_name(modifier, "Input_97") == activeobj
+                            or _secret_paint_modifier_input_by_name(modifier, "Input_2") == activeobj
+                            or _secret_paint_modifier_input_by_name(modifier, "Input_73") == activeobj
+                        )
+                    ):
+                        brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                        brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                        listed_hair.append((hayr, brush_object if brush_object else brush_collection))
     return listed_hair
 def biome_remove_gaps(context,biome_hair):
     all_biome_numbers=[]
     for hayr in biome_hair[:]:
-        if hayr[0].modifiers[0]["Socket_0"] not in all_biome_numbers: all_biome_numbers.append(hayr[0].modifiers[0]["Socket_0"])
+        biome_number = _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0")
+        if biome_number not in all_biome_numbers: all_biome_numbers.append(biome_number)
     all_biome_numbers.sort()
     loop = 1
     for biome_number in all_biome_numbers[:]:
         for hayr in biome_hair[:]:
-            if hayr[0].modifiers[0]["Socket_0"] == biome_number:
-                hayr[0].modifiers[0]["Socket_0"] = loop
+            modifier = hayr[0].modifiers[0]
+            if _secret_paint_modifier_input_by_name(modifier, "Socket_0") == biome_number:
+                _secret_paint_set_modifier_input_by_name(modifier, "Socket_0", loop)
                 biome_hair.remove(hayr)
         loop += 1
 
@@ -5825,25 +5984,26 @@ def biomegroupreorder_f(context,**kwargs):
     if move_to_extreme:
         all_biome_numbers = []
         for hayr in hair[:]:
-            if hayr[0].modifiers[0]["Socket_0"] not in all_biome_numbers: all_biome_numbers.append(hayr[0].modifiers[0]["Socket_0"])
+            biome_number = _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0")
+            if biome_number not in all_biome_numbers: all_biome_numbers.append(biome_number)
         if direction == -1: destination_biome = min(all_biome_numbers)-1
         elif direction == +1: destination_biome = max(all_biome_numbers)+1
-    else: destination_biome = activeobj.modifiers[0]["Socket_0"] + direction
-    hair_in_destination_biome = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == destination_biome]
+    else: destination_biome = _secret_paint_modifier_input_by_name(activeobj.modifiers[0], "Socket_0", 0) + direction
+    hair_in_destination_biome = [hayr[0] for hayr in hair[:] if _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0") == destination_biome]
     for obj in objselection:
         if obj.type == "CURVES" and obj.modifiers:
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                    modif["Socket_0"] = destination_biome
-                    modif["Socket_3"] = False #reset temp visibility
-                    modif["Socket_4"] = False
-                    modif["Socket_5"] = False
-                    modif["Socket_6"] = False
+                    _secret_paint_set_modifier_input_by_name(modif, "Socket_0", destination_biome)
+                    for socket_name in ("Socket_3", "Socket_4", "Socket_5", "Socket_6"):
+                        _secret_paint_set_modifier_input_by_name(modif, socket_name, False)
                     if len(hair_in_destination_biome) >=1:
-                        modif["Socket_2"] = hair_in_destination_biome[0].modifiers[0]["Socket_2"] #inherit biome visibility viewport from the destination biome that the hair is being transferred to. but only if it's not an empty biome, otherwise don't update and keep current state
-                        modif["Socket_15"] = hair_in_destination_biome[0].modifiers[0]["Socket_15"] #inherit biome visibility viewport from the destination biome that the hair is being transferred to. but only if it's not an empty biome, otherwise don't update and keep current state
+                        reference_modifier = hair_in_destination_biome[0].modifiers[0]
+                        _secret_paint_set_modifier_input_by_name(modif, "Socket_2", _secret_paint_modifier_input_by_name(reference_modifier, "Socket_2", False))
+                        _secret_paint_set_modifier_input_by_name(modif, "Socket_15", _secret_paint_modifier_input_by_name(reference_modifier, "Socket_15", False))
                     obj.location=obj.location
-                    if hair_in_destination_biome: modif["Socket_8"] = hair_in_destination_biome[0].modifiers[0]["Socket_8"]   #BIOME NAME
+                    if hair_in_destination_biome:
+                        _secret_paint_set_modifier_input_by_name(modif, "Socket_8", _secret_paint_modifier_input_by_name(hair_in_destination_biome[0].modifiers[0], "Socket_8", ""))
     biome_remove_gaps(context, hair)
 
 
@@ -5868,7 +6028,7 @@ def _secret_paint_panel_set_row_order(flat_rows):
         if modifier is None:
             continue
         try:
-            bgroup = int(modifier["Socket_0"])
+            bgroup = int(_secret_paint_modifier_input_by_name(modifier, "Socket_0", 0))
         except Exception:
             bgroup = modifier.get("Socket_0", 0)
         try:
@@ -5883,24 +6043,19 @@ def _secret_paint_panel_apply_biome_state(obj, destination_biome, reference_obj=
     if modifier is None:
         return False
 
-    try:
-        modifier["Socket_0"] = int(destination_biome)
-    except Exception:
-        modifier["Socket_0"] = destination_biome
+    _secret_paint_set_modifier_input_by_name(modifier, "Socket_0", int(destination_biome))
 
     for socket_name in ("Socket_3", "Socket_4", "Socket_5", "Socket_6"):
-        try:
-            modifier[socket_name] = False
-        except Exception:
-            pass
+        _secret_paint_set_modifier_input_by_name(modifier, socket_name, False)
 
     reference_modifier = _secret_paint_system_modifier(reference_obj)
     if reference_modifier is not None:
         for socket_name in ("Socket_2", "Socket_15", "Socket_8"):
-            try:
-                modifier[socket_name] = reference_modifier[socket_name]
-            except Exception:
-                pass
+            _secret_paint_set_modifier_input_by_name(
+                modifier,
+                socket_name,
+                _secret_paint_modifier_input_by_name(reference_modifier, socket_name),
+            )
     return True
 
 
@@ -5988,7 +6143,7 @@ def _secret_paint_panel_make_reorder_snapshot(context, object_name):
         socket_values = {}
         for socket_name in SECRET_PAINT_PANEL_DRAG_RESTORE_SOCKETS:
             try:
-                socket_values[socket_name] = modifier[socket_name]
+                socket_values[socket_name] = _secret_paint_modifier_input_by_name(modifier, socket_name)
             except Exception:
                 pass
 
@@ -6022,10 +6177,7 @@ def _secret_paint_panel_restore_reorder_snapshot(context, snapshot):
         modifier = _secret_paint_system_modifier(obj)
         if modifier is not None:
             for socket_name, socket_value in row_state.get("sockets", {}).items():
-                try:
-                    modifier[socket_name] = socket_value
-                except Exception:
-                    pass
+                _secret_paint_set_modifier_input_by_name(modifier, socket_name, socket_value)
 
         try:
             if row_state.get("has_panel_order", False):
@@ -6243,19 +6395,13 @@ def _secret_paint_panel_reorder_entries(context, activeobj, flat_rows, buttonobj
                 if modifier is None:
                     continue
                 try:
-                    modifier["Socket_0"] = bgroup_numbers[row_entry["bgroup"]]
+                    _secret_paint_set_modifier_input_by_name(modifier, "Socket_0", bgroup_numbers[row_entry["bgroup"]])
                 except Exception:
                     continue
-                try:
-                    modifier["Socket_8"] = name_by_bgroup[row_entry["bgroup"]]
-                except Exception:
-                    pass
+                _secret_paint_set_modifier_input_by_name(modifier, "Socket_8", name_by_bgroup[row_entry["bgroup"]])
                 if row_entry.get("object") in moving_objects:
                     for socket_name in ("Socket_3", "Socket_4", "Socket_5", "Socket_6"):
-                        try:
-                            modifier[socket_name] = False
-                        except Exception:
-                            pass
+                        _secret_paint_set_modifier_input_by_name(modifier, socket_name, False)
             _secret_paint_panel_set_row_order(new_flat_rows)
             _clear_side_panel_count_cache(reason="panel_drag_reorder")
             _secret_paint_tag_redraw_view3d_areas(context)
@@ -6419,11 +6565,11 @@ def _secret_paint_panel_duplicate_backup_system(context, obj):
     backup_modifier = _secret_paint_system_modifier(newobj)
     if backup_modifier is not None:
         try:
-            backup_modifier["Input_99"] = True
+            _secret_paint_set_modifier_input_by_name(backup_modifier, "Input_99", True)
         except Exception:
             pass
     try:
-        source_modifier["Input_99"] = False
+        _secret_paint_set_modifier_input_by_name(source_modifier, "Input_99", False)
         obj.location = obj.location
     except Exception:
         pass
@@ -6511,23 +6657,21 @@ def _secret_paint_panel_set_object_mode(context):
 
 
 def _secret_paint_panel_modifier_bool(obj, socket_name, default=False):
-    modifier = _secret_paint_system_modifier(obj)
-    if modifier is None:
-        return default
-    try:
-        return bool(modifier[socket_name])
-    except Exception:
-        return default
+    return bool(_secret_paint_panel_modifier_value(obj, socket_name, default))
 
 
 def _secret_paint_panel_modifier_value(obj, socket_name, default=None):
     modifier = _secret_paint_system_modifier(obj)
     if modifier is None:
         return default
-    try:
-        return modifier[socket_name]
-    except Exception:
-        return default
+    return _secret_paint_modifier_input_by_name(modifier, socket_name, default)
+
+
+def _secret_paint_panel_set_modifier_value(obj, socket_name, value):
+    modifier = _secret_paint_system_modifier(obj)
+    if modifier is None:
+        return False
+    return _secret_paint_set_modifier_input_by_name(modifier, socket_name, value)
 
 
 def _secret_paint_panel_object_is_in_view_layer(obj):
@@ -6608,19 +6752,22 @@ def _secret_paint_panel_apply_procedural_value(value, object_names):
         if modifier is None:
             continue
         try:
-            if bool(value) and not bool(modifier["Input_69"]) and modifier["Input_68"] > 0 and obj.parent:
+            procedural_enabled = bool(_secret_paint_modifier_input_by_name(modifier, "Input_69", False))
+            density = _secret_paint_modifier_input_by_name(modifier, "Input_68", 0.0)
+            scale_compensation = _secret_paint_modifier_input_by_name(modifier, "Input_100", 1.0)
+            if bool(value) and not procedural_enabled and density > 0 and obj.parent:
                 all_terrain_area = sum(face.area for face in obj.parent.data.polygons)
-                density_estimate = all_terrain_area / ((1 / ((modifier["Input_68"] ** 0.5) * modifier["Input_100"])) ** 2)
+                density_estimate = all_terrain_area / ((1 / ((density ** 0.5) * scale_compensation)) ** 2)
                 if density_estimate > _secret_paint_pref("trigger_viewport_mask", 15000):
-                    modifier["Input_98"] = False
-                    modifier["Input_97"] = None
+                    _secret_paint_set_modifier_input_by_name(modifier, "Input_98", False)
+                    _secret_paint_set_modifier_input_by_name(modifier, "Input_97", None)
                     secretpaint_viewport_mask_function(
                         _SECRET_PAINT_PANEL_REPORT_SINK,
                         context,
                         objselection=[obj],
                         activeobj=obj,
                     )
-            modifier["Input_69"] = bool(value)
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_69", bool(value))
             obj.location = obj.location
         except Exception:
             pass
@@ -6772,8 +6919,8 @@ def _secret_paint_panel_render_prop_set(self, value):
         if modifier is None:
             continue
         try:
-            modifier["Input_99"] = bool(value)
-            modifier["Socket_14"] = False
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_99", bool(value))
+            _secret_paint_set_modifier_input_by_name(modifier, "Socket_14", False)
             obj.location = obj.location
         except Exception:
             pass
@@ -6783,8 +6930,8 @@ def _secret_paint_panel_render_prop_set(self, value):
         if modifier is None:
             continue
         try:
-            modifier["Socket_3"] = False
-            modifier["Socket_4"] = False
+            _secret_paint_set_modifier_input_by_name(modifier, "Socket_3", False)
+            _secret_paint_set_modifier_input_by_name(modifier, "Socket_4", False)
             obj.location = obj.location
         except Exception:
             pass
@@ -6803,10 +6950,14 @@ def _secret_paint_panel_render_modified_click(context, buttonobj, *, alt=False, 
                 if modifier is None:
                     continue
                 try:
-                    if bool(modifier["Socket_3"]):
-                        modifier["Input_99"] = not bool(modifier["Input_99"])
-                    modifier["Socket_3"] = False
-                    modifier["Socket_4"] = False
+                    if bool(_secret_paint_modifier_input_by_name(modifier, "Socket_3", False)):
+                        _secret_paint_set_modifier_input_by_name(
+                            modifier,
+                            "Input_99",
+                            not bool(_secret_paint_modifier_input_by_name(modifier, "Input_99", False)),
+                        )
+                    _secret_paint_set_modifier_input_by_name(modifier, "Socket_3", False)
+                    _secret_paint_set_modifier_input_by_name(modifier, "Socket_4", False)
                     obj.location = obj.location
                 except Exception:
                     pass
@@ -6816,8 +6967,8 @@ def _secret_paint_panel_render_modified_click(context, buttonobj, *, alt=False, 
                 if modifier is None:
                     continue
                 try:
-                    modifier["Socket_3"] = False
-                    modifier["Socket_4"] = False
+                    _secret_paint_set_modifier_input_by_name(modifier, "Socket_3", False)
+                    _secret_paint_set_modifier_input_by_name(modifier, "Socket_4", False)
                     obj.location = obj.location
                 except Exception:
                     pass
@@ -6828,13 +6979,13 @@ def _secret_paint_panel_render_modified_click(context, buttonobj, *, alt=False, 
                     continue
                 try:
                     if obj in targets:
-                        if bool(modifier["Input_99"]):
-                            modifier["Input_99"] = False
-                            modifier["Socket_3"] = True
-                        modifier["Socket_4"] = True
-                    elif not bool(modifier["Input_99"]):
-                        modifier["Socket_3"] = True
-                        modifier["Input_99"] = True
+                        if bool(_secret_paint_modifier_input_by_name(modifier, "Input_99", False)):
+                            _secret_paint_set_modifier_input_by_name(modifier, "Input_99", False)
+                            _secret_paint_set_modifier_input_by_name(modifier, "Socket_3", True)
+                        _secret_paint_set_modifier_input_by_name(modifier, "Socket_4", True)
+                    elif not bool(_secret_paint_modifier_input_by_name(modifier, "Input_99", False)):
+                        _secret_paint_set_modifier_input_by_name(modifier, "Socket_3", True)
+                        _secret_paint_set_modifier_input_by_name(modifier, "Input_99", True)
                     obj.location = obj.location
                 except Exception:
                     pass
@@ -6847,8 +6998,8 @@ def _secret_paint_panel_render_modified_click(context, buttonobj, *, alt=False, 
             if modifier is None:
                 continue
             try:
-                modifier["Input_99"] = False
-                modifier["Socket_14"] = viewport_hidden
+                _secret_paint_set_modifier_input_by_name(modifier, "Input_99", False)
+                _secret_paint_set_modifier_input_by_name(modifier, "Socket_14", viewport_hidden)
                 obj.location = obj.location
             except Exception:
                 pass
@@ -7245,20 +7396,14 @@ class panel_keyboard_delete(bpy.types.Operator):
             surface_obj = getattr(system_obj, "parent", None)
             if surface_obj is None:
                 modifier = _secret_paint_system_modifier(system_obj)
-                try:
-                    surface_obj = modifier["Input_73"] if modifier is not None else None
-                except Exception:
-                    surface_obj = None
+                surface_obj = _secret_paint_modifier_input_by_name(modifier, "Input_73")
             if surface_obj is not None and surface_obj not in affected_surfaces:
                 affected_surfaces.append(surface_obj)
 
         replacement_obj = getattr(anchor_obj, "parent", None)
         if replacement_obj is None:
             modifier = _secret_paint_system_modifier(anchor_obj)
-            try:
-                replacement_obj = modifier["Input_73"] if modifier is not None else None
-            except Exception:
-                replacement_obj = None
+            replacement_obj = _secret_paint_modifier_input_by_name(modifier, "Input_73")
 
         for system_obj in systems_to_delete:
             try:
@@ -7525,26 +7670,34 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
         if buttonobj not in objselection: objselection.append(buttonobj) #sometimes the active object might not be selected
         if buttonobj != bpy.context.active_object and buttonobj not in bpy.context.selected_objects: objselection = [buttonobj]   #when called from button: if the button references an object that was not selected or active: disregard selection and just use the row object
         hair = find_all_listed_paintsystems(context, activeobj=context.object)
-        hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == buttonbiome]
+        hair_in_bgroup = [
+            hayr[0]
+            for hayr in hair[:]
+            if _secret_paint_panel_modifier_value(hayr[0], "Socket_0", None) == buttonbiome
+        ]
         for ob in objselection[:]:  #constrain the selected objects to the active biome from where you pressed the button
             if ob not in hair_in_bgroup: objselection.remove(ob)
         if event.alt:
-            if buttonobj.modifiers[0]["Socket_4"] == True:   # if True in [hairr.modifiers[0]["Socket_3"] for hairr in hair_in_bgroup]:
+            if _secret_paint_panel_modifier_bool(buttonobj, "Socket_4", False):   # if True in [hairr.modifiers[0]["Socket_3"] for hairr in hair_in_bgroup]:
                 for hayii in hair_in_bgroup:
                     if hayii.type == "CURVES":
                         for modif in hayii.modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                                if modif["Socket_3"]==True: modif["Input_99"] = not modif["Input_99"]  #TOGGLE BACK TO ORIGINAL STATE
-                                modif["Socket_3"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
-                                modif["Socket_4"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
+                                if _secret_paint_modifier_input_by_name(modif, "Socket_3", False):
+                                    _secret_paint_set_modifier_input_by_name(
+                                        modif, "Input_99",
+                                        not _secret_paint_modifier_input_by_name(modif, "Input_99", False),
+                                    )  # TOGGLE BACK TO ORIGINAL STATE
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_3", False)
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_4", False)
                                 hayii.location = hayii.location
             else:
                 for hayyur in hair_in_bgroup:  #hair[:]:
                     if hayyur.type == "CURVES":
                         for modif in hayyur.modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                                modif["Socket_3"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
-                                modif["Socket_4"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_3", False)
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_4", False)
                                 hayyur.location = hayyur.location
 
                 for hayii in hair_in_bgroup:
@@ -7552,19 +7705,19 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                         for modif in hayii.modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 if hayii in objselection:
-                                    if modif["Input_99"] == True:                 # if modif["Input_99"] == False: modif["Socket_3"] = True  #IF IT WAS ALREADY HIDDEN, MARK FOR TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP") (in order to toggle back and forth exactly as everything was)
-                                        modif["Input_99"] = False #enable
-                                        modif["Socket_3"] = True  #MARK FOR TOGGLE
-                                    modif["Socket_4"] = True  #MARK AS ORIGINAL SOLOED
+                                    if _secret_paint_modifier_input_by_name(modif, "Input_99", False):
+                                        _secret_paint_set_modifier_input_by_name(modif, "Input_99", False)
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_3", True)
+                                    _secret_paint_set_modifier_input_by_name(modif, "Socket_4", True)
                                 else:
-                                    if modif["Input_99"] == False: #CHECK IF THE SYSTEM WAS ALREADY ENABLED (because a system might already be manually hidden)
-                                        modif["Socket_3"] = True #ONLY MARK THE SYSTEMS THAT WE'RE HIDING  (in order to avoid toggling visibility of systems that were turned off by hand)
-                                        modif["Input_99"] = True  #HIDE IT
+                                    if not _secret_paint_modifier_input_by_name(modif, "Input_99", False):
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_3", True)
+                                        _secret_paint_set_modifier_input_by_name(modif, "Input_99", True)
 
                                 hayii.location=hayii.location #update paint system
         elif event.shift:
-            mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
-            mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
+            mute_visibility_render = _secret_paint_panel_modifier_bool(buttonobj, "Input_99", False)
+            mute_visibility_viewport = _secret_paint_panel_modifier_bool(buttonobj, "Socket_14", False)
 
             if mute_visibility_render == True:    #EVEN IF IT'S THE WRONG BEHAVIOR, IT'S MORE INTUITIVE TO TOGGLE THE CURRENT STATE BACK TO EVERYTHING VISIBLE
                 mute_visibility_render_new = False
@@ -7580,12 +7733,12 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Input_99"] = mute_visibility_render_new
-                            modif["Socket_14"] = mute_visibility_viewport_new
+                            _secret_paint_set_modifier_input_by_name(modif, "Input_99", mute_visibility_render_new)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_14", mute_visibility_viewport_new)
                             obj.location=obj.location
         else:
-            mute_visibility_render = buttonobj.modifiers[0]["Input_99"]
-            mute_visibility_viewport = buttonobj.modifiers[0]["Socket_14"]
+            mute_visibility_render = _secret_paint_panel_modifier_bool(buttonobj, "Input_99", False)
+            mute_visibility_viewport = _secret_paint_panel_modifier_bool(buttonobj, "Socket_14", False)
 
             if mute_visibility_render == True or mute_visibility_viewport == True:
                 mute_visibility_render_new = False
@@ -7598,16 +7751,16 @@ class ToggleVisibilityOperatorRender(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Input_99"] = mute_visibility_render_new
-                            modif["Socket_14"] = mute_visibility_viewport_new
+                            _secret_paint_set_modifier_input_by_name(modif, "Input_99", mute_visibility_render_new)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_14", mute_visibility_viewport_new)
                             obj.location=obj.location
 
             for hayyur in hair_in_bgroup:  #hair[:]:  #RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                 if hayyur.type == "CURVES":
                     for modif in hayyur.modifiers:  # modifier.name == "GeometryNodes"
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Socket_3"] = False  #RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
-                            modif["Socket_4"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_3", False)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_4", False)
                             hayyur.location = hayyur.location
         _clear_side_panel_count_cache(reason="toggle_visibilityrender")
         _secret_paint_tag_redraw_view3d_areas(context)
@@ -7623,25 +7776,26 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
         hair_in_bgroup =[]
         hair_in_OTHER_bgroups =[]
         for hayr in hair[:]:
-            if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome): hair_in_bgroup.append(hayr[0])
+            if _secret_paint_panel_modifier_value(hayr[0], "Socket_0", None) == int(self.object_biome): hair_in_bgroup.append(hayr[0])
             else: hair_in_OTHER_bgroups.append(hayr[0])
         if event.alt: #SOLO THIS BIOME
-            if True in [hairr.modifiers[0]["Socket_6"] for hairr in hair_in_bgroup]:
+            if True in [_secret_paint_panel_modifier_bool(hairr, "Socket_6", False) for hairr in hair_in_bgroup]:
                 for hayii in hair[:]:
                     if hayii[0].type == "CURVES":
                         for modif in hayii[0].modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                                if modif["Socket_5"]==True: modif["Socket_2"] = not modif["Socket_2"]  #TOGGLE BACK TO ORIGINAL STATE
-                                modif["Socket_5"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
-                                modif["Socket_6"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
+                                if _secret_paint_modifier_input_by_name(modif, "Socket_5", False):
+                                    _secret_paint_set_modifier_input_by_name(modif, "Socket_2", not _secret_paint_modifier_input_by_name(modif, "Socket_2", False))
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_5", False)
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_6", False)
                                 hayii[0].location = hayii[0].location
             else:
                 for hayyur in hair[:]:  # RESET THE BIOME TEMPORARY CHECKBOXES ("TURN OFF SOLOED TEMP")
                     if hayyur[0].type == "CURVES":
                         for modif in hayyur[0].modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                                modif["Socket_5"] = False  # RESET THE TEMPORARY BIOME CHECKBOX ("TURN OFF SOLOED TEMP")
-                                modif["Socket_6"] = False  # RESET THE MARKED BIOME AS ORIGINAL CHECKBOX
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_5", False)
+                                _secret_paint_set_modifier_input_by_name(modif, "Socket_6", False)
                                 hayyur[0].location = hayyur[0].location
 
                 for hayii in hair[:]:
@@ -7649,19 +7803,19 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                         for modif in hayii[0].modifiers:  # modifier.name == "GeometryNodes"
                             if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
                                 if hayii[0] in hair_in_bgroup:
-                                    if modif["Socket_2"] == True:                 # if modif["Input_99"] == False: modif["Socket_3"] = True  #IF IT WAS ALREADY HIDDEN, MARK FOR TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP") (in order to toggle back and forth exactly as everything was)
-                                        modif["Socket_2"] = False #enable biome
-                                        modif["Socket_5"] = True  #MARK FOR TOGGLE
-                                    modif["Socket_6"] = True  #MARK AS ORIGINAL SOLOED
+                                    if _secret_paint_modifier_input_by_name(modif, "Socket_2", False):
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_2", False)
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_5", True)
+                                    _secret_paint_set_modifier_input_by_name(modif, "Socket_6", True)
                                 else:
-                                    if modif["Socket_2"] == False: #CHECK IF THE SYSTEM WAS ALREADY ENABLED (because a system might already be manually hidden)
-                                        modif["Socket_5"] = True #ONLY MARK THE SYSTEMS THAT WE'RE HIDING  (in order to avoid toggling visibility of systems that were turned off by hand)
-                                        modif["Socket_2"] = True  #HIDE IT
+                                    if not _secret_paint_modifier_input_by_name(modif, "Socket_2", False):
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_5", True)
+                                        _secret_paint_set_modifier_input_by_name(modif, "Socket_2", True)
 
                                 hayii[0].location=hayii[0].location #update paint system
         elif event.shift:
-            mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
-            mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
+            mute_biome_visibility_render = False if False in [_secret_paint_panel_modifier_bool(hairr, "Socket_2", False) for hairr in hair_in_bgroup] else True
+            mute_biome_visibility_viewport = False if False in [_secret_paint_panel_modifier_bool(hairr, "Socket_15", False) for hairr in hair_in_bgroup] else True
 
             if mute_biome_visibility_render == True:    #EVEN IF IT'S THE WRONG BEHAVIOR, IT'S MORE INTUITIVE TO TOGGLE THE CURRENT STATE BACK TO EVERYTHING VISIBLE
                 mute_biome_visibility_render_new = False
@@ -7677,12 +7831,12 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Socket_2"] = mute_biome_visibility_render_new
-                            modif["Socket_15"] = mute_biome_visibility_viewport_new
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_2", mute_biome_visibility_render_new)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_15", mute_biome_visibility_viewport_new)
                             obj.location=obj.location
         else:
-            mute_biome_visibility_render = False if False in [hairr.modifiers[0]["Socket_2"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
-            mute_biome_visibility_viewport = False if False in [hairr.modifiers[0]["Socket_15"] for hairr in hair_in_bgroup] else True  # IF THERE'S A SINGLE ACTIVE SYSTEM, DISABLE EVERYTHING. ELSE ENABLE EVERYTHING
+            mute_biome_visibility_render = False if False in [_secret_paint_panel_modifier_bool(hairr, "Socket_2", False) for hairr in hair_in_bgroup] else True
+            mute_biome_visibility_viewport = False if False in [_secret_paint_panel_modifier_bool(hairr, "Socket_15", False) for hairr in hair_in_bgroup] else True
 
             if mute_biome_visibility_render == True or mute_biome_visibility_viewport == True:
                 mute_biome_visibility_render_new = False
@@ -7695,16 +7849,16 @@ class ToggleVisibilityOperatorRenderBiome(bpy.types.Operator):
                 if obj.type == "CURVES":
                     for modif in obj.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Socket_2"] = mute_biome_visibility_render_new
-                            modif["Socket_15"] = mute_biome_visibility_viewport_new
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_2", mute_biome_visibility_render_new)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_15", mute_biome_visibility_viewport_new)
                             obj.location=obj.location
 
             for hayii in hair[:]:  #RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
                 if hayii[0].type == "CURVES":
                     for modif in hayii[0].modifiers:  # modifier.name == "GeometryNodes"
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                            modif["Socket_5"] = False  # RESET THE TEMPORARY CHECKBOX ("TURN OFF SOLOED TEMP")
-                            modif["Socket_6"] = False  # RESET THE MARKED AS ORIGINAL CHECKBOX
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_5", False)
+                            _secret_paint_set_modifier_input_by_name(modif, "Socket_6", False)
                             hayii[0].location = hayii[0].location
         _clear_side_panel_count_cache(reason="toggle_visibilityrender_biome")
         _secret_paint_tag_redraw_view3d_areas(context)
@@ -7747,16 +7901,23 @@ class toggle_display_bounds_biome(bpy.types.Operator):
                 if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
                     for modifier in hai.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-                            hair.append((hai, hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
+                            source_modifier = _secret_paint_modifier(hai)
+                            brush_object = _secret_paint_modifier_input_by_name(source_modifier, "Input_2")
+                            brush_collection = _secret_paint_modifier_input_by_name(source_modifier, "Input_9")
+                            hair.append((hai, brush_object if brush_object else brush_collection))
         elif obj.type == "MESH" or obj.type == "EMPTY":
             for hayr in bpy.context.scene.objects:
                 if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                     for modifier in hayr.modifiers:  # if mask selected, if brush obj selected, if terrain selected
-                        if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
-                                or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
-                                or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
-                            hair.append((hayr, hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-        hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
+                        if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and (
+                            _secret_paint_modifier_input_by_name(modifier, "Input_97") == obj
+                            or _secret_paint_modifier_input_by_name(modifier, "Input_2") == obj
+                            or _secret_paint_modifier_input_by_name(modifier, "Input_73") == obj
+                        ):
+                            brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                            brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                            hair.append((hayr, brush_object if brush_object else brush_collection))
+        hair_in_bgroup = [hayr[0] for hayr in hair[:] if _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0", 0) == int(self.object_biome)]
         if hair_in_bgroup:
             buttonobj_status= hair_in_bgroup[0].display_type
             for obj in hair_in_bgroup:
@@ -7799,7 +7960,11 @@ class secretpaint_viewport_mask_biome(bpy.types.Operator):
             if event.alt:  # select only mask object
                 for x in bpy.context.selected_objects: x.select_set(False)  #deselect everything
                 for hai in hair_in_bgroup:
-                    if hai.modifiers[0]["Input_97"]: maskobsel = hai.modifiers[0]["Input_97"]
+                    maskobsel = _secret_paint_modifier_input_by_name(
+                        _secret_paint_modifier(hai),
+                        "Input_97",
+                        None,
+                    )
                     break
                 if maskobsel:
                     bpy.context.view_layer.objects.active = maskobsel
@@ -8217,8 +8382,8 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
                         oobjj)
                     if oobjj.parent and oobjj.parent not in all_found_parents: all_found_parents.append(
                         oobjj.parent)
-                    temp_variable_for_mask_detection1.append(modifier["Input_98"])  # checkbox for mask
-                    temp_variable_for_mask_detection2.append(modifier["Input_97"])
+                    temp_variable_for_mask_detection1.append(_secret_paint_modifier_input_by_name(modifier, "Input_98", False))  # checkbox for mask
+                    temp_variable_for_mask_detection2.append(_secret_paint_modifier_input_by_name(modifier, "Input_97", None))
 
 
     all_hair_share_same_mask_settings = False
@@ -8232,15 +8397,19 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
     if N_Of_Selected == len(objs_with_orencurve): all_sel_are_orencurves = True
     if mask_found:
         for scattered_hair in objs_with_orencurve:
-            scattered_hair.modifiers[0]["Input_98"] = True
-            scattered_hair.modifiers[0]["Input_97"] = mask_found
+            modifier = _secret_paint_modifier(scattered_hair)
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_98", True)
+            _secret_paint_set_modifier_input_by_name(modifier, "Input_97", mask_found)
 
             scattered_hair.hide_viewport = True  # refresh
             scattered_hair.hide_viewport = False  # refresh
             scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
     else:
-        checkboxstatus = activeobj.modifiers[0]["Input_98"]
-        maskstatus = activeobj.modifiers[0]["Input_97"]
+        active_modifier = _secret_paint_modifier(activeobj)
+        if active_modifier is None:
+            return {'CANCELLED'}
+        checkboxstatus = bool(_secret_paint_modifier_input_by_name(active_modifier, "Input_98", False))
+        maskstatus = _secret_paint_modifier_input_by_name(active_modifier, "Input_97", None)
         if all_hair_share_same_mask_settings:
             maskobj = None #[]
             if maskstatus == None:
@@ -8284,25 +8453,27 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
 
 
             for scattered_hair in objs_with_orencurve:
+                modifier = _secret_paint_modifier(scattered_hair)
                 if checkboxstatus:
-                    scattered_hair.modifiers[0]["Input_98"] = False  # checkbox
-                    scattered_hair.modifiers[0]["Input_97"] = None  # mask
+                    _secret_paint_set_modifier_input_by_name(modifier, "Input_98", False)  # checkbox
+                    _secret_paint_set_modifier_input_by_name(modifier, "Input_97", None)  # mask
 
                 elif checkboxstatus == False:
-                    scattered_hair.modifiers[0]["Input_98"] = True  # checkbox
+                    _secret_paint_set_modifier_input_by_name(modifier, "Input_98", True)  # checkbox
 
                     if maskstatus:
-                        scattered_hair.modifiers[0]["Input_97"] = maskstatus
+                        _secret_paint_set_modifier_input_by_name(modifier, "Input_97", maskstatus)
                     elif maskstatus == None:
-                        scattered_hair.modifiers[0]["Input_97"] = maskobj
+                        _secret_paint_set_modifier_input_by_name(modifier, "Input_97", maskobj)
 
                 scattered_hair.hide_viewport = True  # refresh
                 scattered_hair.hide_viewport = False  # refresh
                 scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
         else:
             for scattered_hair in objs_with_orencurve:
-                scattered_hair.modifiers[0]["Input_98"] = checkboxstatus
-                scattered_hair.modifiers[0]["Input_97"] = maskstatus
+                modifier = _secret_paint_modifier(scattered_hair)
+                _secret_paint_set_modifier_input_by_name(modifier, "Input_98", checkboxstatus)
+                _secret_paint_set_modifier_input_by_name(modifier, "Input_97", maskstatus)
                 scattered_hair.hide_viewport = True  # refresh
                 scattered_hair.hide_viewport = False  # refresh
                 scattered_hair.location = scattered_hair.location  # best way to update the scene ;update scene
@@ -8313,7 +8484,8 @@ def secretpaint_viewport_mask_function(*args,**kwargs): #objselection,activeobj,
         if obj.modifiers:
             for modifier in obj.modifiers:
                 if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint":  # modifier.name == "GeometryNodes"
-                    if modifier["Input_97"] and modifier["Input_97"] not in all_used_masks_in_blendfile: all_used_masks_in_blendfile.append(modifier["Input_97"])
+                    mask_object = _secret_paint_modifier_input_by_name(modifier, "Input_97", None)
+                    if mask_object and mask_object not in all_used_masks_in_blendfile: all_used_masks_in_blendfile.append(mask_object)
     for mask in all_masks_in_blendfile:
         if mask not in all_used_masks_in_blendfile:
             flag_make_row_object_active_after_deleting_mask = True if mask == bpy.context.active_object else False
@@ -8349,8 +8521,8 @@ def _secret_paint_viewport_mask_click_creates_temp_mask(context, activeobj):
             node_group = getattr(modifier, "node_group", None)
             if modifier.type == 'NODES' and node_group and node_group.name == "Secret Paint":
                 objs_with_orencurve.append(obj)
-                mask_enabled_values.append(modifier["Input_98"])
-                mask_object_values.append(modifier["Input_97"])
+                mask_enabled_values.append(_secret_paint_modifier_input_by_name(modifier, "Input_98", False))
+                mask_object_values.append(_secret_paint_modifier_input_by_name(modifier, "Input_97", None))
 
     if not objs_with_orencurve:
         return False
@@ -8358,7 +8530,11 @@ def _secret_paint_viewport_mask_click_creates_temp_mask(context, activeobj):
         return False
 
     try:
-        maskstatus = activeobj.modifiers[0]["Input_97"]
+        maskstatus = _secret_paint_modifier_input_by_name(
+            _secret_paint_modifier(activeobj),
+            "Input_97",
+            None,
+        )
     except Exception:
         return False
     if maskstatus is not None:
@@ -8385,9 +8561,14 @@ class secretpaint_viewport_mask(bpy.types.Operator):
 
         if event.alt: #select mask object
             for x in bpy.context.selected_objects: x.select_set(False) #objselection
-            if obbb.modifiers[0]["Input_97"]:
-                bpy.context.view_layer.objects.active = obbb.modifiers[0]["Input_97"]
-                obbb.modifiers[0]["Input_97"].select_set(True)
+            mask_object = _secret_paint_modifier_input_by_name(
+                _secret_paint_modifier(obbb),
+                "Input_97",
+                None,
+            )
+            if mask_object:
+                bpy.context.view_layer.objects.active = mask_object
+                mask_object.select_set(True)
             else:
                 for ob in bpy.context.scene.objects:
                     if ob.name.startswith("Secret Paint Viewport Mask"):
@@ -8436,13 +8617,13 @@ def select_biome_all_function(context):
         if activeobj.modifiers:
             for modif in activeobj.modifiers:
                 if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                    brushobj = activeobj.modifiers[0]["Input_2"]
-                    brushcoll = activeobj.modifiers[0]["Input_9"]
+                    brushobj = _secret_paint_modifier_input_by_name(modif, "Input_2")
+                    brushcoll = _secret_paint_modifier_input_by_name(modif, "Input_9")
     for obj in bpy.context.scene.objects:
         if obj.type == "CURVES":
             if obj.modifiers:
                 for modif in obj.modifiers:
-                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and obj.modifiers[0]["Input_2"] == brushobj and obj.modifiers[0]["Input_9"] == brushcoll:
+                    if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and _secret_paint_modifier_input_by_name(modif, "Input_2") == brushobj and _secret_paint_modifier_input_by_name(modif, "Input_9") == brushcoll:
                         bpy.data.objects[obj.name].select_set(True)
     return {'FINISHED'}
 class select_biome_all(bpy.types.Operator):
@@ -8472,7 +8653,7 @@ def secretpaint_cleanup_empty_systems(self,context):
     for obj in bpy.context.scene.objects:
         if obj.type == "CURVES" and obj.modifiers and obj != bpy.context.active_object and obj not in bpy.context.selected_objects:
             for modif in obj.modifiers:  # modifier.name == "GeometryNodes"
-                if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and (sum(len(spline.points) for spline in obj.data.curves)) == 0 and obj.modifiers[0]["Input_99"] == False and obj.modifiers[0]["Input_69"] == False:
+                if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint" and (sum(len(spline.points) for spline in obj.data.curves)) == 0 and not _secret_paint_modifier_input_by_name(modif, "Input_99", False) and not _secret_paint_modifier_input_by_name(modif, "Input_69", False):
                     bpy.data.objects.remove(obj, do_unlink=True)
 def _secret_paint_collection_from_candidate(collection_candidate):
     if collection_candidate is None:
@@ -8556,18 +8737,36 @@ def secretpaint_create_curve(self,context,**kwargs):
                 except:
                     continue
                 setattr(mod_copy, attr, getattr(mod, attr))
+            try:
                 for key, value in mod.items():
                     try:
                         mod_copy[key] = value
-                    except: print("failllllllllll", value)
-    hairCurves.modifiers[0]["Input_99"] = True    #ALWAYS TURN OFF SYSTEM, CALCULATE IF MASK IS NEEDED, THEN TURN IT ON FOR EACH INDIVIDUAL SCATTER SCENARIO
-    hairCurves.modifiers[0]["Input_71"] = float(random.choice(range(0, 10)))  # random noise W
-    hairCurves.modifiers[0]["Input_73"] = targetOBJsurface #surface
-    hairCurves.modifiers[0]["Input_100"] = abs(max(targetOBJsurface.scale))    # OBJ SCALE COMPENSATION calculated from max dimension
+                    except Exception:
+                        pass
+            except (AttributeError, TypeError):
+                pass
+            _secret_paint_copy_modifier_inputs(mod, mod_copy)
+    hair_modifier = hairCurves.modifiers[0]
+    _secret_paint_set_modifier_input_by_name(
+        hair_modifier,
+        "Input_99",
+        True,
+    )  # ALWAYS TURN OFF SYSTEM while mask calculations are prepared.
+    _secret_paint_set_modifier_input_by_name(
+        hair_modifier,
+        "Input_71",
+        float(random.choice(range(0, 10))),
+    )  # random noise W
+    _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_73", targetOBJsurface)
+    _secret_paint_set_modifier_input_by_name(
+        hair_modifier,
+        "Input_100",
+        abs(max(targetOBJsurface.scale)),
+    )  # OBJ SCALE COMPENSATION calculated from max dimension
     if targetOBJsurface.modifiers:   #if armature modifier detected, turn on deform on surface
         for mod in targetOBJsurface.modifiers:
             if mod.type in ["ARMATURE","CAST","CURVE","DISPLACE","HOOK","LAPLACIANDEFORM","LATTICE","MESH_DEFORM","SHRINKWRAP","SIMPLE_DEFORM","SMOOTH","CORRECTIVE_SMOOTH","LAPLACIANSMOOTH","SURFACE_DEFORM","WARP","WAVE",]:
-                hairCurves.modifiers[0]["Input_63"] = True #DEFORM ON SURFACE
+                _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_63", True) #DEFORM ON SURFACE
                 targetOBJsurface.add_rest_position_attribute = True
     smallest_obj = brushOBJ[0]   #FIND SMALLES OBJECT WHEN PAINTING WITH A COLLECTION, when having similar flowers variations it's better to find the smallest one and calculate the density based on that rather than having spaces with the biggest one
     for obje in brushOBJ:
@@ -8594,8 +8793,18 @@ def secretpaint_create_curve(self,context,**kwargs):
         else: dimensions_of_smallest_axis = 1 / ((smallest_obj.dimensions[0]/smallest_obj.scale[0]) **2) #smallest_obj.scale[1])
         if dimensions_of_smallest_axis < 10000: #if it's more than 10000 it's because it's an infinitely thin plane, so ignore it and leave modifier default density value of 0.2
             density_value = secret_paint_apply_object_size_density_multiplier(dimensions_of_smallest_axis, context)
-            hairCurves.modifiers[0]["Input_68"] = density_value
-            hairCurves.modifiers[0]["Socket_11"] =     (0.5/((density_value ** 0.5) *hairCurves.modifiers[0]["Input_100"]))*2
+            _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_68", density_value)
+            scale_compensation = _secret_paint_modifier_input_by_name(
+                hair_modifier,
+                "Input_100",
+                1.0,
+            )
+            if scale_compensation:
+                _secret_paint_set_modifier_input_by_name(
+                    hair_modifier,
+                    "Socket_11",
+                    (0.5 / ((density_value ** 0.5) * scale_compensation)) * 2,
+                )
     return hairCurves
 def auto_assembly_print(*parts):
     print("Secret Paint Auto Assembly:", *parts)
@@ -8757,9 +8966,15 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                     if oobjj != activeobj and oobjj not in selobjs_without_active_with_orencurve: selobjs_without_active_with_orencurve.append(oobjj)
                     if oobjj.type == "CURVES" and oobjj.parent and oobjj.parent not in all_found_parents: all_found_parents.append(oobjj.parent) #oobjj.data.surface CANT WORK BECAUSE OF SHIFT+D LINKED DUPLICATE MESHES
                     if oobjj != activeobj and oobjj.type == "CURVES" and oobjj.parent and oobjj.parent not in all_found_parents_without_activeobj: all_found_parents_without_activeobj.append(oobjj.parent)
-                    if modifier["Input_83_attribute_name"]:
+                    modifier_attribute_name = _secret_paint_modifier_input_by_name(
+                        modifier,
+                        "Input_83_attribute_name",
+                        "",
+                    )
+                    if modifier_attribute_name:
                         all_hair_with_Vgroup.append(oobjj)
-                        if modifier["Input_83_attribute_name"] not in all_Vgroups: all_Vgroups.append(modifier["Input_83_attribute_name"])
+                        if modifier_attribute_name not in all_Vgroups:
+                            all_Vgroups.append(modifier_attribute_name)
 
     for mesh in all_meshes:
         if mesh not in all_found_parents: all_meshes_that_are_not_parents.append(mesh)
@@ -8900,20 +9115,33 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             elif mesh.type == "CURVES": allTerrainArea = sum(face.area for face in mesh.parent.data.polygons)  #activeobj.data.surface
             all_bgroups_starter = []
             for hayr in selobjs_without_active_with_orencurve:
-                if hayr.modifiers[0]["Socket_0"] not in all_bgroups_starter: all_bgroups_starter.append(hayr.modifiers[0]["Socket_0"])
+                biome_number = _secret_paint_modifier_input_by_name(
+                    _secret_paint_modifier(hayr),
+                    "Socket_0",
+                    0,
+                )
+                if biome_number not in all_bgroups_starter:
+                    all_bgroups_starter.append(biome_number)
 
 
             for parentt in all_found_parents:
                 hair = find_all_listed_paintsystems(context, activeobj=mesh, objselection=[mesh])
                 all_bgroups = []
                 for hayr in hair[:]:
-                    if hayr[0].modifiers[0]["Socket_0"] not in all_bgroups: all_bgroups.append(hayr[0].modifiers[0]["Socket_0"])
+                    biome_number = _secret_paint_modifier_input_by_name(
+                        _secret_paint_modifier(hayr[0]),
+                        "Socket_0",
+                        0,
+                    )
+                    if biome_number not in all_bgroups:
+                        all_bgroups.append(biome_number)
                 all_bgroups.sort()
                 loop = 1
                 for biome_number in all_bgroups[:]:
                     for hayr in hair[:]:
-                        if hayr[0].modifiers[0]["Socket_0"] == biome_number:
-                            hayr[0].modifiers[0]["Socket_0"] = loop
+                        hayr_modifier = _secret_paint_modifier(hayr[0])
+                        if _secret_paint_modifier_input_by_name(hayr_modifier, "Socket_0", 0) == biome_number:
+                            _secret_paint_set_modifier_input_by_name(hayr_modifier, "Socket_0", loop)
                             hair.remove(hayr)
                     loop += 1
                 if all_bgroups: additional_biome_n = max(all_bgroups)
@@ -8929,28 +9157,56 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
                                     continue
                                 newlycreated_hair.append(hairCurves)
                                 newlycreated_hair_for_currentlyprocessing_mesh.append(hairCurves)
+                                source_modifier = _secret_paint_modifier(hair)
+                                target_modifier = _secret_paint_modifier(hairCurves)
+                                if source_modifier is None or target_modifier is None:
+                                    continue
                                 if _secret_paint_pref("checkboxKeepManualWhenTransferBiome", False) == False:
-                                    if N_Of_Selected >= 3 or hair.modifiers[0]["Input_69"]: hairCurves.modifiers[0]["Input_69"] = True  # generate hair
-                                hairCurves.modifiers[0]["Input_68"] = hair.modifiers[0]["Input_68"]  # density
-                                hairCurves.modifiers[0]["Socket_11"] = hair.modifiers[0]["Socket_11"]  # density
-                                hairCurves.modifiers[0]["Input_60"] = 0.15 * ((hairCurves.modifiers[0]["Input_68"] ** 0.5))  # world noise scale
-                                hairCurves.modifiers[0]["Socket_0"] = hair.modifiers[0]["Socket_0"] + additional_biome_n  # BIOME NUMBER, adjusted to avoid intersecting with existing biome in target mesh
-                                if len(all_bgroups_starter) >= 2: hairCurves.modifiers[0]["Socket_2"] = hair.modifiers[0]["Socket_2"]
+                                    if N_Of_Selected >= 3 or _secret_paint_modifier_input_by_name(source_modifier, "Input_69", False):
+                                        _secret_paint_set_modifier_input_by_name(target_modifier, "Input_69", True)  # generate hair
+                                transferred_density = _secret_paint_modifier_input_by_name(source_modifier, "Input_68", 0.0)
+                                _secret_paint_set_modifier_input_by_name(target_modifier, "Input_68", transferred_density)
+                                _secret_paint_set_modifier_input_by_name(
+                                    target_modifier,
+                                    "Socket_11",
+                                    _secret_paint_modifier_input_by_name(source_modifier, "Socket_11", 0.0),
+                                )
+                                _secret_paint_set_modifier_input_by_name(target_modifier, "Input_60", 0.15 * (transferred_density ** 0.5))
+                                source_biome_number = _secret_paint_modifier_input_by_name(source_modifier, "Socket_0", 0)
+                                _secret_paint_set_modifier_input_by_name(target_modifier, "Socket_0", source_biome_number + additional_biome_n)
+                                if len(all_bgroups_starter) >= 2:
+                                    _secret_paint_set_modifier_input_by_name(
+                                        target_modifier,
+                                        "Socket_2",
+                                        _secret_paint_modifier_input_by_name(source_modifier, "Socket_2", False),
+                                    )
 
                                 if mesh.data.library:  # REMOVE WEIGHT IF SURFACE HAS LINKED MESH DATA (can't weight paint on linked data)
-                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = ""
-                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = False
+                                    _secret_paint_set_modifier_input_by_name(target_modifier, "Input_83_attribute_name", "")
+                                    _secret_paint_set_modifier_input_by_name(target_modifier, "Input_83_use_attribute", False)
                                 else:
-                                    hairCurves.modifiers[0]["Input_83_attribute_name"] = hair.modifiers[0]["Input_83_attribute_name"]  # VGROUP
-                                    if hair.modifiers[0]["Input_83_use_attribute"] == 1 or hair.modifiers[0]["Input_83_use_attribute"] == True: new_attribute_status_convert_int_to_boolean = True
-                                    elif hair.modifiers[0]["Input_83_use_attribute"] == 0 or hair.modifiers[0]["Input_83_use_attribute"] == False: new_attribute_status_convert_int_to_boolean = False
-                                    hairCurves.modifiers[0]["Input_83_use_attribute"] = new_attribute_status_convert_int_to_boolean # VGROUP
-                                if hairCurves.modifiers[0]["Input_98"] \
-                                or hairCurves.modifiers[0]["Input_97"]\
-                                or (allTerrainArea/   (   (1/   ((hairCurves.modifiers[0]["Input_68"] ** 0.5) * (hairCurves.modifiers[0]["Input_100"]))   )   **2))            > _secret_paint_pref("trigger_viewport_mask", 15000) and hairCurves.modifiers[0]["Input_69"]:  # or allTerrainArea / (0.5/(hairCurves.modifiers["GeometryNodes"]["Input_68"]*hairCurves.modifiers["GeometryNodes"]["Input_100"])) > 10000 and hairCurves.modifiers["GeometryNodes"]["Input_69"]:
+                                    _secret_paint_set_modifier_input_by_name(
+                                        target_modifier,
+                                        "Input_83_attribute_name",
+                                        _secret_paint_modifier_input_by_name(source_modifier, "Input_83_attribute_name", ""),
+                                    )
+                                    _secret_paint_set_modifier_input_by_name(
+                                        target_modifier,
+                                        "Input_83_use_attribute",
+                                        bool(_secret_paint_modifier_input_by_name(source_modifier, "Input_83_use_attribute", False)),
+                                    )
+                                target_density = _secret_paint_modifier_input_by_name(target_modifier, "Input_68", 0.0)
+                                target_scale = _secret_paint_modifier_input_by_name(target_modifier, "Input_100", 1.0)
+                                target_procedural = bool(_secret_paint_modifier_input_by_name(target_modifier, "Input_69", False))
+                                density_estimate = 0.0
+                                if target_density > 0 and target_scale > 0:
+                                    density_estimate = allTerrainArea / ((1 / ((target_density ** 0.5) * target_scale)) ** 2)
+                                if _secret_paint_modifier_input_by_name(target_modifier, "Input_98", False) \
+                                or _secret_paint_modifier_input_by_name(target_modifier, "Input_97", None) \
+                                or density_estimate > _secret_paint_pref("trigger_viewport_mask", 15000) and target_procedural:
                                     if hairCurves not in hair_thatNeedA_mask: hair_thatNeedA_mask.append(hairCurves)
-                                    hairCurves.modifiers[0]["Input_98"] = False  # clean mask slots so that the function doesn't toggle the mask settings
-                                    hairCurves.modifiers[0]["Input_97"] = None
+                                    _secret_paint_set_modifier_input_by_name(target_modifier, "Input_98", False)
+                                    _secret_paint_set_modifier_input_by_name(target_modifier, "Input_97", None)
                                 hairCurves.select_set(True)  # select it
                                 bpy.context.view_layer.objects.active = hairCurves  # make active
             NoMasksDetected = True
@@ -8958,13 +9214,15 @@ def secretpaint_function(self,*args,**kwargs):  #paint. conversion
             elif hair_thatNeedA_mask: NoMasksDetected = False  #paint mask if objs that need it are found
             else: NoMasksDetected=True
             paint_the_vertex=False #AVOID VERTEX PAINT because we're transferring on multiple meshes
-            vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
+            if newlycreated_hair_for_currentlyprocessing_mesh:
+                vertexgrouppaint_function(self, context,NoMasksDetected,calledfrombutton=False, being_transferred_to_newmesh=True, objselection=newlycreated_hair_for_currentlyprocessing_mesh, activeobj=newlycreated_hair_for_currentlyprocessing_mesh[0], paint_the_vertex=paint_the_vertex)
             if NoMasksDetected==False: secretpaint_viewport_mask_function(self, context, objselection=hair_thatNeedA_mask, activeobj=hair_thatNeedA_mask[0])
         for ojgb in newlycreated_hair:
-            ojgb.modifiers[0]["Input_99"] = False
+            _secret_paint_set_modifier_input_by_name(_secret_paint_modifier(ojgb), "Input_99", False)
             ojgb.location = ojgb.location #update
         for x in bpy.context.selected_objects: x.select_set(False)
-        if N_Of_Selected == 2 and newlycreated_hair[0].modifiers[0]["Input_69"] == False and not defer_enter_paint_mode: context3sculptbrush(context, activeobj=newlycreated_hair[0])   #hairCurves
+        if newlycreated_hair and N_Of_Selected == 2 and not _secret_paint_modifier_input_by_name(_secret_paint_modifier(newlycreated_hair[0]), "Input_69", False) and not defer_enter_paint_mode:
+            context3sculptbrush(context, activeobj=newlycreated_hair[0])
     elif ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "MESH" \
             or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "EMPTY" \
             or ActiveMode == "OBJECT" and N_Of_Selected == 2 and activeobj.type == "CURVES" and selobj.type == "CURVE":
@@ -10235,7 +10493,11 @@ def brush_vertex_paint(activeobj,objselection,vertex_group,context):
     bpy.ops.object.vertex_group_set_active(group=vertex_group)  # bpy.context.scene.tool_settings.vertex_group_weight = surfaceobj.vertex_groups.get(biomename).index
     if pickup_trace:
         pickup_trace.action("brush_vertex_paint.set_active_group", set_group_start, detail=f"group={vertex_group}")
-    activeobj.modifiers[0]["Input_69"] = True  # ENABLE NOISE SCATTER
+    _secret_paint_set_modifier_input_by_name(
+        _secret_paint_modifier(activeobj),
+        "Input_69",
+        True,
+    )  # ENABLE NOISE SCATTER
     activeobj.location = activeobj.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
     if pickup_trace:
         pickup_trace.action("brush_vertex_paint.total", brush_vertex_paint_start, detail=f"group={vertex_group}; active={activeobj.name if activeobj else 'None'}")
@@ -10271,8 +10533,13 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
         return {"CANCELLED"}
     surfaceobj = activeobj.parent   #.data.surface
 
-    biomeofactive=activeobj.modifiers[0]["Input_83_attribute_name"]
-    if biomeofactive and being_transferred_to_newmesh == False: vertex_ofParent=surfaceobj.vertex_groups.get(biomeofactive).name #when transferring to a new mesh: the vertex group of the terrain will not match the hair
+    active_modifier = _secret_paint_modifier(activeobj)
+    if active_modifier is None or surfaceobj is None:
+        self.report({'WARNING'}, "Secret Paint surface or modifier not found")
+        return {"CANCELLED"}
+    biomeofactive = _secret_paint_modifier_input_by_name(active_modifier, "Input_83_attribute_name", "")
+    if biomeofactive and being_transferred_to_newmesh == False and surfaceobj.vertex_groups.get(biomeofactive):
+        vertex_ofParent = surfaceobj.vertex_groups.get(biomeofactive).name #when transferring to a new mesh: the vertex group of the terrain will not match the hair
     else: vertex_ofParent=[]
 
     only_hair_from_selected=[]
@@ -10286,7 +10553,8 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                         if modif.node_group:
                             if modif.node_group.name == "Secret Paint":
                                 only_hair_from_selected.append(ob)
-                                if modif["Input_83_attribute_name"] and modif["Input_83_attribute_name"] not in all_vertex_groups: all_vertex_groups.append(modif["Input_83_attribute_name"])
+                                modifier_attribute_name = _secret_paint_modifier_input_by_name(modif, "Input_83_attribute_name", "")
+                                if modifier_attribute_name and modifier_attribute_name not in all_vertex_groups: all_vertex_groups.append(modifier_attribute_name)
     if pickup_trace:
         pickup_trace.action(
             "vertexgrouppaint.collect_selection",
@@ -10307,12 +10575,14 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
                 loopN=1
                 for hair in only_hair_from_selected[:]:
                     loopN += 1
-                    if vgroup == hair.modifiers[0]["Input_83_attribute_name"]:
+                    hair_modifier = _secret_paint_modifier(hair)
+                    if vgroup == _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", ""):
 
-                        hair.modifiers[0]["Input_83_attribute_name"] = biomename
-                        hair.modifiers[0]["Input_69"] = True
+                        _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", biomename)
+                        _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_69", True)
 
-                        if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] =True #1 # TURN ON ATTRIBUTE
+                        if not _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", False):
+                            _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", True) # TURN ON ATTRIBUTE
                         hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
                         only_hair_from_selected.remove(hair) #remove processed hair from list for future vgroup loops, possiblity of overlapping names (biome1 gets created but it already existed in one of hair, so it worngfully matches with the newly created vgroup)
                     else: sameVgroup_forAllHair=False
@@ -10327,9 +10597,12 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
         removed_vgroups=[]
         parent_of_hair=None
         for hair in only_hair_from_selected:
-            if hair.modifiers[0]["Input_83_attribute_name"] and hair.modifiers[0]["Input_83_attribute_name"] not in removed_vgroups: removed_vgroups.append(hair.modifiers[0]["Input_83_attribute_name"])
-            hair.modifiers[0]["Input_83_attribute_name"] = ""
-            if hair.modifiers[0]["Input_83_use_attribute"] == True: hair.modifiers[0]["Input_83_use_attribute"] = False  # TURN OFF ATTRIBUTE
+            hair_modifier = _secret_paint_modifier(hair)
+            hair_attribute_name = _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", "")
+            if hair_attribute_name and hair_attribute_name not in removed_vgroups: removed_vgroups.append(hair_attribute_name)
+            _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", "")
+            if _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", False):
+                _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", False)  # TURN OFF ATTRIBUTE
             hair.location = hair.location
             if hair.parent: parent_of_hair=hair.parent
         all_Vgroups_used_in_biome=[]
@@ -10337,21 +10610,24 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
             if child.type == "CURVES" and child.modifiers or child.type == "CURVE" and child.modifiers:
                 for modif in child.modifiers:  # modifier.name == "GeometryNodes"
                     if modif.type == 'NODES' and modif.node_group and modif.node_group.name == "Secret Paint":
-                        if child.modifiers[0]["Input_83_attribute_name"] and child.modifiers[0]["Input_83_attribute_name"] not in all_Vgroups_used_in_biome: all_Vgroups_used_in_biome.append(child.modifiers[0]["Input_83_attribute_name"])
+                        child_attribute_name = _secret_paint_modifier_input_by_name(modif, "Input_83_attribute_name", "")
+                        if child_attribute_name and child_attribute_name not in all_Vgroups_used_in_biome: all_Vgroups_used_in_biome.append(child_attribute_name)
         for g in removed_vgroups:
             if g not in all_Vgroups_used_in_biome: parent_of_hair.vertex_groups.remove(parent_of_hair.vertex_groups.get(g))
         if pickup_trace:
             pickup_trace.action("vertexgrouppaint.remove_vgroup", remove_vgroup_start, detail=f"removed={len(removed_vgroups)}")
-    elif activeobj.modifiers[0]["Input_83_use_attribute"]==False:
+    elif not _secret_paint_modifier_input_by_name(active_modifier, "Input_83_use_attribute", False):
         create_vgroup_start = time.perf_counter()
         numb = 1
         while surfaceobj.vertex_groups.get("Biome"+str(numb)): numb += 1
         biomename = "Biome"+str(numb)
         surfaceobj.vertex_groups.new(name=biomename)
         for hair in only_hair_from_selected:
-            hair.modifiers[0]["Input_83_attribute_name"] = biomename
-            hair.modifiers[0]["Input_69"] = True
-            if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  # TURN ON ATTRIBUTE
+            hair_modifier = _secret_paint_modifier(hair)
+            _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", biomename)
+            _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_69", True)
+            if not _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", False):
+                _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", True)  # TURN ON ATTRIBUTE
             hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
         bpy.data.objects[surfaceobj.name].select_set(True)  # select it   #BONES bpy.data.objects[c.id_data.name].pose.bones[bone.name].bone.select = False
         bpy.context.view_layer.objects.active = surfaceobj  # make active
@@ -10366,9 +10642,11 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
         share_vgroup_start = time.perf_counter()
         if len(only_hair_from_selected)!=1:
             for hair in only_hair_from_selected:
-                hair.modifiers[0]["Input_83_attribute_name"] = biomeofactive
-                hair.modifiers[0]["Input_69"] = True
-                if hair.modifiers[0]["Input_83_use_attribute"] == False: hair.modifiers[0]["Input_83_use_attribute"] = True  # TURN ON ATTRIBUTE
+                hair_modifier = _secret_paint_modifier(hair)
+                _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_attribute_name", biomeofactive)
+                _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_69", True)
+                if not _secret_paint_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", False):
+                    _secret_paint_set_modifier_input_by_name(hair_modifier, "Input_83_use_attribute", True)  # TURN ON ATTRIBUTE
                 hair.location = hair.location  # best way to update the scene ;update scene        # bpy.ops.transform.translate(value=(0, 0, 0))
         for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
         bpy.context.view_layer.objects.active = surfaceobj  # make active
@@ -10385,7 +10663,7 @@ def vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton
         pickup_trace.action(
             "vertexgrouppaint.total",
             vertexgrouppaint_start,
-            detail=f"group={biomeofactive if biomeofactive else 'none'}; created={bool(activeobj.modifiers[0]['Input_83_use_attribute'] == False)}",
+            detail=f"group={biomeofactive if biomeofactive else 'none'}; created={not bool(_secret_paint_modifier_input_by_name(active_modifier, 'Input_83_use_attribute', False))}",
         )
 class vertexgrouppaint(bpy.types.Operator):
     """Weight Paint Mask. Share it with all selected (or press Q in the viewport). Alt+Click to remove it"""
@@ -10424,20 +10702,29 @@ class vertexgrouppaint_biome(bpy.types.Operator):
                     if hai.name in bpy.context.view_layer.objects and hai.type == 'CURVES' and hai.modifiers:
                         for modifier in hai.modifiers:
                             if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name.startswith("Secret Paint"):
-                                hair.append((hai,hai.modifiers[0]["Input_2"] if hai.modifiers[0]["Input_2"] else hai.modifiers[0]["Input_9"] if hai.modifiers[0]["Input_9"] else None))
+                                brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                                brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                                hair.append((hai, brush_object if brush_object else brush_collection))
             elif obj.type=="MESH" or obj.type=="EMPTY":
                 for hayr in bpy.context.scene.objects:
                     if hayr.type == 'CURVES' and hayr.modifiers and hayr.name in bpy.context.view_layer.objects:
                         for modifier in hayr.modifiers: #if mask selected, if brush obj selected, if terrain selected
-                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_97"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_2"] == obj \
-                            or modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and modifier["Input_73"] == obj:
-                                hair.append((hayr,hayr.modifiers[0]["Input_2"] if hayr.modifiers[0]["Input_2"] else hayr.modifiers[0]["Input_9"] if hayr.modifiers[0]["Input_9"] else None))
-            hair_in_bgroup = [hayr[0] for hayr in hair[:] if hayr[0].modifiers[0]["Socket_0"] == int(self.object_biome)]
+                            if modifier.type == 'NODES' and modifier.node_group and modifier.node_group.name == "Secret Paint" and (
+                                _secret_paint_modifier_input_by_name(modifier, "Input_97") == obj
+                                or _secret_paint_modifier_input_by_name(modifier, "Input_2") == obj
+                                or _secret_paint_modifier_input_by_name(modifier, "Input_73") == obj
+                            ):
+                                brush_object = _secret_paint_modifier_input_by_name(modifier, "Input_2")
+                                brush_collection = _secret_paint_modifier_input_by_name(modifier, "Input_9")
+                                hair.append((hayr, brush_object if brush_object else brush_collection))
+            hair_in_bgroup = [hayr[0] for hayr in hair[:] if _secret_paint_modifier_input_by_name(hayr[0].modifiers[0], "Socket_0", 0) == int(self.object_biome)]
 
 
         if event.alt: remove_vgroup=True  #REMOVE VGROUP
         else: remove_vgroup=False  #REMOVE VGROUP
+        if not hair_in_bgroup:
+            self.report({'WARNING'}, "No Secret Paint systems found in this biome")
+            return {'CANCELLED'}
         vertexgrouppaint_function(self,context,NoMasksDetected=True,calledfrombutton=True, called_for_entire_biome=True, activeobj=hair_in_bgroup[0],objselection=hair_in_bgroup , remove_vgroup=remove_vgroup)
         return {'FINISHED'}
 def orencurveselectobj_function(self,context, **kwargs):

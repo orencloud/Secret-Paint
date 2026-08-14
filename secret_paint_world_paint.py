@@ -401,10 +401,7 @@ def _native_brush_debug_state(context, operator=None):
         except Exception:
             modifier = None
         if modifier is not None:
-            try:
-                state["modifier_socket_11"] = modifier["Socket_11"]
-            except Exception:
-                state["modifier_socket_11"] = ""
+            state["modifier_socket_11"] = _modifier_input_value(modifier, "Socket_11", "")
         else:
             state["modifier_socket_11"] = ""
 
@@ -1415,6 +1412,14 @@ def _secret_modifier(obj):
     return None
 
 
+def _modifier_input_value(modifier, socket_name, default=None):
+    return shared._secret_paint_modifier_input_by_name(modifier, socket_name, default)
+
+
+def _set_modifier_input_value(modifier, socket_name, value):
+    return shared._secret_paint_set_modifier_input_by_name(modifier, socket_name, value)
+
+
 def _is_secret_paint_system(obj):
     if obj is None:
         return False
@@ -1432,10 +1437,7 @@ def _secret_paint_system_is_procedural(obj):
     modifier = _secret_modifier(obj)
     if modifier is None:
         return False
-    try:
-        return bool(modifier["Input_69"])
-    except Exception:
-        return False
+    return bool(_modifier_input_value(modifier, "Input_69", False))
 
 
 def _source_pick_secret_system_allowed(system_obj, *, allow_procedural_systems=False):
@@ -1480,10 +1482,10 @@ def _source_signature(brush_object, brush_collection):
 
 
 def _same_source(modifier, brush_object, brush_collection):
-    try:
-        return modifier["Input_2"] == brush_object and modifier["Input_9"] == brush_collection
-    except Exception:
-        return False
+    return (
+        _modifier_input_value(modifier, "Input_2") == brush_object
+        and _modifier_input_value(modifier, "Input_9") == brush_collection
+    )
 
 
 def _curve_point_count(curves_obj):
@@ -1504,10 +1506,7 @@ def _system_surface_object(system_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return None
-    try:
-        surface_obj = modifier["Input_73"]
-    except Exception:
-        surface_obj = None
+    surface_obj = _modifier_input_value(modifier, "Input_73")
     if surface_obj is not None:
         return surface_obj
     try:
@@ -1995,14 +1994,8 @@ def _source_data_from_system(system_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return None
-    try:
-        brush_object = modifier["Input_2"] if "Input_2" in modifier else None
-    except Exception:
-        brush_object = None
-    try:
-        brush_collection = modifier["Input_9"] if "Input_9" in modifier else None
-    except Exception:
-        brush_collection = None
+    brush_object = _modifier_input_value(modifier, "Input_2")
+    brush_collection = _modifier_input_value(modifier, "Input_9")
     return {
         "origin_kind": "SYSTEM",
         "origin_object": system_obj,
@@ -2169,18 +2162,12 @@ def _system_uses_object_as_source(system_obj, source_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return False
-    try:
-        brush_object = modifier["Input_2"] if "Input_2" in modifier else None
-    except Exception:
-        brush_object = None
+    brush_object = _modifier_input_value(modifier, "Input_2")
     if brush_object == source_obj:
         return True
     if brush_object is not None and _objects_share_data(brush_object, source_obj):
         return True
-    try:
-        brush_collection = modifier["Input_9"] if "Input_9" in modifier else None
-    except Exception:
-        brush_collection = None
+    brush_collection = _modifier_input_value(modifier, "Input_9")
     if brush_collection is None:
         return False
     try:
@@ -2388,11 +2375,8 @@ def _world_system_disabled_for_automatic_match(system_obj):
         if modifier is None:
             return False
         for socket_name in ("Input_99", "Socket_14"):
-            try:
-                if bool(modifier[socket_name]):
-                    return True
-            except Exception:
-                pass
+            if bool(_modifier_input_value(modifier, socket_name, False)):
+                return True
         return False
 
 
@@ -2401,11 +2385,8 @@ def _world_system_biome_disabled_for_automatic_match(system_obj):
     if modifier is None:
         return False
     for socket_name in ("Socket_2", "Socket_15"):
-        try:
-            if bool(modifier[socket_name]):
-                return True
-        except Exception:
-            pass
+        if bool(_modifier_input_value(modifier, socket_name, False)):
+            return True
     return False
 
 
@@ -2428,10 +2409,7 @@ def _world_system_biome_value(system_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return 0
-    try:
-        return modifier["Socket_0"]
-    except Exception:
-        return 0
+    return _modifier_input_value(modifier, "Socket_0", 0)
 
 
 def _world_system_panel_sort_key(system_obj):
@@ -2624,11 +2602,11 @@ def _copy_world_system_object_display_settings(source_obj, target_obj):
 def _copy_world_system_modifier_settings(source_modifier, target_modifier):
     if source_modifier is None or target_modifier is None:
         return False
+    copied = shared._secret_paint_copy_modifier_inputs(source_modifier, target_modifier)
     try:
         modifier_keys = list(source_modifier.keys())
     except Exception:
-        return False
-    copied = False
+        modifier_keys = ()
     for key in modifier_keys:
         try:
             target_modifier[key] = source_modifier[key]
@@ -2648,15 +2626,9 @@ def _surface_scale_compensation_value(surface_obj):
 def _modifier_float_setting(modifier, key):
     if modifier is None:
         return None
-    try:
-        value = modifier.get(key, None)
-    except Exception:
-        value = None
+    value = _modifier_input_value(modifier, key)
     if value is None:
-        try:
-            value = modifier[key]
-        except Exception:
-            return None
+        return None
     try:
         value = float(value)
     except Exception:
@@ -2733,16 +2705,10 @@ def _restore_world_system_target_modifier_settings(
         return
     surface_requires_deform = False
     if surface_obj is not None:
-        try:
-            modifier["Input_73"] = surface_obj
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_73", surface_obj)
         scale_compensation = _surface_scale_compensation_value(surface_obj)
         if scale_compensation is not None:
-            try:
-                modifier["Input_100"] = scale_compensation
-            except Exception:
-                pass
+            _set_modifier_input_value(modifier, "Input_100", scale_compensation)
         curves_data = getattr(system_obj, "data", None)
         if curves_data is not None:
             try:
@@ -2751,19 +2717,13 @@ def _restore_world_system_target_modifier_settings(
                 pass
         surface_requires_deform = _surface_requires_deform_on_surface(surface_obj)
     if surface_requires_deform:
-        try:
-            modifier["Input_63"] = True
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_63", True)
         try:
             surface_obj.add_rest_position_attribute = True
         except Exception:
             pass
     elif deform_on_surface:
-        try:
-            modifier["Input_63"] = True
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_63", True)
     density_spacing = _target_density_spacing_value(
         modifier,
         source_density_spacing=source_density_spacing,
@@ -2777,10 +2737,7 @@ def _restore_world_system_target_modifier_settings(
         source_scale_compensation=source_scale_compensation,
     )
     if world_noise_scale is not None:
-        try:
-            modifier["Input_60"] = world_noise_scale
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_60", world_noise_scale)
 
 
 def _copy_world_system_settings_from_source(system_obj, source_obj, *, surface_obj=None):
@@ -2789,11 +2746,8 @@ def _copy_world_system_settings_from_source(system_obj, source_obj, *, surface_o
     if source_modifier is None or target_modifier is None:
         return False
 
-    target_deform_on_surface = None
-    try:
-        target_deform_on_surface = bool(target_modifier["Input_63"])
-    except Exception:
-        pass
+    target_deform_on_surface = bool(_modifier_input_value(target_modifier, "Input_63", False))
+    target_noise_offset = _modifier_input_value(target_modifier, "Input_71")
     source_density_spacing = _modifier_density_spacing_value(source_modifier)
     source_scale_compensation = _modifier_positive_float_setting(source_modifier, "Input_100")
     source_world_noise_scale = _modifier_float_setting(source_modifier, "Input_60")
@@ -2809,6 +2763,8 @@ def _copy_world_system_settings_from_source(system_obj, source_obj, *, surface_o
         source_scale_compensation=source_scale_compensation,
         source_world_noise_scale=source_world_noise_scale,
     )
+    if target_noise_offset is not None:
+        _set_modifier_input_value(target_modifier, "Input_71", target_noise_offset)
     return bool(copied_modifier or copied_display)
 
 
@@ -2825,10 +2781,7 @@ def _switch_system_brush_source(system_obj, source_data):
             source_obj,
             surface_obj=_system_surface_object(system_obj),
         )
-        try:
-            modifier["Input_39"] = False
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_39", False)
         _copy_brush_materials_from_object(system_obj, source_obj)
         try:
             system_obj.location = system_obj.location
@@ -2841,21 +2794,9 @@ def _switch_system_brush_source(system_obj, source_data):
     if brush_object is None and brush_collection is None:
         return False
 
-    changed = False
-    try:
-        modifier["Input_2"] = brush_object
-        changed = True
-    except Exception:
-        pass
-    try:
-        modifier["Input_9"] = brush_collection
-        changed = True
-    except Exception:
-        pass
-    try:
-        modifier["Input_39"] = False
-    except Exception:
-        pass
+    changed = _set_modifier_input_value(modifier, "Input_2", brush_object)
+    changed = _set_modifier_input_value(modifier, "Input_9", brush_collection) or changed
+    _set_modifier_input_value(modifier, "Input_39", False)
 
     if brush_collection is not None:
         _copy_brush_materials_from_collection(system_obj, brush_collection)
@@ -2885,18 +2826,26 @@ def _configure_new_system(system_obj, source_data, surface_obj, *, target_kind=W
             surface_obj=surface_obj,
         )
     else:
-        modifier["Input_16"] = 5
-        modifier["Input_15"] = 0.25
-        modifier["Input_62"] = 0.5
-        modifier["Input_6"][2] = 20
-        modifier["Input_60"] = 0.15 * ((modifier["Input_68"] ** 0.5)) if modifier.get("Input_68", 0.0) > 0 else 0.15
-        modifier["Input_99"] = False
-        try:
-            modifier["Socket_14"] = False
-        except Exception:
-            pass
-    modifier["Input_2"] = brush_object
-    modifier["Input_9"] = brush_collection
+        _set_modifier_input_value(modifier, "Input_16", 5)
+        _set_modifier_input_value(modifier, "Input_15", 0.25)
+        _set_modifier_input_value(modifier, "Input_62", 0.5)
+        input_6 = _modifier_input_value(modifier, "Input_6")
+        if input_6 is not None:
+            try:
+                input_6[2] = 20
+                _set_modifier_input_value(modifier, "Input_6", input_6)
+            except Exception:
+                pass
+        density_value = _modifier_input_value(modifier, "Input_68", 0.0)
+        _set_modifier_input_value(
+            modifier,
+            "Input_60",
+            0.15 * (density_value ** 0.5) if density_value > 0 else 0.15,
+        )
+        _set_modifier_input_value(modifier, "Input_99", False)
+        _set_modifier_input_value(modifier, "Socket_14", False)
+    _set_modifier_input_value(modifier, "Input_2", brush_object)
+    _set_modifier_input_value(modifier, "Input_9", brush_collection)
     if source_modifier is None:
         _restore_world_system_target_modifier_settings(system_obj, modifier, surface_obj)
     system_obj[WORLD_PAINT_TARGET_KIND_PROP] = target_kind
@@ -2954,15 +2903,17 @@ def _world_apply_new_system_biome_placement(
     if not preserve_modifier_settings:
         reference_modifier = _secret_modifier(biome_reference)
         if reference_modifier is not None:
-            try:
-                modifier["Socket_0"] = reference_modifier["Socket_0"]
-            except Exception:
-                pass
+            _set_modifier_input_value(
+                modifier,
+                "Socket_0",
+                _modifier_input_value(reference_modifier, "Socket_0", 0),
+            )
             for socket_name in ("Socket_2", "Socket_15", "Socket_8"):
-                try:
-                    modifier[socket_name] = reference_modifier[socket_name]
-                except Exception:
-                    pass
+                _set_modifier_input_value(
+                    modifier,
+                    socket_name,
+                    _modifier_input_value(reference_modifier, socket_name),
+                )
         elif terrain_systems:
             biome_numbers = []
             for existing_system in terrain_systems:
@@ -2970,21 +2921,12 @@ def _world_apply_new_system_biome_placement(
                     biome_numbers.append(int(_world_system_biome_value(existing_system)))
                 except Exception:
                     pass
-            try:
-                modifier["Socket_0"] = max(biome_numbers, default=0) + 1
-            except Exception:
-                pass
+            _set_modifier_input_value(modifier, "Socket_0", max(biome_numbers, default=0) + 1)
             for socket_name in ("Socket_2", "Socket_15"):
-                try:
-                    modifier[socket_name] = False
-                except Exception:
-                    pass
+                _set_modifier_input_value(modifier, socket_name, False)
 
         for socket_name in ("Socket_3", "Socket_4", "Socket_5", "Socket_6"):
-            try:
-                modifier[socket_name] = False
-            except Exception:
-                pass
+            _set_modifier_input_value(modifier, socket_name, False)
 
     target_biome = _world_system_biome_value(system_obj)
     biome_systems = [
@@ -3216,26 +3158,18 @@ def _configure_curve_draw_object(context, curve_obj, source_data):
     source_modifier = _secret_modifier(source_obj) if source_obj is not None and source_obj != curve_obj else None
     if source_modifier is not None:
         for input_name in WORLD_BRUSH_SWITCH_COPY_INPUTS:
-            try:
-                modifier[input_name] = source_modifier[input_name]
-            except Exception:
-                pass
-        try:
-            modifier["Input_39"] = False
-        except Exception:
-            pass
+            _set_modifier_input_value(
+                modifier,
+                input_name,
+                _modifier_input_value(source_modifier, input_name),
+            )
+        _set_modifier_input_value(modifier, "Input_39", False)
         _copy_brush_materials_from_object(curve_obj, source_obj)
     else:
         brush_object = source_data.get("brush_object")
         brush_collection = source_data.get("brush_collection")
-        try:
-            modifier["Input_2"] = brush_object
-        except Exception:
-            pass
-        try:
-            modifier["Input_9"] = brush_collection
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_2", brush_object)
+        _set_modifier_input_value(modifier, "Input_9", brush_collection)
         if brush_collection is not None:
             _copy_brush_materials_from_collection(curve_obj, brush_collection)
         elif brush_object is not None:
@@ -3243,10 +3177,7 @@ def _configure_curve_draw_object(context, curve_obj, source_data):
 
     density_value = _curve_draw_source_density_value(source_data, context)
     if density_value is not None:
-        try:
-            modifier["Input_68"] = density_value
-        except Exception:
-            pass
+        _set_modifier_input_value(modifier, "Input_68", density_value)
     try:
         curve_obj.data.update_tag()
     except Exception:
@@ -4527,7 +4458,7 @@ def _modifier_scale_value(system_obj):
     if modifier is None:
         return 1.0
     try:
-        return float(modifier["Input_8"])
+        return float(_modifier_input_value(modifier, "Input_8", 1.0))
     except Exception:
         return 1.0
 
@@ -4536,10 +4467,7 @@ def _set_modifier_scale(system_obj, value):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return
-    try:
-        modifier["Input_8"] = value
-    except Exception:
-        pass
+    _set_modifier_input_value(modifier, "Input_8", value)
 
 
 def _modifier_socket_identifier_by_name(modifier, socket_name):
@@ -4583,11 +4511,8 @@ def _set_modifier_align_to_global_z(system_obj, value):
 
     numeric_value = float(value)
     for key in candidate_keys:
-        try:
-            modifier[key] = numeric_value
+        if _set_modifier_input_value(modifier, key, numeric_value):
             return
-        except Exception:
-            continue
 
 
 def _get_modifier_align_to_global_z(system_obj):
@@ -4603,10 +4528,12 @@ def _get_modifier_align_to_global_z(system_obj):
         candidate_keys.append("Input_51")
 
     for key in candidate_keys:
-        try:
-            return float(modifier[key])
-        except Exception:
-            continue
+        value = _modifier_input_value(modifier, key)
+        if value is not None:
+            try:
+                return float(value)
+            except Exception:
+                pass
     return None
 
 
@@ -4625,10 +4552,7 @@ def _set_system_enabled(system_obj, enabled):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return
-    try:
-        modifier["Input_99"] = not enabled
-    except Exception:
-        pass
+    _set_modifier_input_value(modifier, "Input_99", not enabled)
 
 
 def _delete_visible_empty_manual_paint_systems(context, system_names):
@@ -4794,6 +4718,25 @@ def _mark_system_curve_cache_dirty(system_obj):
             _WORLD_STATE.setdefault("curve_cache_signatures", {})[cache_key] = signature
 
 
+def _tag_system_geometry_changed(system_obj):
+    """Invalidate curve data and its Geometry Nodes object after attribute edits."""
+    if system_obj is None:
+        return
+    curves_data = getattr(system_obj, "data", None)
+    for datablock in (curves_data, system_obj):
+        if datablock is None:
+            continue
+        try:
+            datablock.update_tag(refresh={'DATA'})
+        except (TypeError, ValueError):
+            try:
+                datablock.update_tag()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+
 def _discard_system_curve_cache(system_obj):
     cache_key = _system_cache_key(system_obj)
     if cache_key is not None:
@@ -4820,10 +4763,7 @@ def _system_brush_object(system_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is None:
         return None
-    try:
-        return modifier["Input_2"] if "Input_2" in modifier else None
-    except Exception:
-        return None
+    return _modifier_input_value(modifier, "Input_2")
 
 
 def _same_brush_object_systems(brush_object):
@@ -4834,11 +4774,8 @@ def _same_brush_object_systems(brush_object):
         modifier = _secret_modifier(obj)
         if modifier is None:
             continue
-        try:
-            if modifier["Input_2"] == brush_object:
-                systems.append(obj)
-        except Exception:
-            continue
+        if _modifier_input_value(modifier, "Input_2") == brush_object:
+            systems.append(obj)
     return systems
 
 
@@ -4976,15 +4913,7 @@ def _stored_system_density_spacing(system_obj, fallback=None):
 
     modifier = _secret_modifier(system_obj)
     if modifier is not None:
-        try:
-            value = modifier.get("Socket_11", None)
-        except Exception:
-            value = None
-        if value is None:
-            try:
-                value = modifier["Socket_11"]
-            except Exception:
-                value = None
+        value = _modifier_input_value(modifier, "Socket_11")
         if value is not None:
             try:
                 return _density_spacing_value(value, fallback=fallback)
@@ -5231,13 +5160,14 @@ def _curve_id_seed_values(curves_data):
 
 def _sync_point_ids_from_curve_values(curves_data, curve_values):
     if curves_data is None:
-        return None
+        return False
     curve_count = len(curves_data.curves)
     point_count = len(curves_data.points)
     if curve_count <= 0 or point_count <= 0:
-        return None
+        return False
 
     attribute = curves_data.attributes.get("id")
+    attribute_created = False
     if attribute is not None:
         try:
             if attribute.domain != 'POINT' or attribute.data_type != 'INT':
@@ -5248,8 +5178,9 @@ def _sync_point_ids_from_curve_values(curves_data, curve_values):
     if attribute is None:
         try:
             attribute = curves_data.attributes.new("id", 'INT', 'POINT')
+            attribute_created = True
         except Exception:
-            return None
+            return False
 
     offsets = _curves_offsets(curves_data)
     point_values = [0] * point_count
@@ -5259,8 +5190,13 @@ def _sync_point_ids_from_curve_values(curves_data, curve_values):
         end = offsets[curve_index + 1]
         for point_index in range(start, end):
             point_values[point_index] = stable_id
-    _set_attribute_array(attribute, point_values, width=1)
-    return attribute
+    existing_values = [] if attribute_created else [
+        int(value) for value in _attribute_array(attribute, width=1)
+    ]
+    values_changed = attribute_created or existing_values != point_values
+    if values_changed:
+        _set_attribute_array(attribute, point_values, width=1)
+    return values_changed
 
 
 def _evaluated_int_attribute_values(context, system_obj, name):
@@ -5389,15 +5325,12 @@ def _ensure_stable_curve_ids(context, system_obj):
     values_changed = attribute is None or not ids_ready or final_values != values
     attribute = _ensure_attribute(curves_data, WORLD_PAINT_STABLE_ID_ATTR, 'INT', 'CURVE')
     _set_attribute_array(attribute, final_values, width=1)
-    _sync_point_ids_from_curve_values(curves_data, final_values)
+    point_ids_changed = _sync_point_ids_from_curve_values(curves_data, final_values)
     _set_next_stable_curve_id(curves_data, {value for value in final_values if value > 0})
     curves_data[WORLD_PAINT_STABLE_IDS_READY_PROP] = True
-    if values_changed:
+    if values_changed or point_ids_changed:
         _mark_system_curve_cache_dirty(system_obj)
-        try:
-            curves_data.update_tag()
-        except Exception:
-            pass
+        _tag_system_geometry_changed(system_obj)
     return final_values
 
 
@@ -5711,7 +5644,7 @@ def _curve_query_cell_size(system_obj):
     modifier = _secret_modifier(system_obj)
     if modifier is not None:
         try:
-            return max(0.02, float(modifier.get("Socket_11", 0.1)))
+            return max(0.02, float(_modifier_input_value(modifier, "Socket_11", 0.1)))
         except Exception:
             pass
     return 0.1
@@ -11466,7 +11399,13 @@ class secret_world_paint_mode(bpy.types.Operator):
             active_system = bpy.data.objects.get(self.active_system_name) if self.active_system_name else None
             modifier = _secret_modifier(active_system)
             if modifier is not None:
-                modifier["Input_6"][2] = 20 if self.random_z else 0
+                input_6 = _modifier_input_value(modifier, "Input_6")
+                if input_6 is not None:
+                    try:
+                        input_6[2] = 20 if self.random_z else 0
+                        _set_modifier_input_value(modifier, "Input_6", input_6)
+                    except Exception:
+                        pass
         elif flag_id == "ALIGN_TO_NORMAL":
             self.align_to_normal = not self.align_to_normal
             active_system = bpy.data.objects.get(self.active_system_name) if self.active_system_name else None
@@ -12952,12 +12891,10 @@ class secret_world_paint_mode(bpy.types.Operator):
             False if revision_changed else
             _mark_system_curve_cache_dirty_if_signature_changed(system_obj)
         )
-        if revision_changed or signature_changed:
-            try:
-                system_obj.data.update_tag()
-            except Exception:
-                pass
-        if force_refresh:
+        geometry_changed = revision_changed or signature_changed
+        if geometry_changed or force_refresh:
+            _tag_system_geometry_changed(system_obj)
+        if geometry_changed or force_refresh:
             _maybe_refresh_live_view(context, force=True)
         return bool(stable_values or revision_changed or signature_changed)
 
@@ -13016,7 +12953,6 @@ class secret_world_paint_mode(bpy.types.Operator):
         sync_token = self._native_stroke_stable_id_sync_token
         attempts = {"count": 0}
         max_attempts = 4
-        max_live_attempts = 120
 
         def _sync_stable_ids_after_native_stroke():
             operator = _world_operator()
@@ -13025,20 +12961,19 @@ class secret_world_paint_mode(bpy.types.Operator):
             if sync_token != getattr(operator, "_native_stroke_stable_id_sync_token", 0):
                 return None
             attempts["count"] += 1
-            paint_is_active = (
-                while_painting and
-                bool(getattr(operator, "_primary_paint_button_down", False))
-            )
-            for system_name in system_names:
+            target_names = set(system_names)
+            if while_painting:
+                target_names.update(operator._native_density_stable_id_system_names(bpy.context))
+            for system_name in target_names:
                 target_system = bpy.data.objects.get(system_name)
                 if target_system is None:
                     continue
                 operator._sync_native_stroke_stable_ids(
                     bpy.context,
                     target_system,
-                    force_refresh=force_refresh or (not paint_is_active and attempts["count"] >= max_attempts),
+                    force_refresh=force_refresh or (not while_painting and attempts["count"] >= max_attempts),
                 )
-            if paint_is_active and attempts["count"] < max_live_attempts:
+            if while_painting:
                 return 0.05
             return 0.05 if attempts["count"] < max_attempts else None
 
@@ -15892,7 +15827,11 @@ class secret_world_paint_mode(bpy.types.Operator):
             if hasattr(event, "mouse_region_x") and hasattr(event, "mouse_region_y"):
                 self.hover_mouse_region = (event.mouse_region_x, event.mouse_region_y)
             self._force_native_brush_visibility(context)
-            if _is_primary_paint_active_event(event) or _is_primary_paint_end_event(event):
+            if (
+                _is_primary_paint_active_event(event) or
+                _is_primary_paint_end_event(event) or
+                primary_released_by_event_history
+            ):
                 active_system = self._current_system()
                 context_active = getattr(context, "active_object", None)
                 if _is_secret_paint_system(context_active):
