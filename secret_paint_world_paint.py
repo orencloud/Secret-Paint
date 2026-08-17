@@ -6983,6 +6983,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._pick_source_hold_last_update_time = 0.0
         self._pick_source_hold_last_hit_time = 0.0
         self._pick_source_hold_restore_mode = ""
+        self._pick_source_hold_event_type = ""
         self._source_switch_history = []
         self.stroke_active = False
         self.stroke_last_world = None
@@ -11053,19 +11054,26 @@ class secret_world_paint_mode(bpy.types.Operator):
             self.last_hover_key = ""
             self._sync_effective_brush_radius(context, mouse_coord=self.hover_mouse_region)
             self._sync_tool_ui_mode(context)
+            _remember_world_paint_context_mode(context)
             return
         if self.hover_target is None:
             self._refresh_hover_target_from_stored_mouse(context, commit=True)
         if self._density_uses_native_ui() and self.hover_target is not None:
             if self._ensure_idle_native_density_session(context, event=event):
+                _remember_world_paint_context_mode(context)
                 return
         self._sync_tool_ui_mode(context)
+        _remember_world_paint_context_mode(context)
 
     def _begin_pick_source_hold(self, context, event):
         if getattr(self, "_pick_source_hold_active", False):
             self._update_pick_source_hold(context, event)
             return
+        event_type = getattr(event, "type", "") if event is not None else ""
+        if event_type:
+            self._pick_source_hold_event_type = event_type
         self._prepare_pick_source_object_mode(context)
+        _remember_world_paint_context_mode(context)
         self._pick_source_hold_active = True
         self._pick_source_hold_source_data = None
         self._pick_source_hold_picked_name = ""
@@ -11117,6 +11125,7 @@ class secret_world_paint_mode(bpy.types.Operator):
         self._pick_source_hold_last_mouse = None
         self._pick_source_hold_last_update_time = 0.0
         self._pick_source_hold_last_hit_time = 0.0
+        self._pick_source_hold_event_type = ""
         self._restore_pick_selection_preview(context, restore_cage=True, restore_active=True)
         if (
             switched and
@@ -11159,6 +11168,13 @@ class secret_world_paint_mode(bpy.types.Operator):
             _keep_active_system_object(context, self._current_system())
         self._restore_pick_source_paint_ui(context, event)
         return picked
+
+    def _pick_source_hold_release_matches(self, event):
+        return bool(
+            getattr(self, "_pick_source_hold_active", False)
+            and getattr(event, "value", "") == 'RELEASE'
+            and getattr(event, "type", "") == getattr(self, "_pick_source_hold_event_type", "")
+        )
 
     def _active_brush_switch_system(self, context):
         system_obj = self._current_system()
@@ -15339,6 +15355,9 @@ class secret_world_paint_mode(bpy.types.Operator):
                 event_value=getattr(event, "value", ""),
             )
             return {'CANCELLED', 'PASS_THROUGH'}
+        if self._pick_source_hold_release_matches(event):
+            self._end_pick_source_hold(context, event, commit=True)
+            return {'RUNNING_MODAL'}
         if _finish_world_paint_for_external_mode_change(self, context):
             return {'CANCELLED', 'PASS_THROUGH'}
         event_type = getattr(event, "type", "")
