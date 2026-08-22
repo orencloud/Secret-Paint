@@ -4,47 +4,46 @@ Implements draw calls, popups, and operators that use the addon_updater.
 """
 
 import os
-import json
 import traceback
 
 import bpy
 from bpy.app.handlers import persistent
 try:
-    try:
-        from .addon_updater import Updater as updater
-    except Exception:
-        from addon_updater import Updater as updater
+    from .addon_updater import Updater as updater
 except Exception as e:
-    print("ERROR INITIALIZING UPDATER")
-    print(str(e))
-    traceback.print_exc()
+    try:
+        from addon_updater import Updater as updater
+    except Exception as e:
+        print("ERROR INITIALIZING UPDATER")
+        print(str(e))
+        traceback.print_exc()
 
-    class SingletonUpdaterNone(object):
-        """Fake, bare minimum fields and functions for the updater object."""
+        class SingletonUpdaterNone(object):
+            """Fake, bare minimum fields and functions for the updater object."""
 
-        def __init__(self):
-            self.invalid_updater = True  # Used to distinguish bad install.
+            def __init__(self):
+                self.invalid_updater = True  # Used to distinguish bad install.
 
-            self.addon = None
-            self.verbose = False
-            self.use_print_traces = True
-            self.error = None
-            self.error_msg = None
-            self.async_checking = None
+                self.addon = None
+                self.verbose = False
+                self.use_print_traces = True
+                self.error = None
+                self.error_msg = None
+                self.async_checking = None
 
-        def clear_state(self):
-            self.addon = None
-            self.verbose = False
-            self.invalid_updater = True
-            self.error = None
-            self.error_msg = None
-            self.async_checking = None
+            def clear_state(self):
+                self.addon = None
+                self.verbose = False
+                self.invalid_updater = True
+                self.error = None
+                self.error_msg = None
+                self.async_checking = None
 
-        def run_update(self, force, callback, clean):
-            pass
+            def run_update(self, force, callback, clean):
+                pass
 
-        def check_for_update(self, now):
-            pass
+            def check_for_update(self, now):
+                pass
 
     updater = SingletonUpdaterNone()
     updater.error = "Error initializing updater module"
@@ -89,15 +88,6 @@ def get_user_preferences(context=None):
     if prefs:
         return prefs.preferences
     return None
-
-
-def online_access_disabled():
-    return hasattr(bpy.app, "online_access") and not bpy.app.online_access
-
-
-def online_access_disabled_message():
-    return ("Blender online access is disabled. Enable Online Access in "
-            "Blender preferences to check for updates.")
 class AddonUpdaterInstallPopup(bpy.types.Operator):
     """Check and install update if available"""
     bl_label = "Update {x} addon".format(x=updater.addon)
@@ -156,10 +146,6 @@ class AddonUpdaterInstallPopup(bpy.types.Operator):
         if updater.invalid_updater:
             return {'CANCELLED'}
 
-        if online_access_disabled() and not updater.manual_only:
-            self.report({'WARNING'}, online_access_disabled_message())
-            return {'CANCELLED'}
-
         if updater.manual_only:
             bpy.ops.wm.url_open(url=updater.website)
         elif updater.update_ready:
@@ -193,10 +179,6 @@ class AddonUpdaterCheckNow(bpy.types.Operator):
 
     def execute(self, context):
         if updater.invalid_updater:
-            return {'CANCELLED'}
-
-        if online_access_disabled():
-            self.report({'WARNING'}, online_access_disabled_message())
             return {'CANCELLED'}
 
         if updater.async_checking and updater.error is None:
@@ -239,10 +221,6 @@ class AddonUpdaterUpdateNow(bpy.types.Operator):
 
         if updater.manual_only:
             bpy.ops.wm.url_open(url=updater.website)
-            return {'FINISHED'}
-        if online_access_disabled():
-            self.report({'WARNING'}, online_access_disabled_message())
-            return {'CANCELLED'}
         if updater.update_ready:
             try:
                 res = updater.run_update(force=False,
@@ -310,8 +288,6 @@ class AddonUpdaterUpdateTarget(bpy.types.Operator):
     def poll(cls, context):
         if updater.invalid_updater:
             return False
-        if online_access_disabled():
-            return False
         return updater.update_ready is not None and len(updater.tags) > 0
 
     def invoke(self, context, event):
@@ -330,9 +306,6 @@ class AddonUpdaterUpdateTarget(bpy.types.Operator):
 
     def execute(self, context):
         if updater.invalid_updater:
-            return {'CANCELLED'}
-        if online_access_disabled():
-            self.report({'WARNING'}, online_access_disabled_message())
             return {'CANCELLED'}
 
         res = updater.run_update(
@@ -683,8 +656,6 @@ def check_for_update_background():
     """
     if updater.invalid_updater:
         return
-    if online_access_disabled():
-        return
     global ran_background_check
     if ran_background_check:
         return
@@ -705,9 +676,6 @@ def check_for_update_background():
 def check_for_update_nonthreaded(self, context):
     """Can be placed in front of other operators to launch when pressed"""
     if updater.invalid_updater:
-        return
-    if online_access_disabled():
-        self.report({'WARNING'}, online_access_disabled_message())
         return
     settings = get_user_preferences(bpy.context)
     if not settings:
@@ -843,7 +811,6 @@ def update_settings_ui(self, context, element=None):
         return
     box.label(text="Updater Settings")
     row = box.row()
-    online_disabled = online_access_disabled()
     if not updater.auto_reload_post_update:
         saved_state = updater.json
         if "just_updated" in saved_state and saved_state["just_updated"]:
@@ -855,11 +822,10 @@ def update_settings_ui(self, context, element=None):
 
     split = layout_split(row, factor=0.4)
     sub_col = split.column()
-    sub_col.enabled = not online_disabled
     sub_col.prop(settings, "auto_check_update")
     sub_col = split.column()
 
-    if online_disabled or not settings.auto_check_update:
+    if not settings.auto_check_update:
         sub_col.enabled = False
     sub_row = sub_col.row()
     sub_row.label(text="Interval between checks")
@@ -869,25 +835,6 @@ def update_settings_ui(self, context, element=None):
     check_col = sub_row.column(align=True)
     check_col.prop(settings, "updater_interval_days")
     check_col = sub_row.column(align=True)
-    if online_disabled:
-        row = box.row()
-        row.alert = True
-        row.label(text=online_access_disabled_message(), icon='ERROR')
-        row = box.row()
-        row.scale_y = 2
-        row.operator(AddonUpdaterCheckNow.bl_idname)
-        if updater.website:
-            row = box.row()
-            row.operator("wm.url_open", text="Open Secret Paint website").url = updater.website
-        row = box.row()
-        row.scale_y = 0.7
-        last_check = updater.json["last_check"]
-        if last_check:
-            last_check = last_check[0: last_check.index(".")]
-            row.label(text="Last update check: " + last_check)
-        else:
-            row.label(text="Last update check: Never")
-        return
     row = box.row()
     col = row.column()
     if updater.error is not None:
@@ -1013,16 +960,6 @@ def update_settings_ui_condensed(self, context, element=None):
     settings = get_user_preferences(context)
     if not settings:
         row.label(text="Error getting updater preferences", icon='ERROR')
-        return
-    if online_access_disabled():
-        row.alert = True
-        row.label(text=online_access_disabled_message(), icon='ERROR')
-        row = element.row()
-        row.scale_y = 2
-        row.operator(AddonUpdaterCheckNow.bl_idname)
-        row = element.row()
-        row.enabled = False
-        row.prop(settings, "auto_check_update")
         return
     if not updater.auto_reload_post_update:
         saved_state = updater.json
@@ -1165,146 +1102,6 @@ def select_link_function(self, tag):
     """
     link = tag["zipball_url"]
     return link
-
-
-def _cli_args(argv):
-    if len(argv) == 1 and isinstance(argv[0], (list, tuple)):
-        return list(argv[0])
-    return list(argv)
-
-
-def _cli_arg_value(argv, option_name):
-    args = _cli_args(argv)
-    try:
-        index = args.index(option_name)
-    except ValueError:
-        return None
-    next_index = index + 1
-    if next_index >= len(args):
-        return None
-    return args[next_index]
-
-
-def _tuple_or_none(value):
-    if value is None:
-        return None
-    return tuple(value)
-
-
-def _json_safe_version(value):
-    if isinstance(value, tuple):
-        return list(value)
-    return value
-
-
-def _configure_updater_from_cli_payload(payload):
-    updater.clear_state()
-    updater.addon = payload.get("addon") or updater.addon
-    updater.engine = payload.get("engine") or "Github"
-    if payload.get("api_url"):
-        updater.api_url = payload["api_url"]
-    updater.private_token = None
-    updater.user = payload.get("user")
-    updater.repo = payload.get("repo")
-    updater.website = payload.get("website")
-    updater.subfolder_path = payload.get("subfolder_path")
-    updater.current_version = tuple(payload.get("current_version") or (0, 0, 0))
-    updater.use_releases = bool(payload.get("use_releases", False))
-    updater.include_branches = bool(payload.get("include_branches", False))
-    updater.include_branch_list = payload.get("include_branch_list") or None
-    updater.include_branch_auto_check = bool(payload.get("include_branch_auto_check", False))
-    updater.manual_only = bool(payload.get("manual_only", False))
-    updater.version_min_update = _tuple_or_none(payload.get("version_min_update"))
-    updater.version_max_update = _tuple_or_none(payload.get("version_max_update"))
-    updater.fake_install = bool(payload.get("fake_install", False))
-    updater.verbose = bool(payload.get("verbose", False))
-    updater.use_print_traces = bool(payload.get("use_print_traces", True))
-    updater.skip_tag = skip_tag_function
-    updater.select_link = select_link_function
-
-    interval = payload.get("check_interval") or {}
-    updater.set_check_interval(
-        enabled=bool(interval.get("enabled", False)),
-        months=int(interval.get("months", 0)),
-        days=int(interval.get("days", 0)),
-        hours=int(interval.get("hours", 0)),
-        minutes=int(interval.get("minutes", 0)))
-
-
-def secret_paint_update_check_cli(*argv):
-    request_path = _cli_arg_value(argv, "--request")
-    if not request_path:
-        print("secret_paint_update_check requires --request <path>")
-        return 2
-
-    status_path = None
-    try:
-        with open(request_path, encoding='utf-8') as request_file:
-            payload = json.load(request_file)
-        status_path = payload.get("status_path")
-        _configure_updater_from_cli_payload(payload)
-        updater.check_for_update(now=bool(payload.get("now", False)))
-        status = {
-            "update_ready": updater.update_ready,
-            "update_version": _json_safe_version(updater.update_version),
-            "update_link": updater.update_link,
-            "error": updater.error,
-            "error_msg": updater.error_msg,
-            "json": updater.json,
-        }
-        exit_code = 0 if updater.error is None else 1
-    except Exception as exception:
-        traceback.print_exc()
-        status = {
-            "update_ready": False,
-            "update_version": None,
-            "update_link": None,
-            "error": "Error occurred",
-            "error_msg": str(exception),
-            "json": {},
-        }
-        exit_code = 1
-
-    if status_path:
-        try:
-            with open(status_path, 'w', encoding='utf-8') as status_file:
-                status_file.write(json.dumps(status, indent=4))
-        except Exception:
-            traceback.print_exc()
-            return 1
-
-    return exit_code
-
-
-_REGISTERED_CLI_COMMANDS = {}
-
-
-def _register_updater_cli_commands():
-    register_cli_command = getattr(bpy.utils, "register_cli_command", None)
-    if register_cli_command is None:
-        print("Secret Paint updater CLI command unavailable: bpy.utils.register_cli_command is missing")
-        return
-    if "secret_paint_update_check" in _REGISTERED_CLI_COMMANDS:
-        return
-    try:
-        command = register_cli_command("secret_paint_update_check", secret_paint_update_check_cli)
-        _REGISTERED_CLI_COMMANDS["secret_paint_update_check"] = command
-    except Exception:
-        traceback.print_exc()
-
-
-def _unregister_updater_cli_commands():
-    unregister_cli_command = getattr(bpy.utils, "unregister_cli_command", None)
-    if unregister_cli_command is None:
-        _REGISTERED_CLI_COMMANDS.clear()
-        return
-    for command_id, command in tuple(_REGISTERED_CLI_COMMANDS.items()):
-        try:
-            unregister_cli_command(command)
-        except Exception:
-            traceback.print_exc()
-        finally:
-            _REGISTERED_CLI_COMMANDS.pop(command_id, None)
 classes = (
     AddonUpdaterInstallPopup,
     AddonUpdaterCheckNow,
@@ -1350,12 +1147,10 @@ def register(bl_info):
     for cls in classes:
         make_annotations(cls)
         bpy.utils.register_class(cls)
-    _register_updater_cli_commands()
     show_reload_popup()
 
 
 def unregister():
-    _unregister_updater_cli_commands()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     updater.clear_state()  # Clear internal vars, avoids reloading oddities.

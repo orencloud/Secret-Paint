@@ -10,11 +10,11 @@ import traceback
 import platform
 import ssl
 import urllib.request
+import urllib
 import os
 import json
 import zipfile
 import shutil
-import subprocess
 import fnmatch
 from datetime import datetime, timedelta
 import bpy
@@ -58,15 +58,12 @@ class SingletonUpdater:
         self._verbose = False
         self._use_print_traces = True
         self._fake_install = False
-        self._async_checking = False  # only true while an update check process is active
+        self._async_checking = False  # only true when async daemon started
         self._update_ready = None
         self._update_link = None
         self._update_version = None
         self._source_zip = None
-        self._check_process = None
-        self._check_request_path = None
-        self._check_status_path = None
-        self._check_callback = None
+        self._check_timer = None
         self._select_link = None
         self.skip_tag = None
         self._addon = __package__.lower()
@@ -982,17 +979,13 @@ class SingletonUpdater:
             bpy.ops.preferences.addon_enable(module=self._addon_package)
             print("2.8 reload complete")
     def clear_state(self):
+        self._cancel_check_timer()
         self._update_ready = None
         self._update_link = None
         self._update_version = None
         self._source_zip = None
         self._error = None
         self._error_msg = None
-        self._async_checking = False
-        self._check_process = None
-        self._check_request_path = None
-        self._check_status_path = None
-        self._check_callback = None
 
     def url_retrieve(self, url_file, filepath):
         """Custom urlretrieve implementation"""
@@ -1035,7 +1028,7 @@ class SingletonUpdater:
         return tuple(segments)
 
     def check_for_update_async(self, callback=None):
-        """Called for running check in a background Blender process"""
+        """Called for running check in a background thread"""
         is_ready = (
             self._json is not None
             and "update_ready" in self._json
@@ -1064,7 +1057,7 @@ class SingletonUpdater:
             "Check update pressed, first getting current status")
         if self._async_checking:
             self.print_verbose("Skipping async check, already started")
-            return  # already running the background process
+            return  # already running the bg thread
         elif self._update_ready is None:
             self.start_async_check_update(True, callback)
         else:
@@ -1075,7 +1068,7 @@ class SingletonUpdater:
         """Check for update not in a syncrhonous manner.
 
         This function is not async, will always return in sequential fashion
-        but should have a parent which calls it outside the UI flow.
+        but should have a parent which calls it in another thread.
         """
         self.print_verbose("Checking for update function")
         self._error = None
@@ -1373,200 +1366,63 @@ class SingletonUpdater:
     def ignore_update(self):
         self._json["ignore"] = True
         self.save_updater_json()
-    def _async_check_paths(self):
-        """Return JSON paths used to communicate with a background Blender."""
-        if self._updater_path is None:
-            raise ValueError("updater_path is not defined")
-        if not os.path.isdir(self._updater_path):
-            os.makedirs(self._updater_path)
-        safe_addon = str(self._addon_package).replace(os.sep, "_").replace(" ", "_")
-        token = "{}_{}".format(safe_addon, os.getpid())
-        request_path = os.path.join(
-            self._updater_path,
-            "{}_update_check_request.json".format(token))
-        status_path = os.path.join(
-            self._updater_path,
-            "{}_update_check_status.json".format(token))
-        return request_path, status_path
-
-    def _async_check_request_payload(self, now, status_path):
-        """Serialize the current updater configuration for a child process."""
-        return {
-            "status_path": status_path,
-            "now": bool(now),
-            "addon": self._addon,
-            "addon_package": self._addon_package,
-            "engine": getattr(self._engine, "name", "Github"),
-            "api_url": self.api_url,
-            "user": self._user,
-            "repo": self._repo,
-            "website": self._website,
-            "current_version": list(self._current_version or ()),
-            "subfolder_path": self._subfolder_path,
-            "use_releases": bool(self._use_releases),
-            "include_branches": bool(self._include_branches),
-            "include_branch_list": list(self._include_branch_list or []),
-            "include_branch_auto_check": bool(self._include_branch_auto_check),
-            "manual_only": bool(self._manual_only),
-            "version_min_update": (
-                list(self._version_min_update)
-                if self._version_min_update is not None else None
-            ),
-            "version_max_update": (
-                list(self._version_max_update)
-                if self._version_max_update is not None else None
-            ),
-            "fake_install": bool(self._fake_install),
-            "verbose": bool(self._verbose),
-            "use_print_traces": bool(self._use_print_traces),
-            "check_interval": {
-                "enabled": bool(self._check_interval_enabled),
-                "months": int(self._check_interval_months),
-                "days": int(self._check_interval_days),
-                "hours": int(self._check_interval_hours),
-                "minutes": int(self._check_interval_minutes),
-            },
-        }
-
-    def _write_async_check_request(self, now, request_path, status_path):
-        payload = self._async_check_request_payload(now, status_path)
-        with open(request_path, 'w', encoding='utf-8') as request_file:
-            request_file.write(json.dumps(payload, indent=4))
-
-    def _async_check_bootstrap_expression(self):
-        """Ensure the add-on is enabled before Blender resolves CLI commands."""
-        return (
-            "import addon_utils\n"
-            "for mod in addon_utils.modules():\n"
-            "    if getattr(mod, 'bl_info', {}).get('name') == 'Secret Paint':\n"
-            "        addon_utils.enable(mod.__name__, default_set=False)\n"
-            "        break\n"
-        )
-
-    def _async_check_command(self, request_path):
-        blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
-        return [
-            blender_binary,
-            "--background",
-            "--python-expr",
-            self._async_check_bootstrap_expression(),
-            "--command",
-            "secret_paint_update_check",
-            "--request",
-            request_path,
-        ]
-
-    def _cleanup_async_check_files(self):
-        for path in (self._check_request_path, self._check_status_path):
-            if not path:
-                continue
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
-            except Exception:
-                self.print_trace()
-
-    def _apply_async_check_status(self, status):
-        update_version = status.get("update_version")
-        if isinstance(update_version, list):
-            update_version = tuple(update_version)
-        self._update_ready = status.get("update_ready")
-        self._update_version = update_version
-        self._update_link = status.get("update_link")
-        self._error = status.get("error")
-        self._error_msg = status.get("error_msg")
-        if isinstance(status.get("json"), dict):
-            self._json = status["json"]
-
-    def _complete_async_check_process(self):
-        process = self._check_process
-        callback = self._check_callback
-        return_code = process.poll() if process is not None else None
-        status = None
-        if self._check_status_path and os.path.isfile(self._check_status_path):
-            try:
-                with open(self._check_status_path, encoding='utf-8') as status_file:
-                    status = json.load(status_file)
-            except Exception as exception:
-                self.print_trace()
-                self._update_ready = False
-                self._update_version = None
-                self._update_link = None
-                self._error = "Error occurred"
-                self._error_msg = "Could not read update check result: {}".format(exception)
-        if isinstance(status, dict):
-            self._apply_async_check_status(status)
-        elif self._error is None:
-            self._update_ready = False
-            self._update_version = None
-            self._update_link = None
-            self._error = "Error occurred"
-            self._error_msg = "Update check process exited with code {}".format(return_code)
-
-        self._async_checking = False
-        self._check_process = None
-        self._cleanup_async_check_files()
-        self._check_request_path = None
-        self._check_status_path = None
-        self._check_callback = None
-
-        if callback:
-            self.print_verbose("Finished subprocess update check, doing callback")
-            callback(self._update_ready)
-        self.print_verbose("Subprocess update check finished")
-
-    def _poll_async_check_update(self):
-        process = self._check_process
-        if process is None:
-            return None
-        if process.poll() is None:
-            return 0.25
-        self._complete_async_check_process()
-        return None
+    def _cancel_check_timer(self):
+        """Remove a queued update check from Blender's main-loop timer."""
+        check_timer = self._check_timer
+        self._check_timer = None
+        if check_timer is None:
+            return
+        try:
+            if bpy.app.timers.is_registered(check_timer):
+                bpy.app.timers.unregister(check_timer)
+        except Exception:
+            self.print_trace()
 
     def start_async_check_update(self, now=False, callback=None):
-        """Start a background Blender process which will check for updates"""
+        """Defer an update check to Blender's main loop.
+
+        Blender's Python API is not thread-safe. A previous implementation
+        moved the request to a child Blender process, but that process could
+        terminate before writing its result (reported as exit code 11). A
+        timer keeps the operation in this Blender instance and runs callbacks
+        on the main thread, where UI redraws are safe.
+        """
         if self._async_checking:
             return
-        self.print_verbose("Starting background update check process")
+        self.print_verbose("Scheduling update check on Blender's main loop")
         self._async_checking = True
         self._update_ready = None
-        self._check_callback = callback
 
+        def run_check():
+            self._check_timer = None
+            if not self._async_checking:
+                return None
+            self.async_check_update(now, callback)
+            return None
+
+        self._check_timer = run_check
         try:
-            if not hasattr(bpy.utils, "register_cli_command"):
-                raise RuntimeError(
-                    "This Blender build does not support bpy.utils.register_cli_command")
-            request_path, status_path = self._async_check_paths()
-            self._check_request_path = request_path
-            self._check_status_path = status_path
-            self._write_async_check_request(now, request_path, status_path)
-            self._check_process = subprocess.Popen(
-                self._async_check_command(request_path),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL)
-            bpy.app.timers.register(self._poll_async_check_update, first_interval=0.25)
+            if bpy.app.background:
+                run_check()
+            else:
+                bpy.app.timers.register(run_check, first_interval=0.0)
         except Exception as exception:
+            self._check_timer = None
             self._async_checking = False
-            self._check_process = None
-            self._cleanup_async_check_files()
-            self._check_request_path = None
-            self._check_status_path = None
-            self._check_callback = None
             self._update_ready = False
             self._update_version = None
             self._update_link = None
             self._error = "Error occurred"
-            self._error_msg = "Could not start update check process: {}".format(exception)
+            self._error_msg = "Could not schedule update check: {}".format(
+                exception)
             self.print_trace()
             if callback:
                 callback(False)
 
     def async_check_update(self, now, callback=None):
-        """Perform update check in the current process."""
+        """Perform a deferred update check on Blender's main thread."""
         self._async_checking = True
-        self.print_verbose("Checking for update now in subprocess")
+        self.print_verbose("Checking for update now")
 
         try:
             self.check_for_update(now=now)
@@ -1582,24 +1438,21 @@ class SingletonUpdater:
                 self._error_msg = "Encountered an error while checking for updates"
 
         self._async_checking = False
-        self._check_process = None
+        self._check_timer = None
 
         if callback:
             self.print_verbose("Finished check update, doing callback")
             callback(self._update_ready)
-        self.print_verbose("Subprocess: Finished check update, no callback")
+        self.print_verbose("Finished deferred update check")
 
     def stop_async_check_update(self):
         """Method to give impression of stopping check for update.
 
-        Currently does nothing but allows user to retry/stop blocking UI from
-        hitting a refresh button. This does not actually stop the subprocess, as it
-        will complete after the connection timeout regardless. If the process
-        does complete with a successful response, this will be still displayed
-        on next UI refresh (ie no update, or update available).
+        A queued timer can be cancelled before the request starts. Once the
+        request is running, Blender's main loop is occupied until it completes,
+        so the UI cannot issue this operator mid-request.
         """
-        if self._check_process is not None and self._check_process.poll() is None:
-            self.print_verbose("Update check process will end in normal course.")
+        self._cancel_check_timer()
         self._async_checking = False
         self._error = None
         self._error_msg = None
