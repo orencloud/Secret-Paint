@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 4),
+    "version": (2, 1, 5),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -35,6 +35,61 @@ for mod in addon_utils.modules():
         if addon_path != None: both_addon_and_extensions_are_installed = True
         if hasattr(mod, '__file_manifest__'): addon_is_an_extension=True
 addon_path = os.path.dirname(os.path.abspath(__file__))
+_SECRET_PAINT_TRACE_SEQUENCE = 0
+
+
+def _secret_paint_trace_path():
+    blend_path = bpy.data.filepath
+    if blend_path:
+        blend = Path(blend_path)
+        return str(blend.with_name(f"{blend.stem} - Secret Paint Trace.txt"))
+    return os.path.join(addon_path, "Secret Paint Trace.txt")
+
+
+def _secret_paint_trace(message, **details):
+    """Append one timestamped diagnostic event beside the active blend file."""
+    global _SECRET_PAINT_TRACE_SEQUENCE
+    _SECRET_PAINT_TRACE_SEQUENCE += 1
+    wall_ns = time.time_ns()
+    wall_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(wall_ns / 1_000_000_000))
+    detail_text = " ".join(
+        f"{key}={value!r}" for key, value in details.items()
+    )
+    line = (
+        f"{_SECRET_PAINT_TRACE_SEQUENCE:06d} "
+        f"{wall_time}.{(wall_ns // 1_000_000) % 1000:03d} "
+        f"{message}"
+    )
+    if detail_text:
+        line = f"{line} | {detail_text}"
+    try:
+        with open(_secret_paint_trace_path(), "a", encoding="utf-8") as trace_file:
+            trace_file.write(f"{line}\n")
+    except OSError as error:
+        print(f"Secret Paint trace write failed: {error}")
+
+
+def _secret_paint_trace_begin(action, **details):
+    _secret_paint_trace(f"BEGIN {action}", **details)
+    return time.perf_counter()
+
+
+def _secret_paint_trace_end(action, started_at, **details):
+    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    _secret_paint_trace(f"END {action}", elapsed_ms=round(elapsed_ms, 3), **details)
+    return elapsed_ms
+
+
+def _secret_paint_trace_session(action, **details):
+    _secret_paint_trace("=" * 72)
+    return _secret_paint_trace_begin(
+        action,
+        blend_file=bpy.data.filepath or "<unsaved>",
+        blender=bpy.app.version_string,
+        **details,
+    )
+
+
 _SECRET_PAINT_NODE_LIBRARY_NAMES = frozenset({
     "Secret Paint.blend",
     "Secret Paint 4.5-5.1.blend",
@@ -329,11 +384,18 @@ def contextorencurveappend(context,**kwargs):
     return {"FINISHED"}
 def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs):
     upadte_provenance = kwargs.get("upadte_provenance") if "upadte_provenance" in kwargs else None
+    update_started = _secret_paint_trace_begin(
+        "secretpaint_update_modifier_f",
+        provenance=upadte_provenance,
+        objects=len(bpy.data.objects),
+        node_groups=len(bpy.data.node_groups),
+    )
     current_node_version = 50
     pass
     activeobj = bpy.context.active_object
     objselection = bpy.context.selected_objects
     carry_through = False
+    validation_started = time.perf_counter()
     try:
         if bpy.app.version_string >= "4.0.0":
             if bpy.data.node_groups.get("Secret Paint") == None      or bpy.data.node_groups.get("Secret Generator") == None      or ["secret paint with linked library found" for node_tree in bpy.data.node_groups if node_tree.name == "Secret Paint" and node_tree.library or node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999" and node_tree.library]     or ["found multiple duplicates like Secret Paint.002 " for node_tree in bpy.data.node_groups if node_tree.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999"]     or bpy.data.node_groups["Secret Paint"].interface.items_tree[1].default_value != current_node_version:    carry_through=True
@@ -342,9 +404,17 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
     except:
         pass
         carry_through=True
+    _secret_paint_trace_end(
+        "update modifier validation",
+        validation_started,
+        reimport_required=carry_through,
+    )
     if carry_through:
         pass
+        material_started = time.perf_counter()
         reupdate_hair_material(context, objselection=[ob for ob in bpy.data.objects])
+        _secret_paint_trace_end("update all hair materials", material_started)
+        scan_started = time.perf_counter()
         nodes_to_switch = []
         cleanup_generator = []
         for node_tree in bpy.data.node_groups:
@@ -354,12 +424,21 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
             if node_tree.name == "Secret Generator" or node_tree.name.startswith("Secret Generator") and re.search(r"\.\d{3}$", node_tree.name) and ".001" <= node_tree.name[-4:] <= ".999":
                 if not node_tree.library: node_tree.name = "Secret Generator.001"
                 if node_tree not in cleanup_generator: cleanup_generator.append(node_tree)
+        _secret_paint_trace_end(
+            "scan obsolete node groups",
+            scan_started,
+            paint_groups=len(nodes_to_switch),
+            generator_groups=len(cleanup_generator),
+        )
         all_previous_nodes = set(bpy.data.node_groups)
         file_path = _secret_paint_node_library_path()
         inner_path = "NodeTree"
         object_name = "Secret Paint"
+        append_started = time.perf_counter()
         try: bpy.ops.wm.append(filepath=os.path.join(file_path, inner_path, object_name),directory=os.path.join(file_path, inner_path),filename=object_name)
         except:pass
+        _secret_paint_trace_end("append current node library", append_started, library=file_path)
+        relink_started = time.perf_counter()
         for lib in bpy.data.libraries:
             if lib.name in _SECRET_PAINT_NODE_LIBRARY_NAMES: bpy.data.libraries.remove(lib, do_unlink=True)
         for nod in bpy.data.node_groups:
@@ -371,12 +450,18 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
                 for modif in obj.modifiers:
                     if modif.type == 'NODES' and modif.node_group:
                         if modif.node_group.name == "Secret Paint" or modif.node_group.name.startswith("Secret Paint") and re.search(r"\.\d{3}$", modif.node_group.name) and ".001" <= modif.node_group.name[-4:] <= ".999" : modif.node_group = orenpaintNode
+        _secret_paint_trace_end("relink paint modifiers", relink_started)
+        cleanup_started = time.perf_counter()
         for nod in nodes_to_switch[:]:
             bpy.data.node_groups.remove(nod, do_unlink=True)
         for nod in cleanup_generator[:]:
             bpy.data.node_groups.remove(nod, do_unlink=True)
+        _secret_paint_trace_end("remove obsolete node groups", cleanup_started)
+    restore_started = time.perf_counter()
     for x in objselection: x.select_set(True)
     if activeobj: bpy.context.view_layer.objects.active = activeobj
+    _secret_paint_trace_end("restore update selection", restore_started)
+    _secret_paint_trace_end("secretpaint_update_modifier_f", update_started)
 class secretpaint_update_modifier(bpy.types.Operator):
     """Reimport the Secret Paint node tree: Useful when opening older blend files. Blender developers often change how the Geometry Node tree calculates attributes. So when opening an old scene with a new blender version, reimport the latest Node Tree which will account for those changes"""
     bl_idname = "secret.secretpaint_update_modifier"
@@ -390,8 +475,116 @@ def all_variables_are_equal(variables):
         return True
     first_value = variables[0]
     return all(value == first_value for value in variables)
+def _secret_paint_apply_missing_ids(obj):
+    """Materialize implicit point IDs without evaluating a Geometry Nodes modifier."""
+    if obj is None or obj.type != "CURVES":
+        _secret_paint_trace(
+            "SKIP direct ID application",
+            object=getattr(obj, "name", None),
+            reason="not a Curves object",
+        )
+        return False
+    id_started = _secret_paint_trace_begin(
+        "direct ID application",
+        object=obj.name,
+        data=getattr(obj.data, "name", None),
+    )
+    curves = getattr(obj, "data", None)
+    attributes = getattr(curves, "attributes", None)
+    points = getattr(curves, "points", None)
+    if attributes is None or points is None:
+        _secret_paint_trace_end(
+            "direct ID application", id_started, handled=False,
+            reason="Curves attributes or points unavailable",
+        )
+        return False
+
+    point_count = len(points)
+    id_attribute = attributes.get("id")
+    if id_attribute is None:
+        try:
+            id_attribute = attributes.new(name="id", type='INT', domain='POINT')
+        except (RuntimeError, TypeError):
+            _secret_paint_trace_end(
+                "direct ID application", id_started, handled=False,
+                reason="could not create point ID attribute",
+            )
+            return False
+        if point_count:
+            if np is not None:
+                values = np.arange(point_count, dtype=np.int32)
+            else:
+                from array import array
+                values = array('i', range(point_count))
+            id_attribute.data.foreach_set("value", values)
+            curves.update_tag()
+        _secret_paint_trace_end(
+            "direct ID application", id_started, handled=True,
+            points=point_count, missing_ids=point_count,
+            operation="created ID attribute",
+        )
+        return True
+
+    if (id_attribute.data_type != 'INT' or id_attribute.domain != 'POINT' or
+            len(id_attribute.data) != point_count):
+        _secret_paint_trace_end(
+            "direct ID application", id_started, handled=False,
+            reason="incompatible ID attribute",
+            data_type=id_attribute.data_type, domain=id_attribute.domain,
+        )
+        return False
+    if point_count <= 1:
+        _secret_paint_trace_end(
+            "direct ID application", id_started, handled=True,
+            points=point_count, missing_ids=0,
+        )
+        return True
+
+    if np is not None:
+        values = np.empty(point_count, dtype=np.int32)
+        id_attribute.data.foreach_get("value", values)
+        missing_indices = np.flatnonzero(values[1:] == 0) + 1
+    else:
+        from array import array
+        values = array('i', [0]) * point_count
+        id_attribute.data.foreach_get("value", values)
+        missing_indices = [
+            index for index, value in enumerate(values[1:], start=1)
+            if value == 0
+        ]
+
+    if not len(missing_indices):
+        _secret_paint_trace_end(
+            "direct ID application", id_started, handled=True,
+            points=point_count, missing_ids=0, operation="no write",
+        )
+        return True
+    if len(missing_indices) <= 1024:
+        for index in missing_indices:
+            id_attribute.data[int(index)].value = int(index)
+    else:
+        if np is not None:
+            values[missing_indices] = missing_indices
+        else:
+            for index in missing_indices:
+                values[index] = index
+        id_attribute.data.foreach_set("value", values)
+    curves.update_tag()
+    _secret_paint_trace_end(
+        "direct ID application", id_started, handled=True,
+        points=point_count, missing_ids=len(missing_indices),
+        operation="updated missing IDs",
+    )
+    return True
 def apply_paint(self,context, **kwargs):
     pass
+    apply_started = _secret_paint_trace_begin(
+        "apply_paint",
+        requested_object=getattr(kwargs.get("activeobj"), "name", None),
+        force_ids=bool(kwargs.get("applyIDs", False)),
+        keep_active_brush=bool(kwargs.get("keep_active_brush", False)),
+    )
+    setup_started = time.perf_counter()
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
@@ -401,6 +594,16 @@ def apply_paint(self,context, **kwargs):
     if "applyIDs" in kwargs:applyIDs = kwargs.get("applyIDs")
     else:applyIDs = False
     keep_active_brush = kwargs.get("keep_active_brush") if "keep_active_brush" in kwargs else False
+    active_paint_modifier = _secret_paint_1731_paint_modifier(activeobj)
+    preserve_sculpt_context = (
+        activeobj is not None and
+        bpy.context.active_object == activeobj and
+        getattr(activeobj, "mode", None) == "SCULPT_CURVES" and
+        (
+            applyIDs or
+            not _secret_paint_1731_modifier_value(active_paint_modifier, "Input_69", False)
+        )
+    )
     if activeobj != bpy.context.active_object and activeobj not in bpy.context.selected_objects: objselection = [activeobj]
     N_Of_Selected = len(objselection)
     randomselectedobj = []
@@ -430,10 +633,37 @@ def apply_paint(self,context, **kwargs):
                 else: all_objs_are_orencurves = False
             else: all_objs_are_orencurves = False
             if obj.type != "CURVES": all_selected_non_hair.append(obj)
+    _secret_paint_trace_end(
+        "apply_paint selection classification",
+        setup_started,
+        selected=N_Of_Selected,
+        hair_objects=len(all_selected_hair),
+        non_hair_objects=len(all_selected_non_hair),
+    )
     for obj in all_selected_hair:
+        object_started = _secret_paint_trace_begin(
+            "apply_paint object",
+            object=obj.name,
+            data=getattr(obj.data, "name", None),
+            points=len(getattr(obj.data, "points", ())),
+            curves=len(getattr(obj.data, "curves", ())),
+            data_users=getattr(obj.data, "users", None),
+        )
         node_to_use=[]
         paint_modifier = _secret_paint_1731_paint_modifier(obj)
-        if applyIDs or _secret_paint_1731_modifier_value(paint_modifier, "Input_69", False) == False:
+        apply_id_only = (
+            applyIDs or
+            _secret_paint_1731_modifier_value(paint_modifier, "Input_69", False) == False
+        )
+        if apply_id_only and _secret_paint_apply_missing_ids(obj):
+            _secret_paint_1731_set_modifier_value(paint_modifier, "Input_69", False)
+            _secret_paint_trace_end(
+                "apply_paint object", object_started,
+                path="direct IDs", modifier_stack_unchanged=True,
+            )
+            continue
+        modifier_setup_started = time.perf_counter()
+        if apply_id_only:
             if "Secret Paint Apply IDs" in bpy.data.node_groups:
                 node_to_use = bpy.data.node_groups.get("Secret Paint Apply IDs")
             else:
@@ -499,8 +729,16 @@ def apply_paint(self,context, **kwargs):
             obj.modifiers.move(len(obj.modifiers) - 1, 0)
         elif bpy.app.version_string < "4.0.0":
             bpy.ops.object.modifier_move_up({'object': obj}, modifier=modifier.name)
+        _secret_paint_trace_end(
+            "create and configure apply modifier",
+            modifier_setup_started,
+            object=obj.name,
+            node_group=getattr(modifier.node_group, "name", None),
+            path="ID modifier fallback" if apply_id_only else "procedural generation",
+        )
         successfully_applied_so_reimport_materials = False
         mats_before = [mat_slot.material for mat_slot in obj.material_slots if mat_slot.material]
+        modifier_apply_started = time.perf_counter()
         if obj.data.users >=2:
             same_data=[xx for xx in bpy.data.objects if xx.data==obj.data and xx!=obj]
             obj.data = obj.data.copy()
@@ -526,17 +764,55 @@ def apply_paint(self,context, **kwargs):
             except:
                 obj.modifiers.remove(modifier)
                 obj.location=obj.location
+        _secret_paint_trace_end(
+            "bpy.ops.object.modifier_apply",
+            modifier_apply_started,
+            object=obj.name,
+            success=successfully_applied_so_reimport_materials,
+            path="ID modifier fallback" if apply_id_only else "procedural generation",
+        )
         if successfully_applied_so_reimport_materials:
             for mat in mats_before:
                 if mat.name not in obj.data.materials: obj.data.materials.append(mat)
         if obj.parent and obj.parent.modifiers:
             for mod in obj.parent.modifiers:
                 if mod.type=="ARMATURE":
-                    bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
-    for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
-    bpy.context.view_layer.objects.active = activeobj
-    context3sculptbrush(context, activeobj=activeobj, keep_active_brush=keep_active_brush)
+                    _secret_paint_trace(
+                        "SKIP automatic curve snapping",
+                        object=obj.name,
+                        reason="snapping is reserved for the manual Reproject operator",
+                    )
+        _secret_paint_trace_end(
+            "apply_paint object", object_started,
+            path="ID modifier fallback" if apply_id_only else "procedural generation",
+            modifier_applied=successfully_applied_so_reimport_materials,
+        )
+    selection_started = time.perf_counter()
+    if preserve_sculpt_context:
+        activeobj.select_set(True)
+    else:
+        for x in bpy.context.selected_objects: bpy.data.objects[x.name].select_set(False)
+        bpy.context.view_layer.objects.active = activeobj
+    _secret_paint_trace_end(
+        "apply_paint selection reset", selection_started,
+        sculpt_context_preserved=preserve_sculpt_context,
+    )
+    uv_check_started = time.perf_counter()
     Check_if_trigger_UV_Reprojection(self, context, activeobj=activeobj, objselection=objselection)
+    _secret_paint_trace_end("apply_paint UV check", uv_check_started)
+    sculpt_context_started = time.perf_counter()
+    if preserve_sculpt_context:
+        _secret_paint_trace_end(
+            "apply_paint sculpt context", sculpt_context_started,
+            operation="preserved existing Sculpt Curves context",
+        )
+    else:
+        context3sculptbrush(context, activeobj=activeobj, keep_active_brush=keep_active_brush)
+        _secret_paint_trace_end(
+            "apply_paint sculpt context", sculpt_context_started,
+            operation="entered Sculpt Curves context",
+        )
+    _secret_paint_trace_end("apply_paint", apply_started)
     return{'FINISHED'}
 class orenscatterinstancesmodifiers(bpy.types.Operator):
     """Convert Procedural Distribution into Manual Paint (or press Q with the paint system selected)"""
@@ -545,11 +821,39 @@ class orenscatterinstancesmodifiers(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     object_name: StringProperty()
     def invoke(self, context, event):
-        if bpy.context.object.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        operator_started = _secret_paint_trace_session(
+            "operator secret.applypaint",
+            object_name=self.object_name,
+            current_mode=getattr(bpy.context.object, "mode", None),
+        )
         activeobj= bpy.data.objects.get(self.object_name)
+        paint_modifier = _secret_paint_1731_paint_modifier(activeobj)
+        preserve_sculpt_mode = (
+            activeobj is not None and
+            bpy.context.active_object == activeobj and
+            getattr(activeobj, "mode", None) == "SCULPT_CURVES" and
+            not _secret_paint_1731_modifier_value(paint_modifier, "Input_69", False)
+        )
+        mode_started = time.perf_counter()
+        if not preserve_sculpt_mode and bpy.context.object.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+            _secret_paint_trace_end("operator enter Object mode", mode_started)
+        else:
+            _secret_paint_trace_end(
+                "operator preserve current mode", mode_started,
+                mode=getattr(activeobj, "mode", None),
+                direct_id_path=preserve_sculpt_mode,
+            )
+        activate_started = time.perf_counter()
         if bpy.context.active_object != activeobj: bpy.context.view_layer.objects.active = activeobj
+        _secret_paint_trace_end("operator activate paint system", activate_started)
+        update_started = time.perf_counter()
         secretpaint_update_modifier_f(context,upadte_provenance="secret.applypaint")
+        _secret_paint_trace_end("operator update modifier", update_started)
+        apply_started = time.perf_counter()
         apply_paint(self,context,activeobj=activeobj, objselection=[activeobj])
+        _secret_paint_trace_end("operator apply_paint call", apply_started)
+        _secret_paint_trace_end("operator secret.applypaint", operator_started)
         return {'FINISHED'}
 class toggle_procedural(bpy.types.Operator):
     """Switch between Manual Paint and Procedural Distribution"""
@@ -1676,15 +1980,34 @@ def _secret_paint_1731_apply_sculpt_ids_silently(context, system):
         return False
     if system is None:
         return False
+    brush_change_started = _secret_paint_trace_session(
+        "Sculpt Curves brush change",
+        object_name=getattr(system, "name", None),
+        current_mode=getattr(system, "mode", None),
+    )
     try:
         _SECRET_PAINT_1731_SCULPT_BRUSH_APPLYING = True
-        _secret_paint_q_apply_ids(
-            _SECRET_PAINT_1731_SILENT_REPORTER,
-            context,
-            system,
+        handled = _secret_paint_apply_missing_ids(system)
+        if handled:
+            _secret_paint_1731_set_modifier_value(
+                _secret_paint_1731_paint_modifier(system),
+                "Input_69",
+                False,
+            )
+        _secret_paint_trace_end(
+            "Sculpt Curves brush change",
+            brush_change_started,
+            handled=handled,
+            mode_unchanged=getattr(system, "mode", None) == "SCULPT_CURVES",
         )
-        return True
-    except Exception:
+        return handled
+    except Exception as error:
+        _secret_paint_trace_end(
+            "Sculpt Curves brush change",
+            brush_change_started,
+            handled=False,
+            error=repr(error),
+        )
         return False
     finally:
         _SECRET_PAINT_1731_SCULPT_BRUSH_APPLYING = False
@@ -1953,7 +2276,15 @@ def context3sculptbrush(context,**kwargs):
     else:activeobj = bpy.context.active_object
     if activeobj == None: activeobj = bpy.context.active_object
     keep_active_brush = kwargs.get("keep_active_brush") if "keep_active_brush" in kwargs else False
+    context_started = _secret_paint_trace_begin(
+        "context3sculptbrush",
+        object=getattr(activeobj, "name", None),
+        object_type=getattr(activeobj, "type", None),
+        starting_mode=getattr(activeobj, "mode", None),
+        keep_active_brush=keep_active_brush,
+    )
     if activeobj.type == "CURVES":
+        surface_setup_started = time.perf_counter()
         if activeobj.data.users >= 2 and activeobj.data.surface!=activeobj.parent: activeobj.data.surface = activeobj.parent
         active_render_UV = None
         custom_uv = None
@@ -1963,12 +2294,24 @@ def context3sculptbrush(context,**kwargs):
         if not activeobj.data.surface_uv_map or activeobj.data.surface_uv_map not in [custom_uv,active_render_UV]:
             if custom_uv: activeobj.data.surface_uv_map = custom_uv
             elif active_render_UV: activeobj.data.surface_uv_map = active_render_UV
-        bpy.ops.object.mode_set(mode="SCULPT_CURVES")
+        _secret_paint_trace_end("sculpt context surface and UV setup", surface_setup_started)
+        mode_started = time.perf_counter()
+        if activeobj.mode != "SCULPT_CURVES":
+            bpy.ops.object.mode_set(mode="SCULPT_CURVES")
+            _secret_paint_trace_end("bpy.ops.object.mode_set SCULPT_CURVES", mode_started)
+        else:
+            _secret_paint_trace_end(
+                "skip Sculpt Curves mode entry", mode_started,
+                reason="target system is already in Sculpt Curves mode",
+            )
         if not keep_active_brush:
+            tool_started = time.perf_counter()
             try:
                 if bpy.app.version_string >= "4.3.0": bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
                 else: bpy.ops.wm.tool_set_by_id(name="builtin_brush.Density")
             except: pass
+            _secret_paint_trace_end("set Density sculpt tool", tool_started)
+        brush_setup_started = time.perf_counter()
         brush_density = []
         brush_grow = []
         brush_add = []
@@ -2105,7 +2448,15 @@ def context3sculptbrush(context,**kwargs):
             for bb in brush_comb:
                 bb.strength = 0.1
                 bb.falloff_shape = 'PROJECTED'
+        _secret_paint_trace_end(
+            "scan and configure Curves sculpt brushes",
+            brush_setup_started,
+            density=len(brush_density), add=len(brush_add),
+            delete=len(brush_delete), grow=len(brush_grow),
+            puff=len(brush_puff), comb=len(brush_comb),
+        )
     elif activeobj.type=="CURVE":
+        curve_mode_started = time.perf_counter()
         bpy.ops.object.mode_set(mode="EDIT")
         for area in bpy.context.screen.areas:
             if area.type == "VIEW_3D":
@@ -2128,12 +2479,16 @@ def context3sculptbrush(context,**kwargs):
                     bpy.context.scene.tool_settings.curve_paint_settings.surface_offset = 0.02
                     bpy.context.scene.tool_settings.curve_paint_settings.surface_plane = 'VIEW'
                     bpy.context.scene.tool_settings.curve_paint_settings.curve_type = 'BEZIER'
+        _secret_paint_trace_end("configure legacy Curve edit context", curve_mode_started)
     if activeobj.type == "CURVES":
+        track_started = time.perf_counter()
         _secret_paint_1731_track_sculpt_brush(
             context,
             activeobj,
             apply_on_change=False,
         )
+        _secret_paint_trace_end("track active Curves sculpt brush", track_started)
+    _secret_paint_trace_end("context3sculptbrush", context_started)
     return{'FINISHED'}
 def curve_draw_tool(context,**kwargs):
     if "dont_set_drawing_tool" in kwargs:dont_set_drawing_tool = kwargs.get("dont_set_drawing_tool")
@@ -4040,21 +4395,7 @@ def _secret_paint_q_paint_system_from_ray(
                     ray_state["display_filtered"] = True
                     ray_state["display_line_hit"] = True
                 return paint_system
-            exit_object = original_hit_object
-            exit_matrix = hit_matrix
-            if display_type == "BOUNDS" and paint_system is not None:
-                exit_object = paint_system
-                exit_matrix = paint_system.matrix_world
-            exit_distance = _secret_paint_q_ray_box_exit_distance(
-                exit_object,
-                exit_matrix,
-                cast_origin,
-                ray_direction,
-            )
-            if exit_distance is None:
-                cast_origin = Vector(location) + ray_direction * 1.0e-4
-            else:
-                cast_origin += ray_direction * (exit_distance + 1.0e-4)
+            cast_origin = Vector(location) + ray_direction * 1.0e-4
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         pass
     return None
@@ -4359,10 +4700,18 @@ def _secret_paint_q_clear_selection(context, keep_active=None):
         context.view_layer.objects.active = keep_active
 def _secret_paint_q_apply_ids(self, context, system):
     """Match the Apply and Paint button after a confirmed Q switch."""
+    switch_started = _secret_paint_trace_session(
+        "Q brush switch apply IDs",
+        object_name=getattr(system, "name", None),
+        current_mode=getattr(context.object, "mode", None),
+    )
+    update_started = time.perf_counter()
     secretpaint_update_modifier_f(
         context,
         upadte_provenance="secret.applypaint",
     )
+    _secret_paint_trace_end("Q switch update modifier", update_started)
+    apply_started = time.perf_counter()
     apply_paint(
         self,
         context,
@@ -4371,6 +4720,8 @@ def _secret_paint_q_apply_ids(self, context, system):
         applyIDs=True,
         keep_active_brush=True,
     )
+    _secret_paint_trace_end("Q switch apply_paint call", apply_started)
+    _secret_paint_trace_end("Q brush switch apply IDs", switch_started)
 def _secret_paint_q_preview_mask_location(
         context,
         event,
@@ -5688,11 +6039,86 @@ def check_overlapping_uvs(self,context,**kwargs):
         pass
         bm.free()
         return False
+_SECRET_PAINT_UV_TOPOLOGY_KEY = "_secret_paint_uv_topology"
+
+
+def _secret_paint_mesh_topology_signature(mesh):
+    return (
+        len(mesh.vertices),
+        len(mesh.edges),
+        len(mesh.polygons),
+        len(mesh.loops),
+    )
+
+
+def _secret_paint_auto_uv_status(surface):
+    """Return whether automatic UV repair is necessary and why."""
+    mesh = getattr(surface, "data", None)
+    if mesh is None or surface.type != "MESH":
+        return False, "not a mesh surface"
+    if mesh.library:
+        return False, "linked mesh data"
+    if not len(mesh.loops):
+        return False, "surface has no loops"
+
+    uv_layer = mesh.uv_layers.get("Secret Paint UV")
+    if uv_layer is None:
+        return True, "Secret Paint UV is missing"
+    uv_values = getattr(uv_layer, "uv", getattr(uv_layer, "data", None))
+    if uv_values is None or len(uv_values) != len(mesh.loops):
+        return True, "Secret Paint UV loop count is invalid"
+
+    signature = _secret_paint_mesh_topology_signature(mesh)
+    stored_signature = mesh.get(_SECRET_PAINT_UV_TOPOLOGY_KEY)
+    if stored_signature is not None:
+        if tuple(stored_signature) != signature:
+            return True, "surface topology changed"
+        return False, "UV and topology signature are current"
+
+    if np is not None:
+        coordinates = np.empty(len(uv_values) * 2, dtype=np.float32)
+        uv_values.foreach_get("vector", coordinates)
+        valid_coordinates = (
+            bool(np.isfinite(coordinates).all()) and
+            float(np.ptp(coordinates)) > 1e-7
+        )
+    else:
+        from array import array
+        coordinates = array('f', [0.0]) * (len(uv_values) * 2)
+        uv_values.foreach_get("vector", coordinates)
+        valid_coordinates = (
+            all(math.isfinite(value) for value in coordinates) and
+            max(coordinates) - min(coordinates) > 1e-7
+        )
+    if not valid_coordinates:
+        return True, "Secret Paint UV is empty or degenerate"
+
+    try:
+        mesh[_SECRET_PAINT_UV_TOPOLOGY_KEY] = list(signature)
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+    return False, "existing Secret Paint UV accepted and signature initialized"
+
+
+def _secret_paint_record_uv_topology(surface):
+    mesh = getattr(surface, "data", None)
+    if mesh is None or mesh.library:
+        return
+    try:
+        mesh[_SECRET_PAINT_UV_TOPOLOGY_KEY] = list(
+            _secret_paint_mesh_topology_signature(mesh)
+        )
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+
+
 def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
+    check_started = _secret_paint_trace_begin("Check_if_trigger_UV_Reprojection")
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     objselection = kwargs.get("objselection") if "objselection" in kwargs else bpy.context.selected_objects
     if not isinstance(objselection, (list, tuple)): objselection = [objselection]
     if activeobj not in objselection: objselection.append(activeobj)
+    collect_started = time.perf_counter()
     surface_to_reUV = []
     for obj in objselection:
         if obj.type == "CURVES":
@@ -5702,13 +6128,46 @@ def Check_if_trigger_UV_Reprojection(self,context,**kwargs):
                         if obj.parent not in surface_to_reUV: surface_to_reUV.append(obj.parent)
         elif obj.type == "MESH":
             if obj not in surface_to_reUV: surface_to_reUV.append(obj)
+    _secret_paint_trace_end(
+        "collect UV reprojection surfaces", collect_started,
+        surfaces=len(surface_to_reUV),
+    )
     for terrain in surface_to_reUV:
+        triangle_count_started = time.perf_counter()
         triangles = sum(polygon.loop_total // 3 for polygon in terrain.data.polygons)
-        if triangles < bpy.context.preferences.addons[__package__].preferences.trigger_auto_uvs:
+        threshold = bpy.context.preferences.addons[__package__].preferences.trigger_auto_uvs
+        eligible_for_reprojection = threshold > 0 and triangles < threshold
+        if eligible_for_reprojection:
+            will_reproject, reason = _secret_paint_auto_uv_status(terrain)
+        else:
+            will_reproject = False
+            reason = "automatic UV repair disabled or above triangle threshold"
+        _secret_paint_trace_end(
+            "count terrain triangles",
+            triangle_count_started,
+            terrain=terrain.name,
+            triangles=triangles,
+            threshold=threshold,
+            will_reproject=will_reproject,
+            reason=reason,
+        )
+        if will_reproject:
+            reproject_started = time.perf_counter()
             reproject_function(self,context,automatically_triggererd=True,activeobj=terrain, objselection=[terrain])
+            _secret_paint_record_uv_topology(terrain)
+            _secret_paint_trace_end(
+                "automatic UV reprojection", reproject_started,
+                terrain=terrain.name,
+            )
+    _secret_paint_trace_end("Check_if_trigger_UV_Reprojection", check_started)
     return{'FINISHED'}
 def reproject_function(self,context,**kwargs):
     start_time = time.perf_counter()
+    _secret_paint_trace(
+        "BEGIN reproject_function",
+        requested_object=getattr(kwargs.get("activeobj"), "name", None),
+        automatic=bool(kwargs.get("automatically_triggererd", False)),
+    )
     activeobj = kwargs.get("activeobj") if "activeobj" in kwargs else bpy.context.active_object
     objselection = kwargs.get("objselection") if "objselection" in kwargs else bpy.context.selected_objects
     if not isinstance(objselection, (list, tuple)): objselection = [objselection]
@@ -5720,6 +6179,7 @@ def reproject_function(self,context,**kwargs):
     changed_selected_objs_so_restore_is_needed = False
     current_mode = bpy.context.object.mode
     dyntopo_status = activeobj.use_dynamic_topology_sculpting
+    discovery_started = time.perf_counter()
     hairlist = []
     unselected_siblings_list = []
     surface_to_reUV = []
@@ -5742,8 +6202,21 @@ def reproject_function(self,context,**kwargs):
                 if child.type == "CURVES":
                     for modif in child.modifiers:
                         if modif.type == 'NODES' and modif.node_group and modif.node_group.name.startswith("Secret Paint") and child not in hairlist: hairlist.append(child)
+    _secret_paint_trace_end(
+        "discover reprojection dependencies",
+        discovery_started,
+        surfaces=len(surface_to_reUV),
+        hair_systems=len(hairlist),
+        unselected_siblings=len(unselected_siblings_list),
+    )
     if surface_to_reUV:
         for surface in surface_to_reUV:
+            surface_started = _secret_paint_trace_begin(
+                "reproject surface", surface=surface.name,
+                vertices=len(surface.data.vertices),
+                polygons=len(surface.data.polygons),
+            )
+            uv_setup_started = time.perf_counter()
             previously_active_UV = None
             previously_active_UV_rendering = None
             custom_uv = None
@@ -5764,7 +6237,14 @@ def reproject_function(self,context,**kwargs):
                 if previously_active_UV != uv_to_reproject:
                     uv_to_reproject.active = True
                     changed_active_uv_so_restore_is_needed = True
+                _secret_paint_trace_end(
+                    "prepare surface UV layer",
+                    uv_setup_started,
+                    surface=surface.name,
+                    uv_layer=getattr(uv_to_reproject, "name", None),
+                )
                 pass
+                projection_started = time.perf_counter()
                 try:
                     for window in context.window_manager.windows:
                         screen = window.screen
@@ -5777,17 +6257,45 @@ def reproject_function(self,context,**kwargs):
                                         bpy.context.view_layer.objects.active = surface
                                         changed_active_obj_so_restore_is_needed =True
                                     restoremode = bpy.context.object.mode
-                                    if restoremode != "EDIT": bpy.ops.object.mode_set(mode="EDIT")
+                                    if restoremode != "EDIT":
+                                        edit_mode_started = time.perf_counter()
+                                        bpy.ops.object.mode_set(mode="EDIT")
+                                        _secret_paint_trace_end(
+                                            "UV projection enter Edit mode", edit_mode_started,
+                                            surface=surface.name,
+                                        )
+                                    select_started = time.perf_counter()
                                     bpy.ops.mesh.select_all(action='SELECT')
+                                    _secret_paint_trace_end(
+                                        "UV projection select all", select_started,
+                                        surface=surface.name,
+                                    )
+                                    smart_project_started = time.perf_counter()
                                     bpy.ops.uv.smart_project(angle_limit=1.20428, island_margin=0.01, area_weight=1, correct_aspect=True, scale_to_bounds=True)
-                                    if restoremode != "EDIT": bpy.ops.object.mode_set(mode=restoremode)
+                                    _secret_paint_trace_end(
+                                        "bpy.ops.uv.smart_project", smart_project_started,
+                                        surface=surface.name,
+                                    )
+                                    if restoremode != "EDIT":
+                                        restore_mode_started = time.perf_counter()
+                                        bpy.ops.object.mode_set(mode=restoremode)
+                                        _secret_paint_trace_end(
+                                            "UV projection restore mode", restore_mode_started,
+                                            surface=surface.name, mode=restoremode,
+                                        )
                                 break
                 except: pass
+                _secret_paint_trace_end(
+                    "surface UV projection context", projection_started,
+                    surface=surface.name,
+                )
                 for UVV in surface.data.uv_layers:
                     if UVV.active_render:
                         UVV.active = True
                         break
+            _secret_paint_trace_end("reproject surface", surface_started, surface=surface.name)
     if hairlist:
+        hair_uv_started = time.perf_counter()
         for ob in hairlist:
             ob.data.surface = ob.parent
             active_render_UV = None
@@ -5799,17 +6307,45 @@ def reproject_function(self,context,**kwargs):
                 ob.data.surface_uv_map = custom_uv
             elif active_render_UV:
                 ob.data.surface_uv_map = active_render_UV
-        for x in objselection: bpy.data.objects[x.name].select_set(False)
-        changed_selected_objs_so_restore_is_needed = True
-        loop = 0
-        for ob in hairlist:
-            if ob not in unselected_siblings_list:
-                if loop == 0:
-                    bpy.context.view_layer.objects.active = ob
-                    changed_active_obj_so_restore_is_needed = True
-                loop+=1
-                bpy.data.objects[ob.name].select_set(True)
+        _secret_paint_trace_end(
+            "update hair surface UV maps", hair_uv_started,
+            hair_systems=len(hairlist),
+        )
+        if automatically_triggererd:
+            _secret_paint_trace(
+                "SKIP automatic curve snapping",
+                reason="snapping is reserved for the manual Reproject operator",
+                hair_systems=len(hairlist),
+            )
+        else:
+            snap_setup_started = time.perf_counter()
+            hair_to_snap = [
+                ob for ob in hairlist
+                if ob not in unselected_siblings_list and
+                len(getattr(ob.data, "curves", ())) > 0
+            ]
+            for selected in list(bpy.context.selected_objects):
+                selected.select_set(False)
+            changed_selected_objs_so_restore_is_needed = True
+            for ob in hair_to_snap:
+                for selected in list(bpy.context.selected_objects):
+                    selected.select_set(False)
+                bpy.context.view_layer.objects.active = ob
+                changed_active_obj_so_restore_is_needed = True
+                ob.select_set(True)
+                snap_started = time.perf_counter()
                 bpy.ops.curves.snap_curves_to_surface(attach_mode='NEAREST')
+                _secret_paint_trace_end(
+                    "bpy.ops.curves.snap_curves_to_surface", snap_started,
+                    object=ob.name,
+                    points=len(ob.data.points), curves=len(ob.data.curves),
+                )
+            _secret_paint_trace_end(
+                "prepare and snap hair systems", snap_setup_started,
+                snapped_systems=len(hair_to_snap),
+                skipped_empty_or_unselected=len(hairlist) - len(hair_to_snap),
+            )
+    restore_started = time.perf_counter()
     if not automatically_triggererd:
         if current_mode == "SCULPT_CURVES":
             for ob in hairlist: ob.select_set(False)
@@ -5822,7 +6358,9 @@ def reproject_function(self,context,**kwargs):
             for ob in bpy.context.selected_objects:
                 if ob not in actualobjselection: ob.select_set(False)
             for xx in actualobjselection: xx.select_set(True)
+    _secret_paint_trace_end("restore reprojection context", restore_started)
     end_time = time.perf_counter()
+    _secret_paint_trace_end("reproject_function", start_time)
     pass
     return {'FINISHED'}
 class clean_hair_orencurve(bpy.types.Operator):
