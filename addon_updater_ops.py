@@ -2,23 +2,21 @@
 Implements draw calls, popups, and operators that use the addon_updater.
 """
 import os
-import traceback
 import bpy
 from bpy.app.handlers import persistent
 try:
     from .addon_updater import Updater as updater
-except Exception as e:
+except Exception:
     try:
         from addon_updater import Updater as updater
-    except Exception as e:
-        traceback.print_exc()
+    except Exception:
         class SingletonUpdaterNone(object):
             """Fake, bare minimum fields and functions for the updater object."""
             def __init__(self):
                 self.invalid_updater = True
                 self.addon = None
                 self.verbose = False
-                self.use_print_traces = True
+                self.use_print_traces = False
                 self.error = None
                 self.error_msg = None
                 self.async_checking = None
@@ -984,7 +982,7 @@ def register(bl_info):
     updater.website = "https://github.com/orencloud/Secret-Paint/"
     updater.subfolder_path = ""
     updater.current_version = bl_info["version"]
-    updater.verbose = True
+    updater.verbose = False
     updater.backup_current = True
     updater.backup_ignore_patterns = ["__pycache__"]
     updater.overwrite_patterns = ["*"]

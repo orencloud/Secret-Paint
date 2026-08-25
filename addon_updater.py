@@ -4,7 +4,6 @@ https://github.com/CGCookie/blender-addon-updater
 """
 __version__ = "1.1.1"
 import errno
-import traceback
 import platform
 import ssl
 import urllib.error
@@ -52,7 +51,7 @@ class SingletonUpdater:
         self._check_interval_hours = 0
         self._check_interval_minutes = 0
         self._verbose = False
-        self._use_print_traces = True
+        self._use_print_traces = False
         self._fake_install = False
         self._async_checking = False
         self._update_ready = None
@@ -77,9 +76,7 @@ class SingletonUpdater:
             return tag["zipball_url"]
         self._select_link = select_link_function
     def print_trace(self):
-        """Print handled exception details when use_print_traces is set"""
-        if self._use_print_traces:
-            traceback.print_exc()
+        return None
     def print_verbose(self, msg):
         """Print out a verbose logging message if verbose is true."""
         if not self._verbose:

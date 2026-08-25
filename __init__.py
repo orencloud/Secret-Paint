@@ -35,57 +35,20 @@ for mod in addon_utils.modules():
         if addon_path != None: both_addon_and_extensions_are_installed = True
         if hasattr(mod, '__file_manifest__'): addon_is_an_extension=True
 addon_path = os.path.dirname(os.path.abspath(__file__))
-_SECRET_PAINT_TRACE_SEQUENCE = 0
-def _secret_paint_trace_path():
-    blend_path = bpy.data.filepath
-    if blend_path:
-        blend = Path(blend_path)
-        return str(blend.with_name(f"{blend.stem} - Secret Paint Trace.txt"))
-    return os.path.join(addon_path, "Secret Paint Trace.txt")
-
-
 def _secret_paint_trace(message, **details):
-    """Append one timestamped diagnostic event beside the active blend file."""
-    global _SECRET_PAINT_TRACE_SEQUENCE
-    _SECRET_PAINT_TRACE_SEQUENCE += 1
-    wall_ns = time.time_ns()
-    wall_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(wall_ns / 1_000_000_000))
-    detail_text = " ".join(
-        f"{key}={value!r}" for key, value in details.items()
-    )
-    line = (
-        f"{_SECRET_PAINT_TRACE_SEQUENCE:06d} "
-        f"{wall_time}.{(wall_ns // 1_000_000) % 1000:03d} "
-        f"{message}"
-    )
-    if detail_text:
-        line = f"{line} | {detail_text}"
-    try:
-        with open(_secret_paint_trace_path(), "a", encoding="utf-8") as trace_file:
-            trace_file.write(f"{line}\n")
-    except OSError as error:
-        print(f"Secret Paint trace write failed: {error}")
+    return None
 
 
 def _secret_paint_trace_begin(action, **details):
-    _secret_paint_trace(f"BEGIN {action}", **details)
-    return time.perf_counter()
+    return None
 
 
 def _secret_paint_trace_end(action, started_at, **details):
-    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
-    _secret_paint_trace(f"END {action}", elapsed_ms=round(elapsed_ms, 3), **details)
-    return elapsed_ms
+    return None
 
 
 def _secret_paint_trace_session(action, **details):
-    _secret_paint_trace("=" * 72)
-    return _secret_paint_trace_begin(
-        action,
-        blend_file=bpy.data.filepath or "<unsaved>",
-        blender=bpy.app.version_string,
-        **details,
-    )
+    return None
 
 
 _SECRET_PAINT_NODE_LIBRARY_NAMES = frozenset({
