@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 6),
+    "version": (2, 1, 7),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -36,8 +36,6 @@ for mod in addon_utils.modules():
         if hasattr(mod, '__file_manifest__'): addon_is_an_extension=True
 addon_path = os.path.dirname(os.path.abspath(__file__))
 _SECRET_PAINT_TRACE_SEQUENCE = 0
-
-
 def _secret_paint_trace_path():
     blend_path = bpy.data.filepath
     if blend_path:
@@ -577,6 +575,21 @@ def _secret_paint_apply_missing_ids(obj):
     )
     return True
 _SECRET_PAINT_DENSITY_FALLBACK = 0.4
+
+
+def _secret_paint_automatic_density_multiplier(context=None):
+    """Return the effective multiplier used for newly calculated densities."""
+    try:
+        if context is None:
+            context = bpy.context
+        density_scale = float(
+            context.preferences.addons[__package__].preferences.automatic_density_multiplier
+        )
+        if density_scale > 0.0 and math.isfinite(density_scale):
+            return density_scale * 4.0
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    return 4.0
 
 
 def _secret_paint_world_dimensions(obj, depsgraph=None):
@@ -3218,7 +3231,9 @@ def secretpaint_create_curve(self,context,**kwargs):
         smallest_horizontal=True,
     )
     if density_size is not None:
-        dimensions_of_smallest_axis = 1 / (density_size ** 2)
+        dimensions_of_smallest_axis = (
+            _secret_paint_automatic_density_multiplier(context) / (density_size ** 2)
+        )
         if dimensions_of_smallest_axis < 10000:
             _secret_paint_1731_set_modifier_value(hair_modifier, "Input_68", dimensions_of_smallest_axis)
             input_100 = float(_secret_paint_1731_modifier_value(hair_modifier, "Input_100", 1.0) or 1.0)
@@ -3744,7 +3759,13 @@ def secretpaint_function(self,*args,**kwargs):
         )
         if density_size is not None:
             _secret_paint_1731_set_modifier_value(
-                hair_modifier, "Input_68", (1 / (density_size ** 2)) * 2
+                hair_modifier,
+                "Input_68",
+                (
+                    (1 / (density_size ** 2))
+                    * 2
+                    * _secret_paint_automatic_density_multiplier(context)
+                ),
             )
         else:
             _secret_paint_1731_set_modifier_value(
@@ -4069,6 +4090,137 @@ def _secret_paint_q_instance_owner_cache(context, system_cache):
         bounded_instance_systems,
     )
     return owners
+def _secret_paint_q_target_bounds_cache(context, system_cache, candidate_systems):
+    """Build exact instance bounds only for the few systems relevant now."""
+    cache = system_cache if system_cache is not None else {}
+    frozen_systems = set(_secret_paint_q_frozen_bounded_systems(context, cache))
+    candidates = []
+    pointers = set()
+    for system in candidate_systems or ():
+        try:
+            pointer = system.as_pointer()
+        except (AttributeError, ReferenceError):
+            continue
+        if (pointer in pointers or system not in frozen_systems or
+                not _secret_paint_q_is_paint_system(system)):
+            continue
+        try:
+            visible = (
+                system.name in context.view_layer.objects and
+                system.visible_get(view_layer=context.view_layer)
+            )
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            visible = not getattr(system, "hide_viewport", False)
+        if not visible:
+            continue
+        pointers.add(pointer)
+        candidates.append(system)
+    cache_key = tuple(sorted(pointers))
+    if not cache_key:
+        return (None, [], [], set())
+    targeted_caches = cache.setdefault("targeted_bounds_bvhs", {})
+    cached = targeted_caches.get(cache_key)
+    if cached is not None:
+        return cached
+
+    maximum_exact_instances = 2048
+    try:
+        manual_instance_count = sum(
+            len(system.data.curves)
+            for system in candidates
+            if system.type == "CURVES"
+        )
+        expected_instance_count = (
+            manual_instance_count
+            if manual_instance_count and all(
+                system.type == "CURVES" for system in candidates
+            )
+            else None
+        )
+    except (AttributeError, ReferenceError, TypeError):
+        manual_instance_count = 0
+        expected_instance_count = None
+    if manual_instance_count > maximum_exact_instances:
+        result = (None, [], [], set())
+        targeted_caches[cache_key] = result
+        return result
+
+    candidate_by_pointer = {
+        system.as_pointer(): system for system in candidates
+    }
+    bounds_vertices = []
+    bounds_faces = []
+    bounds_face_instances = []
+    bounds_instances = []
+    bounded_instance_systems = set()
+    box_faces = (
+        (0, 1, 2, 3), (4, 5, 6, 7),
+        (0, 1, 5, 4), (2, 3, 7, 6),
+        (0, 3, 7, 4), (1, 2, 6, 5),
+    )
+    too_large = False
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        for instance in depsgraph.object_instances:
+            if not instance.is_instance or instance.parent is None:
+                continue
+            parent = getattr(instance.parent, "original", instance.parent)
+            parent = candidate_by_pointer.get(parent.as_pointer())
+            if parent is None:
+                continue
+            source = getattr(instance.object, "original", instance.object)
+            instance_bounds = getattr(instance.object, "bound_box", None)
+            if source is None or not instance_bounds:
+                continue
+            if len(bounds_instances) >= maximum_exact_instances:
+                too_large = True
+                break
+            frozen_bounds = tuple(Vector(corner) for corner in instance_bounds)
+            instance_matrix = instance.matrix_world.copy()
+            base_index = len(bounds_vertices)
+            bounds_vertices.extend(
+                instance_matrix @ corner for corner in frozen_bounds
+            )
+            instance_index = len(bounds_instances)
+            bounds_instances.append((
+                parent,
+                source,
+                instance_matrix,
+                frozen_bounds,
+            ))
+            for face in box_faces:
+                bounds_faces.append(tuple(base_index + index for index in face))
+                bounds_face_instances.append(instance_index)
+            bounded_instance_systems.add(parent)
+            if (expected_instance_count is not None and
+                    len(bounds_instances) >= expected_instance_count):
+                break
+    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+        too_large = True
+
+    bounds_bvh = None
+    if bounds_faces and not too_large:
+        try:
+            from mathutils.bvhtree import BVHTree
+            bounds_bvh = BVHTree.FromPolygons(
+                bounds_vertices,
+                bounds_faces,
+                all_triangles=False,
+            )
+        except (RuntimeError, TypeError, ValueError):
+            bounds_bvh = None
+    if bounds_bvh is None:
+        bounds_face_instances = []
+        bounds_instances = []
+        bounded_instance_systems = set()
+    result = (
+        bounds_bvh,
+        bounds_face_instances,
+        bounds_instances,
+        bounded_instance_systems,
+    )
+    targeted_caches[cache_key] = result
+    return result
 def _secret_paint_q_source_instance_owner_cache(
         context,
         source,
@@ -4775,24 +4927,38 @@ def _secret_paint_q_exact_bounds_system_under_cursor(
         region_3d,
         coord,
         blocker_distance=None,
+        candidate_systems=None,
 ):
     """Match Object Mode selection against exact evaluated bounds edges."""
     cache = system_cache if system_cache is not None else {}
-    _secret_paint_q_instance_owner_cache(context, cache)
+    bounds_cache = _secret_paint_q_target_bounds_cache(
+        context,
+        cache,
+        candidate_systems,
+    )
     (
         bounds_bvh,
         bounds_face_instances,
         bounds_instances,
         _bounded_instance_systems,
-    ) = cache.get(
-        "bounded_instance_bvh",
-        (None, [], [], set()),
-    )
+    ) = bounds_cache
     if bounds_bvh is None:
-        return None, float("inf")
+        return None, float("inf"), False
     world_origin = Vector(ray_origin)
     world_direction = Vector(ray_direction).normalized()
     cast_origin = world_origin.copy()
+    seen_instances = set()
+    try:
+        ui_scale = float(context.preferences.system.ui_scale)
+    except (AttributeError, TypeError, ValueError):
+        ui_scale = 1.0
+    edge_threshold = max(5.0, 7.0 * ui_scale)
+    bounds_edges = (
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7),
+    )
+    bounds_ray_intersected = False
     for _depth in range(128):
         try:
             location, _normal, face_index, _distance = bounds_bvh.ray_cast(
@@ -4806,35 +4972,30 @@ def _secret_paint_q_exact_bounds_system_under_cursor(
         distance = (Vector(location) - world_origin).dot(world_direction)
         if blocker_distance is not None and distance > blocker_distance + 1.0e-4:
             break
+        bounds_ray_intersected = True
         if 0 <= face_index < len(bounds_face_instances):
             instance_index = bounds_face_instances[face_index]
-            if 0 <= instance_index < len(bounds_instances):
+            if (instance_index not in seen_instances and
+                    0 <= instance_index < len(bounds_instances)):
+                seen_instances.add(instance_index)
                 (
                     owner,
                     _source,
                     instance_matrix,
                     instance_bounds,
                 ) = bounds_instances[instance_index]
-                try:
-                    ui_scale = float(context.preferences.system.ui_scale)
-                except (AttributeError, TypeError, ValueError):
-                    ui_scale = 1.0
                 if _secret_paint_q_projected_edges_hit(
                         region,
                         region_3d,
                         coord,
                         instance_matrix,
                         instance_bounds,
-                        (
-                            (0, 1), (1, 2), (2, 3), (3, 0),
-                            (4, 5), (5, 6), (6, 7), (7, 4),
-                            (0, 4), (1, 5), (2, 6), (3, 7),
-                        ),
-                        max(5.0, 7.0 * ui_scale),
+                        bounds_edges,
+                        edge_threshold,
                 ):
-                    return owner, distance
+                    return owner, distance, True
         cast_origin = Vector(location) + world_direction * 1.0e-4
-    return None, float("inf")
+    return None, float("inf"), bounds_ray_intersected
 def _secret_paint_q_paint_system_from_ray(
         context,
         ray_origin,
@@ -5032,6 +5193,8 @@ def _secret_paint_q_pick_object(
     if view_area is not None and region is not None and coord is not None:
         fast_candidate = None
         ray_state = {}
+        ray_origin = None
+        ray_direction = None
         try:
             from bpy_extras import view3d_utils
             region_3d = (space_data or context.space_data).region_3d
@@ -5103,9 +5266,67 @@ def _secret_paint_q_pick_object(
             "unresolved_instance",
             False,
         )
+        if (needs_bounds_edge_pick and exact_instance_targeting and
+                ray_origin is not None and ray_direction is not None):
+            bounds_candidate_systems = []
+            if (_secret_paint_q_is_paint_system(keep_candidate_on_miss) and
+                    _secret_paint_q_system_or_brush_uses_bounds(
+                        keep_candidate_on_miss
+                    )):
+                bounds_candidate_systems.append(keep_candidate_on_miss)
+            if ray_object is not None and not bounds_candidate_systems:
+                for candidate_system in _secret_paint_q_cached_systems_for_brush(
+                        ray_object,
+                        system_cache,
+                ):
+                    if _secret_paint_q_system_or_brush_uses_bounds(
+                            candidate_system
+                    ):
+                        bounds_candidate_systems.append(candidate_system)
+            blocker_distance = None
+            blocker_location = ray_state.get("location")
+            blocker_object = ray_state.get("object")
+            if blocker_location is not None and blocker_object is not None:
+                blocker_display = getattr(
+                    blocker_object,
+                    "display_type",
+                    "SOLID",
+                )
+                if blocker_display not in {"WIRE", "BOUNDS"}:
+                    blocker_distance = (
+                        Vector(blocker_location) - Vector(ray_origin)
+                    ).dot(Vector(ray_direction).normalized())
+            (
+                bounds_candidate,
+                _bounds_distance,
+                bounds_ray_intersected,
+            ) = (
+                _secret_paint_q_exact_bounds_system_under_cursor(
+                    context,
+                    ray_origin,
+                    ray_direction,
+                    system_cache,
+                    region,
+                    region_3d,
+                    coord,
+                    blocker_distance=blocker_distance,
+                    candidate_systems=bounds_candidate_systems,
+                )
+            )
+            if bounds_candidate is not None:
+                fast_candidate = bounds_candidate
+                fast_candidate_is_system = True
+                needs_bounds_object_pick = False
+                needs_instance_object_pick = False
+            elif bounds_ray_intersected:
+                needs_bounds_object_pick = False
         instance_pick_key = ray_state.get("unresolved_instance_key")
         requires_native_pick = (
             not fast_candidate_is_system
+            and (
+                keep_candidate_on_miss is None or
+                needs_instance_object_pick
+            )
             and (
                 needs_bounds_object_pick
                 or needs_instance_object_pick
@@ -5143,7 +5364,7 @@ def _secret_paint_q_pick_object(
                 instance_target_changed
                 or (
                     moved_for_native
-                    and now - last_native_time >= 0.05
+                    and now - last_native_time >= 0.20
                 )
             )
         )
@@ -5202,34 +5423,6 @@ def _secret_paint_q_pick_object(
             picked = fast_candidate
             pick_cache["native_candidate"] = None
             pick_cache["native_instance_key"] = None
-        if needs_bounds_edge_pick and exact_instance_targeting:
-            blocker_distance = None
-            blocker_location = ray_state.get("location")
-            blocker_object = ray_state.get("object")
-            if blocker_location is not None and blocker_object is not None:
-                blocker_display = getattr(
-                    blocker_object,
-                    "display_type",
-                    "SOLID",
-                )
-                if blocker_display not in {"WIRE", "BOUNDS"}:
-                    blocker_distance = (
-                        Vector(blocker_location) - Vector(ray_origin)
-                    ).dot(Vector(ray_direction).normalized())
-            bounds_candidate, _bounds_distance = (
-                _secret_paint_q_exact_bounds_system_under_cursor(
-                    context,
-                    ray_origin,
-                    ray_direction,
-                    system_cache,
-                    region,
-                    region_3d,
-                    coord,
-                    blocker_distance=blocker_distance,
-                )
-            )
-            if bounds_candidate is not None:
-                picked = bounds_candidate
     if picked == terrain:
         picked = None
     if picked in (ignored_objects or ()):
@@ -5830,6 +6023,53 @@ def _secret_paint_q_stop_hold_timer(self, context):
             pass
     self._q_hold_timer = None
     self._q_hold_waiting = False
+class _SecretPaintQMouseEvent:
+    __slots__ = ("mouse_x", "mouse_y")
+
+    def __init__(self, mouse_position):
+        self.mouse_x, self.mouse_y = mouse_position
+def _secret_paint_q_stop_hover_timer(self, context):
+    timer = getattr(self, "_q_hover_timer", None)
+    if timer is not None:
+        try:
+            context.window_manager.event_timer_remove(timer)
+        except (AttributeError, RuntimeError):
+            pass
+    self._q_hover_timer = None
+    self._q_pending_hover_mouse = None
+def _secret_paint_q_update_plant_hover(self, context, event, force=False):
+    """Resolve only the newest queued cursor position for the plant picker."""
+    if not context.area or context.area.type != 'VIEW_3D':
+        return
+    mouse_position = (
+        getattr(event, "mouse_x", None),
+        getattr(event, "mouse_y", None),
+    )
+    if None in mouse_position:
+        return
+    if not force and mouse_position == self._q_last_hover_mouse:
+        return
+    self._q_last_hover_mouse = mouse_position
+    picked = _secret_paint_q_pick_object(
+        context,
+        event,
+        self._q_terrain,
+        preserve_active=self._q_original_curve,
+        system_cache=self._q_system_cache,
+        include_bounds_systems=True,
+        ignored_objects=self._q_ignored_terrains,
+        keep_candidate_on_miss=self._q_candidate,
+    )
+    self._q_exact_pick_ready = True
+    if _secret_paint_q_is_paint_system(picked):
+        self._q_ignored_terrains.add(picked.parent)
+    self._q_candidate = picked
+    _secret_paint_q_sync_preview_mask(
+        self,
+        context,
+        event,
+        self._q_candidate,
+    )
 def _secret_paint_q_begin_plant_selection(
         self,
         context,
@@ -5854,6 +6094,9 @@ def _secret_paint_q_begin_plant_selection(
     self._q_mask_preview = None
     self._q_ignored_terrains = set()
     self._q_last_hover_mouse = None
+    self._q_pending_hover_mouse = None
+    self._q_view_navigating = False
+    self._q_navigation_button = None
     self._q_exact_pick_ready = False
     self._q_from_button = (
         getattr(context.region, "type", "WINDOW") != "WINDOW"
@@ -5887,6 +6130,13 @@ def _secret_paint_q_begin_plant_selection(
     )
     if _secret_paint_q_is_paint_system(self._q_candidate):
         self._q_ignored_terrains.add(self._q_candidate.parent)
+    try:
+        self._q_hover_timer = context.window_manager.event_timer_add(
+            1.0 / 45.0,
+            window=context.window,
+        )
+    except (AttributeError, RuntimeError):
+        self._q_hover_timer = None
     context.area.tag_redraw()
     return True
 class orenscatter(bpy.types.Operator):
@@ -6093,39 +6343,47 @@ class orenscatter(bpy.types.Operator):
                 getattr(self, "_q_from_button", False) and
                 event.type == 'LEFTMOUSE' and event.value == 'PRESS'
             )
-            if event.type == 'MOUSEMOVE' or (
-                    event.type == 'LEFTMOUSE' and not getattr(self, "_q_from_button", False)):
-                if context.area and context.area.type == 'VIEW_3D':
-                    mouse_position = (
+            modified_left = (
+                event.type == 'LEFTMOUSE' and
+                any((event.alt, event.ctrl, event.shift, event.oskey))
+            )
+            navigation_mouse = (
+                event.type == 'MIDDLEMOUSE' or
+                modified_left or
+                event.type == getattr(self, "_q_navigation_button", None)
+            )
+            if navigation_mouse:
+                if event.value == 'PRESS':
+                    self._q_view_navigating = True
+                    self._q_navigation_button = event.type
+                    self._q_pending_hover_mouse = None
+                elif event.value == 'RELEASE':
+                    self._q_view_navigating = False
+                    self._q_navigation_button = None
+                    self._q_pending_hover_mouse = (
                         getattr(event, "mouse_x", None),
                         getattr(event, "mouse_y", None),
                     )
-                    if mouse_position == self._q_last_hover_mouse:
-                        return {'PASS_THROUGH'}
-                    self._q_last_hover_mouse = mouse_position
-                    picked = _secret_paint_q_pick_object(
-                        context,
-                        event,
-                        self._q_terrain,
-                        preserve_active=self._q_original_curve,
-                        system_cache=self._q_system_cache,
-                        include_bounds_systems=True,
-                        ignored_objects=self._q_ignored_terrains,
-                        keep_candidate_on_miss=self._q_candidate,
-                    )
-                    self._q_exact_pick_ready = True
-                    if _secret_paint_q_is_paint_system(picked):
-                        self._q_ignored_terrains.add(picked.parent)
-                    self._q_candidate = picked
-                    _secret_paint_q_sync_preview_mask(
+                return {'PASS_THROUGH'}
+            if getattr(self, "_q_view_navigating", False):
+                return {'PASS_THROUGH'}
+            if event.type == 'MOUSEMOVE':
+                self._q_pending_hover_mouse = (
+                    getattr(event, "mouse_x", None),
+                    getattr(event, "mouse_y", None),
+                )
+                return {'PASS_THROUGH'}
+            if (event.type == 'TIMER' and
+                    getattr(self, "_q_hover_timer", None) is not None):
+                pending_mouse = self._q_pending_hover_mouse
+                self._q_pending_hover_mouse = None
+                if pending_mouse is not None and None not in pending_mouse:
+                    _secret_paint_q_update_plant_hover(
                         self,
                         context,
-                        event,
-                        self._q_candidate,
+                        _SecretPaintQMouseEvent(pending_mouse),
                     )
-                if event.type == 'MOUSEMOVE':
-                    return {'PASS_THROUGH'}
-                return {'PASS_THROUGH' if getattr(self, "_q_from_button", False) else 'RUNNING_MODAL'}
+                return {'PASS_THROUGH'}
             shortcut_type = getattr(self, '_q_shortcut_type', None)
             q_pressed_again = (
                 event.type == shortcut_type and event.value == 'PRESS' and
@@ -6134,6 +6392,20 @@ class orenscatter(bpy.types.Operator):
             )
             if ((event.type == shortcut_type and (event.value == 'RELEASE' or q_pressed_again))
                     or button_confirm):
+                pending_mouse = (
+                    getattr(event, "mouse_x", None),
+                    getattr(event, "mouse_y", None),
+                )
+                if pending_mouse is None or None in pending_mouse:
+                    pending_mouse = self._q_pending_hover_mouse
+                if pending_mouse is not None and None not in pending_mouse:
+                    _secret_paint_q_update_plant_hover(
+                        self,
+                        context,
+                        _SecretPaintQMouseEvent(pending_mouse),
+                        force=True,
+                    )
+                _secret_paint_q_stop_hover_timer(self, context)
                 if (not getattr(self, "_q_exact_pick_ready", False) and
                         context.area and context.area.type == 'VIEW_3D'):
                     self._q_candidate = _secret_paint_q_pick_object(
@@ -6207,6 +6479,7 @@ class orenscatter(bpy.types.Operator):
                 context.area.tag_redraw()
                 return {'FINISHED'}
             if event.type in {'ESC', 'RIGHTMOUSE'}:
+                _secret_paint_q_stop_hover_timer(self, context)
                 _secret_paint_q_restore_preview_mask(self)
                 _secret_paint_q_prompt = False
                 _secret_paint_q_end_selection_mode()
@@ -6228,6 +6501,7 @@ class orenscatter(bpy.types.Operator):
         return {'FINISHED'}
     def cancel(self, context):
         _secret_paint_q_stop_hold_timer(self, context)
+        _secret_paint_q_stop_hover_timer(self, context)
         _secret_paint_q_restore_preview_mask(self)
 def _secret_paint_q_pick_terrain(
         context,
@@ -9174,6 +9448,7 @@ class secret_menu(bpy.types.AddonPreferences):
     checkboxHideImported: bpy.props.BoolProperty(name="Hide Imported Paint Assets", description="When importing and painting objects from the asset browser (Q), hide them in a new collection called Hidden Assets (instead of having them visible next to the terrain)", default=False)
     checkboxShowPaintPrompt: bpy.props.BoolProperty(name="Show Paint Prompt", description="Show the prompt while choosing an object to paint with", default=True)
     plant_selection_hold_ms: bpy.props.IntProperty(name="Plant Selection Hold (ms)", description="How long the paint shortcut must remain held after entering paint mode before opening plant selection. Set to 0 to open plant selection immediately", default=200, min=0, soft_max=1000, max=5000)
+    automatic_density_multiplier: bpy.props.FloatProperty(name="Automatic Density", description="Scale for the density calculated from the brush size when creating a new paint system. 1.0 is the default density", default=1.0, min=0.1, soft_min=0.25, soft_max=4.0, max=10.0, step=10, precision=2)
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
     biomenamecategory: bpy.props.StringProperty(name="Catalog", description="Asset Browser Catalog for the asset that's being exported. Leave empty to not assign to any catalog", default="Biomes/Nature")
     biomename: bpy.props.StringProperty(name="Folder", description="Export the .blend file to this path inside the currently open Asset Library. If .blend file aready exists: add the objects inside of it", default="/Biomes/All Biomes.blend")
@@ -9192,6 +9467,7 @@ class secret_menu(bpy.types.AddonPreferences):
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxShowPaintPrompt")
         layout.prop(self, "plant_selection_hold_ms", slider=True)
+        layout.prop(self, "automatic_density_multiplier", slider=True)
         layout.prop(self, "checkboxOverrideBrushes")
         layout.prop(self, "trigger_viewport_mask")
         layout.prop(self, "trigger_auto_uvs")
