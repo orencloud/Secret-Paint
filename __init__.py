@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 9),
+    "version": (2, 1, 10),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -539,8 +539,7 @@ def _secret_paint_apply_missing_ids(obj):
     )
     return True
 _SECRET_PAINT_DENSITY_FALLBACK = 0.4
-_SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE = 0.1
-_SECRET_PAINT_ACCUMULATE_FIRST_STROKE_FRACTION = 0.25
+_SECRET_PAINT_ACCUMULATE_BASE_STROKE_FRACTION = 0.25
 _SECRET_PAINT_DENSITY_ATTEMPTS_MAX = 2_147_483_647
 _SECRET_PAINT_ACCUMULATE_ATTEMPTS_BACKUP = {}
 
@@ -555,6 +554,41 @@ def _secret_paint_accumulate_manual_paint(context=None):
         )
     except (AttributeError, KeyError, TypeError):
         return True
+
+
+def _secret_paint_accumulate_count_max_multiplier(context=None):
+    """Return the user multiplier for accumulating Count Max."""
+    try:
+        if context is None:
+            context = bpy.context
+        multiplier = float(
+            context.preferences.addons[__package__].preferences.accumulate_count_max_multiplier
+        )
+        if multiplier > 0.0 and math.isfinite(multiplier):
+            return multiplier
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    return 2.0
+
+
+def _secret_paint_accumulate_brush_density_multiplier(context=None):
+    """Return the user multiplier applied to accumulating brush density."""
+    try:
+        if context is None:
+            context = bpy.context
+        multiplier = float(
+            context.preferences.addons[__package__].preferences.accumulate_brush_density_multiplier
+        )
+        if multiplier > 0.0 and math.isfinite(multiplier):
+            return multiplier
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    return 10.0
+
+
+def _secret_paint_accumulate_distance_scale(context=None):
+    """Convert the accumulation density multiplier to minimum-distance scale."""
+    return 1.0 / _secret_paint_accumulate_brush_density_multiplier(context)
 
 
 def _secret_paint_automatic_density_multiplier(context=None):
@@ -2346,14 +2380,19 @@ def _secret_paint_1731_density_base_distance(system):
     return _SECRET_PAINT_DENSITY_FALLBACK
 
 
-def _secret_paint_1731_accumulate_attempt_count(brush_radius, base_distance):
-    """Cap the first accumulating stroke at one quarter of K's brush count."""
+def _secret_paint_1731_accumulate_attempt_count(
+        brush_radius,
+        base_distance,
+        context=None,
+):
+    """Return Count Max for one accumulating stroke at the chosen multiplier."""
     try:
         brush_area = math.pi * float(brush_radius) ** 2
         base_cell_area = float(base_distance) ** 2
         attempts = int(round(
             (brush_area / base_cell_area)
-            * _SECRET_PAINT_ACCUMULATE_FIRST_STROKE_FRACTION
+            * _SECRET_PAINT_ACCUMULATE_BASE_STROKE_FRACTION
+            * _secret_paint_accumulate_count_max_multiplier(context)
         ))
     except (TypeError, ValueError, ZeroDivisionError, OverflowError):
         return None
@@ -2448,7 +2487,11 @@ def _secret_paint_1731_set_accumulate_density_attempts(
         system,
         brush,
     )
-    attempts = _secret_paint_1731_accumulate_attempt_count(radius, base_distance)
+    attempts = _secret_paint_1731_accumulate_attempt_count(
+        radius,
+        base_distance,
+        context=context,
+    )
     if attempts is None:
         return False
     try:
@@ -2506,7 +2549,7 @@ def _secret_paint_update_accumulate_manual_paint(preferences, context):
         return
     minimum_distance = _secret_paint_1731_density_base_distance(system)
     if enabled:
-        minimum_distance *= _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+        minimum_distance *= _secret_paint_accumulate_distance_scale(context)
     for brush in density_brushes:
         try:
             brush.curves_sculpt_settings.minimum_distance = minimum_distance
@@ -2917,7 +2960,9 @@ class brush_density_while_painting(bpy.types.Operator):
                             system
                         )
                     settings.minimum_distance = (
-                        base_distance * _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+                        base_distance * _secret_paint_accumulate_distance_scale(
+                            context
+                        )
                     )
                     if event.type == 'LEFTMOUSE':
                         _secret_paint_1731_set_accumulate_density_attempts(
@@ -3131,6 +3176,7 @@ def context3sculptbrush(context,**kwargs):
         brush_setup_started = time.perf_counter()
         brush_density = []
         brush_grow = []
+        brush_select = []
         brush_add = []
         brush_delete = []
         brush_puff = []
@@ -3141,6 +3187,8 @@ def context3sculptbrush(context,**kwargs):
                     brush_density.append(brush)
                 elif brush.curves_sculpt_brush_type == 'GROW_SHRINK':
                     brush_grow.append(brush)
+                elif brush.curves_sculpt_brush_type == 'SELECTION_PAINT':
+                    brush_select.append(brush)
                 elif brush.curves_sculpt_brush_type == 'ADD':
                     brush_add.append(brush)
                 elif brush.curves_sculpt_brush_type == 'DELETE':
@@ -3154,6 +3202,8 @@ def context3sculptbrush(context,**kwargs):
                     brush_density.append(brush)
                 elif brush.curves_sculpt_tool == 'GROW_SHRINK':
                     brush_grow.append(brush)
+                elif brush.curves_sculpt_tool == 'SELECTION_PAINT':
+                    brush_select.append(brush)
                 elif brush.curves_sculpt_tool == 'ADD':
                     brush_add.append(brush)
                 elif brush.curves_sculpt_tool == 'DELETE':
@@ -3178,6 +3228,14 @@ def context3sculptbrush(context,**kwargs):
                 new_brush_grow.curves_sculpt_tool = 'GROW_SHRINK'
             new_brush_grow.size = 150
             brush_grow.append(new_brush_grow)
+        if not brush_select:
+            new_brush_select = bpy.data.brushes.new('Select Curves',mode="SCULPT_CURVES")
+            if bpy.app.version_string >= "5.0.0":
+                new_brush_select.curves_sculpt_brush_type = 'SELECTION_PAINT'
+            elif bpy.app.version_string < "5.0.0":
+                new_brush_select.curves_sculpt_tool = 'SELECTION_PAINT'
+            new_brush_select.size = 150
+            brush_select.append(new_brush_select)
         if not brush_add:
             new_brush_add = bpy.data.brushes.new('Add Curves',mode="SCULPT_CURVES")
             if bpy.app.version_string >= "5.0.0":
@@ -3212,6 +3270,11 @@ def context3sculptbrush(context,**kwargs):
             brush_comb.append(new_brush_comb)
         for bb in brush_delete:
             bb.falloff_shape = 'PROJECTED'
+        for bb in brush_grow:
+            bb.falloff_shape = 'PROJECTED'
+            bb.strength = 0.03
+        for bb in brush_select:
+            bb.falloff_shape = 'PROJECTED'
         for bb in brush_density:
             paint_modifier = _secret_paint_1731_paint_modifier(activeobj)
             if paint_modifier:
@@ -3223,7 +3286,9 @@ def context3sculptbrush(context,**kwargs):
             else:
                 minimum_distance = _SECRET_PAINT_DENSITY_FALLBACK
             if _secret_paint_accumulate_manual_paint(context):
-                minimum_distance *= _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+                minimum_distance *= _secret_paint_accumulate_distance_scale(
+                    context
+                )
             bb.curves_sculpt_settings.minimum_distance = minimum_distance
             if bpy.app.version_string >= "4.2.0":
                 bb.curves_sculpt_settings.use_length_interpolate = False
@@ -3244,7 +3309,6 @@ def context3sculptbrush(context,**kwargs):
                 elif bpy.app.version_string < "5.0.0": bb.curve_preset = 'SMOOTHER'
                 bb.curves_sculpt_settings.density_add_attempts = 2000
             for bb in brush_grow:
-                bb.strength = 0.03
                 if bpy.app.version_string >= "4.2.0":
                     bb.curves_sculpt_settings.use_uniform_scale = True
                 elif bpy.app.version_string < "4.2.0":
@@ -3276,7 +3340,7 @@ def context3sculptbrush(context,**kwargs):
             brush_setup_started,
             density=len(brush_density), add=len(brush_add),
             delete=len(brush_delete), grow=len(brush_grow),
-            puff=len(brush_puff), comb=len(brush_comb),
+            select=len(brush_select), puff=len(brush_puff), comb=len(brush_comb),
         )
     elif activeobj.type=="CURVE":
         curve_mode_started = time.perf_counter()
@@ -5609,6 +5673,7 @@ def _secret_paint_q_pick_object(
         system_cache=None,
         include_bounds_systems=False,
         exact_instance_targeting=True,
+        resolve_system_terrain=False,
         ignored_objects=None,
         keep_candidate_on_miss=None,
 ):
@@ -5852,6 +5917,9 @@ def _secret_paint_q_pick_object(
             picked = fast_candidate
             pick_cache["native_candidate"] = None
             pick_cache["native_instance_key"] = None
+    if (resolve_system_terrain and
+            _secret_paint_q_is_paint_system(picked)):
+        picked = picked.parent
     if picked == terrain:
         picked = None
     if picked in (ignored_objects or ()):
@@ -6587,6 +6655,7 @@ class orenscatter(bpy.types.Operator):
         ):
             self._q_object_brush = active
             self._q_candidate = None
+            self._q_system_cache = {}
             self._q_view_navigating = False
             self._q_navigation_button = None
             self._q_shortcut_type = event.type
@@ -6600,10 +6669,15 @@ class orenscatter(bpy.types.Operator):
                 context
             )
             _secret_paint_q_clear_selection(context)
+            _secret_paint_q_frozen_bounded_systems(
+                context,
+                self._q_system_cache,
+            )
             self._q_candidate = _secret_paint_q_pick_terrain(
                 context,
                 event,
                 self._q_object_brush,
+                system_cache=self._q_system_cache,
             )
             _secret_paint_q_clear_selection(context)
             if self._q_candidate is not None:
@@ -6700,7 +6774,10 @@ class orenscatter(bpy.types.Operator):
                     self._q_navigation_button = None
                     if context.area and context.area.type == 'VIEW_3D':
                         picked = _secret_paint_q_pick_terrain(
-                            context, event, self._q_object_brush
+                            context,
+                            event,
+                            self._q_object_brush,
+                            system_cache=self._q_system_cache,
                         )
                         _secret_paint_q_clear_selection(context)
                         self._q_candidate = picked
@@ -6714,7 +6791,10 @@ class orenscatter(bpy.types.Operator):
             if event.type == 'MOUSEMOVE' or event.type == 'LEFTMOUSE' and event.value == 'PRESS':
                 if context.area and context.area.type == 'VIEW_3D':
                     picked = _secret_paint_q_pick_terrain(
-                        context, event, self._q_object_brush
+                        context,
+                        event,
+                        self._q_object_brush,
+                        system_cache=self._q_system_cache,
                     )
                     _secret_paint_q_clear_selection(context)
                     self._q_candidate = picked
@@ -6950,11 +7030,10 @@ def _secret_paint_q_pick_terrain(
         current_terrain,
         preserve_active=preserve_active,
         system_cache=system_cache,
-        exact_instance_targeting=False,
+        include_bounds_systems=True,
+        resolve_system_terrain=True,
     )
-    if _secret_paint_q_is_paint_system(picked):
-        target_terrain = picked.parent
-    elif (picked is not None and picked.type == "MESH" and
+    if (picked is not None and picked.type == "MESH" and
             not picked.name.startswith("Secret Paint Viewport Mask")):
         target_terrain = picked
     else:
@@ -10008,7 +10087,9 @@ class secret_menu(bpy.types.AddonPreferences):
     checkboxKeepManualWhenTransferBiome: bpy.props.BoolProperty(name="Keep Manual When Transferring Biomes", description="When transferring biomes from a terrain to another: keep the paint systems in manual mode instead of automatically switching everything to procedural", default=False)
     checkboxHideImported: bpy.props.BoolProperty(name="Hide Imported Paint Assets", description="When importing and painting objects from the asset browser (Q), hide them in a new collection called Hidden Assets (instead of having them visible next to the terrain)", default=False)
     checkboxShowPaintPrompt: bpy.props.BoolProperty(name="Secret Paint Mode in Tab Menu", description="Show Secret Paint as an option in Blender's Tab mode menu", default=True)
-    accumulate_manual_paint: bpy.props.BoolProperty(name="Accumulate Manual Paint", description="Build density over repeated manual Density strokes. Each stroke adds one quarter of the normal density target while allowing closer curve spacing", default=True, update=_secret_paint_update_accumulate_manual_paint)
+    accumulate_manual_paint: bpy.props.BoolProperty(name="Accumulate Manual Paint", description="Build density over repeated manual Density strokes using the accumulation controls below", default=True, update=_secret_paint_update_accumulate_manual_paint)
+    accumulate_count_max_multiplier: bpy.props.FloatProperty(name="Accumulation Count Max Multiplier", description="Multiply the automatically calculated Count Max for each accumulating brushstroke. 2.0 preserves the default half-density stroke", default=2.0, min=0.1, soft_min=0.25, soft_max=8.0, max=100.0, step=10, precision=2)
+    accumulate_brush_density_multiplier: bpy.props.FloatProperty(name="Accumulation Brush Density Multiplier", description="Set how much denser the accumulation brush is than K by reducing Minimum Distance. 10.0 uses K divided by 10", default=10.0, min=1.0, soft_max=20.0, max=100.0, step=10, precision=2, update=_secret_paint_update_accumulate_manual_paint)
     plant_selection_hold_ms: bpy.props.IntProperty(name="Plant Selection Hold (ms)", description="How long the paint shortcut must remain held after entering paint mode before opening plant selection. Set to 0 to open plant selection immediately", default=200, min=0, soft_max=1000, max=5000)
     automatic_density_multiplier: bpy.props.FloatProperty(name="Automatic Density", description="Scale for the density calculated from the brush size when creating a new paint system. 1.0 is the default density", default=1.0, min=0.1, soft_min=0.25, soft_max=4.0, max=10.0, step=10, precision=2)
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
@@ -10029,6 +10110,10 @@ class secret_menu(bpy.types.AddonPreferences):
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxShowPaintPrompt")
         layout.prop(self, "accumulate_manual_paint")
+        accumulate_controls = layout.column(align=True)
+        accumulate_controls.enabled = self.accumulate_manual_paint
+        accumulate_controls.prop(self, "accumulate_count_max_multiplier", slider=True)
+        accumulate_controls.prop(self, "accumulate_brush_density_multiplier", slider=True)
         layout.prop(self, "plant_selection_hold_ms", slider=True)
         layout.prop(self, "automatic_density_multiplier", slider=True)
         layout.prop(self, "checkboxOverrideBrushes")
