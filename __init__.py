@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 8),
+    "version": (2, 1, 9),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -17,6 +17,7 @@ import math
 import bpy, os
 import mathutils
 import time
+import json
 from bpy.props import StringProperty
 import subprocess
 import bmesh
@@ -4303,9 +4304,6 @@ def _secret_paint_q_prompt_draw(area_pointer, region_pointer):
                 area.as_pointer() != area_pointer or
                 region.as_pointer() != region_pointer):
             return
-        preferences = bpy.context.preferences.addons[__package__].preferences
-        if not preferences.checkboxShowPaintPrompt:
-            return
         space_data = bpy.context.space_data
         if not space_data or not getattr(space_data.overlay, "show_overlays", False):
             return
@@ -6580,6 +6578,8 @@ class orenscatter(bpy.types.Operator):
         active = context.active_object
         selected = list(context.selected_objects)
         if (
+                not bool(getattr(self, "use_selected_source", False))
+                and
                 context.mode == "OBJECT"
                 and active is not None
                 and len(selected) == 1
@@ -6623,6 +6623,8 @@ class orenscatter(bpy.types.Operator):
         shortcut_started_at = time.perf_counter()
         from_button = getattr(context.region, "type", "WINDOW") != "WINDOW"
         secretpaint_function(self, context, event)
+        if bool(getattr(self, "_q_from_mode_pie", False)):
+            return {'FINISHED'}
         active = _secret_paint_q_sculpt_system(context, preferred=active)
         entered_paint_mode = (
             not from_button and active is not None
@@ -9834,6 +9836,64 @@ class MyPropertiesClass(bpy.types.PropertyGroup):
 _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED = False
 
 
+class secretpaint_mode_pie(bpy.types.Operator):
+    """Switch to Object Mode and run the same Secret Paint action as Q."""
+    bl_idname = "secret.paint_mode_pie"
+    bl_label = "Secret Paint"
+    bl_options = {'REGISTER', 'UNDO'}
+    active_object_name: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+    selected_object_names: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+    use_selected_source: bpy.props.BoolProperty(
+        default=False,
+        options={'HIDDEN', 'SKIP_SAVE'},
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None
+
+    def invoke(self, context, event):
+        active_object = bpy.data.objects.get(self.active_object_name)
+        try:
+            selected_names = json.loads(self.selected_object_names)
+        except (TypeError, ValueError):
+            selected_names = []
+        selected_objects = [
+            bpy.data.objects[name]
+            for name in selected_names
+            if name in bpy.data.objects
+        ]
+        if active_object is None:
+            return {'CANCELLED'}
+        if context.object is not None and context.object.mode != "OBJECT":
+            try:
+                bpy.ops.object.mode_set(mode="OBJECT")
+            except RuntimeError as error:
+                self.report({'ERROR'}, f"Could not switch to Object Mode: {error}")
+                return {'CANCELLED'}
+        for obj in list(context.selected_objects):
+            obj.select_set(False)
+        for obj in selected_objects:
+            obj.select_set(True)
+        if active_object not in selected_objects:
+            active_object.select_set(True)
+        context.view_layer.objects.active = active_object
+        self.use_selected_source = bool(
+            len(selected_objects) > 1
+            or _secret_paint_1731_paint_modifier(active_object) is not None
+            or (
+                active_object.type in {"CURVE", "CURVES"}
+                and active_object.parent is not None
+                and active_object.parent.type == "MESH"
+            )
+        )
+        self._q_from_mode_pie = True
+        return orenscatter.invoke(self, context, event)
+
+    def modal(self, context, event):
+        return orenscatter.modal(self, context, event)
+
+
 def _secret_paint_object_mode_pie_builtin_mode_count(active_object):
     object_type = getattr(active_object, "type", "")
     if object_type in {"MESH", "GREASEPENCIL"}:
@@ -9849,6 +9909,12 @@ def _secret_paint_object_mode_pie_draw(self, context):
     active_object = context.active_object
     if active_object is None:
         return
+    try:
+        preferences = context.preferences.addons[__package__].preferences
+        if not preferences.checkboxShowPaintPrompt:
+            return
+    except (AttributeError, KeyError):
+        return
     pie = self.layout.menu_pie()
     native_mode_count = _secret_paint_object_mode_pie_builtin_mode_count(
         active_object
@@ -9856,10 +9922,14 @@ def _secret_paint_object_mode_pie_draw(self, context):
     for _slot in range(native_mode_count, 6):
         pie.separator()
     pie.operator_context = 'INVOKE_DEFAULT'
-    pie.operator(
-        "secret.paint",
+    operator = pie.operator(
+        "secret.paint_mode_pie",
         text="Secret Paint",
         icon='BRUSH_DATA',
+    )
+    operator.active_object_name = active_object.name
+    operator.selected_object_names = json.dumps(
+        [obj.name for obj in context.selected_objects]
     )
 
 
@@ -9937,7 +10007,7 @@ class secret_menu(bpy.types.AddonPreferences):
     updater_interval_minutes : bpy.props.IntProperty(name='Minutes',description="Number of minutes between checking for updates",default=0,min=0,max=59)
     checkboxKeepManualWhenTransferBiome: bpy.props.BoolProperty(name="Keep Manual When Transferring Biomes", description="When transferring biomes from a terrain to another: keep the paint systems in manual mode instead of automatically switching everything to procedural", default=False)
     checkboxHideImported: bpy.props.BoolProperty(name="Hide Imported Paint Assets", description="When importing and painting objects from the asset browser (Q), hide them in a new collection called Hidden Assets (instead of having them visible next to the terrain)", default=False)
-    checkboxShowPaintPrompt: bpy.props.BoolProperty(name="Show Paint Prompt", description="Show the prompt while choosing an object to paint with", default=True)
+    checkboxShowPaintPrompt: bpy.props.BoolProperty(name="Secret Paint Mode in Tab Menu", description="Show Secret Paint as an option in Blender's Tab mode menu", default=True)
     accumulate_manual_paint: bpy.props.BoolProperty(name="Accumulate Manual Paint", description="Build density over repeated manual Density strokes. Each stroke adds one quarter of the normal density target while allowing closer curve spacing", default=True, update=_secret_paint_update_accumulate_manual_paint)
     plant_selection_hold_ms: bpy.props.IntProperty(name="Plant Selection Hold (ms)", description="How long the paint shortcut must remain held after entering paint mode before opening plant selection. Set to 0 to open plant selection immediately", default=200, min=0, soft_max=1000, max=5000)
     automatic_density_multiplier: bpy.props.FloatProperty(name="Automatic Density", description="Scale for the density calculated from the brush size when creating a new paint system. 1.0 is the default density", default=1.0, min=0.1, soft_min=0.25, soft_max=4.0, max=10.0, step=10, precision=2)
@@ -10794,6 +10864,7 @@ class toggle_viewport_tab_bookmark(bpy.types.Operator):
 classes = [
     SECRET_PAINT_OT_open_keymap_preferences,
     secret_menu,
+    secretpaint_mode_pie,
     MyPropertiesClass,
     orencurvepanel,
     toggle_display_bounds,
