@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 7),
+    "version": (2, 1, 8),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -351,7 +351,7 @@ def secretpaint_update_modifier_f(context, cant_remove_this_argument=0, **kwargs
         objects=len(bpy.data.objects),
         node_groups=len(bpy.data.node_groups),
     )
-    current_node_version = 50
+    current_node_version = 51
     pass
     activeobj = bpy.context.active_object
     objselection = bpy.context.selected_objects
@@ -538,6 +538,22 @@ def _secret_paint_apply_missing_ids(obj):
     )
     return True
 _SECRET_PAINT_DENSITY_FALLBACK = 0.4
+_SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE = 0.1
+_SECRET_PAINT_ACCUMULATE_FIRST_STROKE_FRACTION = 0.25
+_SECRET_PAINT_DENSITY_ATTEMPTS_MAX = 2_147_483_647
+_SECRET_PAINT_ACCUMULATE_ATTEMPTS_BACKUP = {}
+
+
+def _secret_paint_accumulate_manual_paint(context=None):
+    """Return whether repeated manual Density strokes should accumulate."""
+    try:
+        if context is None:
+            context = bpy.context
+        return bool(
+            context.preferences.addons[__package__].preferences.accumulate_manual_paint
+        )
+    except (AttributeError, KeyError, TypeError):
+        return True
 
 
 def _secret_paint_automatic_density_multiplier(context=None):
@@ -2289,6 +2305,8 @@ _SECRET_PAINT_1731_SCULPT_BRUSH_NOTIFY_PENDING = False
 _SECRET_PAINT_1731_SCULPT_BRUSH_RETRY_COUNT = 0
 _SECRET_PAINT_1731_SCULPT_BRUSH_ACTIVE_INTERVAL = 0.05
 _SECRET_PAINT_1731_SCULPT_BRUSH_IDLE_INTERVAL = 0.75
+_SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = False
+_SECRET_PAINT_1731_RIGHT_DELETE_TOKEN = 0
 class _SecretPaint1731SilentReporter:
     def report(self, *_args, **_kwargs):
         pass
@@ -2307,11 +2325,209 @@ def _secret_paint_1731_active_sculpt_paint_system(context):
         return active_object
     except Exception:
         return None
+
+
+def _secret_paint_1731_density_base_distance(system):
+    """Return K, the non-accumulating minimum distance stored for a system."""
+    modifier = _secret_paint_1731_paint_modifier(system)
+    try:
+        distance = float(
+            _secret_paint_1731_modifier_value(
+                modifier,
+                "Socket_11",
+                _SECRET_PAINT_DENSITY_FALLBACK,
+            ) or _SECRET_PAINT_DENSITY_FALLBACK
+        )
+        if distance > 0.0 and math.isfinite(distance):
+            return distance
+    except (TypeError, ValueError):
+        pass
+    return _SECRET_PAINT_DENSITY_FALLBACK
+
+
+def _secret_paint_1731_accumulate_attempt_count(brush_radius, base_distance):
+    """Cap the first accumulating stroke at one quarter of K's brush count."""
+    try:
+        brush_area = math.pi * float(brush_radius) ** 2
+        base_cell_area = float(base_distance) ** 2
+        attempts = int(round(
+            (brush_area / base_cell_area)
+            * _SECRET_PAINT_ACCUMULATE_FIRST_STROKE_FRACTION
+        ))
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return None
+    return max(1, min(_SECRET_PAINT_DENSITY_ATTEMPTS_MAX, attempts))
+
+
+def _secret_paint_1731_density_space_radius(system, world_radius):
+    """Convert a world brush radius into the space used by minimum_distance."""
+    try:
+        terrain_scale = abs(float(
+            _secret_paint_1731_modifier_value(
+                _secret_paint_1731_paint_modifier(system),
+                "Input_100",
+                1.0,
+            ) or 1.0
+        ))
+        radius = float(world_radius) / terrain_scale
+        return radius if radius > 0.0 and math.isfinite(radius) else None
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _secret_paint_1731_density_brush_radius(
+        context,
+        event,
+        system,
+        brush,
+):
+    """Resolve the brush radius at the hit in minimum_distance space."""
+    try:
+        pressure = float(getattr(event, "pressure", 1.0) or 1.0)
+    except (TypeError, ValueError):
+        pressure = 1.0
+    pressure = max(0.01, pressure) if getattr(brush, "use_pressure_size", False) else 1.0
+
+    try:
+        if getattr(brush, "use_locked_size", "VIEW") == 'SCENE':
+            radius = float(brush.unprojected_size) * pressure * 0.5
+            return _secret_paint_1731_density_space_radius(system, radius)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+    try:
+        _area, region, space_data, coord = _secret_paint_q_view_area_region_space(
+            context,
+            event,
+        )
+        if region is None or space_data is None or coord is None:
+            return None
+        center = _secret_paint_q_preview_mask_location(
+            context,
+            event,
+            system,
+            allow_depth_fallback=False,
+        )
+        if center is None:
+            return None
+        pixel_radius = max(0.5, float(brush.size) * pressure * 0.5)
+        from bpy_extras import view3d_utils
+        edge = view3d_utils.region_2d_to_location_3d(
+            region,
+            space_data.region_3d,
+            (coord[0] + pixel_radius, coord[1]),
+            center,
+        )
+        radius = (edge - center).length
+        return _secret_paint_1731_density_space_radius(system, radius)
+    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+        return None
+
+
+def _secret_paint_1731_set_accumulate_density_attempts(
+        context,
+        event,
+        system,
+        brush=None,
+        base_distance=None,
+):
+    """Set Count Max once for the Density stroke beginning at event."""
+    if not _secret_paint_accumulate_manual_paint(context) or system is None:
+        return False
+    if brush is None:
+        curves_sculpt = getattr(context.tool_settings, "curves_sculpt", None)
+        brush = getattr(curves_sculpt, "brush", None)
+    if _secret_paint_1731_curves_brush_type(brush) != "DENSITY":
+        return False
+    if base_distance is None:
+        base_distance = _secret_paint_1731_density_base_distance(system)
+    radius = _secret_paint_1731_density_brush_radius(
+        context,
+        event,
+        system,
+        brush,
+    )
+    attempts = _secret_paint_1731_accumulate_attempt_count(radius, base_distance)
+    if attempts is None:
+        return False
+    try:
+        brush_key = brush.as_pointer()
+        _SECRET_PAINT_ACCUMULATE_ATTEMPTS_BACKUP.setdefault(
+            brush_key,
+            int(brush.curves_sculpt_settings.density_add_attempts),
+        )
+        brush.curves_sculpt_settings.density_add_attempts = attempts
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _secret_paint_update_accumulate_manual_paint(preferences, context):
+    """Apply a preference toggle to the current Density brush immediately."""
+    enabled = bool(preferences.accumulate_manual_paint)
+    density_brushes = [
+        brush for brush in bpy.data.brushes
+        if _secret_paint_1731_curves_brush_type(brush) == "DENSITY"
+    ]
+    if not enabled:
+        for brush in density_brushes:
+            try:
+                previous_attempts = _SECRET_PAINT_ACCUMULATE_ATTEMPTS_BACKUP.pop(
+                    brush.as_pointer(),
+                    None,
+                )
+                if previous_attempts is not None:
+                    brush.curves_sculpt_settings.density_add_attempts = previous_attempts
+            except (AttributeError, TypeError, ValueError):
+                pass
+
+    candidates = [
+        getattr(context, "active_object", None),
+        getattr(bpy.context, "active_object", None),
+    ]
+    try:
+        candidates.extend(
+            obj for obj in bpy.data.objects
+            if getattr(obj, "mode", "") == "SCULPT_CURVES"
+        )
+    except (AttributeError, ReferenceError, RuntimeError):
+        pass
+    system = next(
+        (
+            obj for obj in candidates
+            if obj is not None and
+            obj.type in {"CURVE", "CURVES"} and
+            _secret_paint_1731_paint_modifier(obj) is not None
+        ),
+        None,
+    )
+    if system is None:
+        return
+    minimum_distance = _secret_paint_1731_density_base_distance(system)
+    if enabled:
+        minimum_distance *= _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+    for brush in density_brushes:
+        try:
+            brush.curves_sculpt_settings.minimum_distance = minimum_distance
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+
 def _secret_paint_1731_sculpt_brush_key(context, system):
     try:
         curves_sculpt = getattr(context.tool_settings, "curves_sculpt", None)
         brush = getattr(curves_sculpt, "brush", None)
         brush_pointer = brush.as_pointer() if brush is not None else 0
+        brush_name = getattr(brush, "name_full", "") if brush is not None else ""
+        brush_type = _secret_paint_1731_curves_brush_type(brush)
+        try:
+            workspace_tool = context.workspace.tools.from_space_view3d_mode(
+                "SCULPT_CURVES",
+                create=False,
+            )
+            tool_id = getattr(workspace_tool, "idname", "") or ""
+        except Exception:
+            tool_id = ""
         asset_reference = getattr(
             curves_sculpt,
             "brush_asset_reference",
@@ -2322,7 +2538,14 @@ def _secret_paint_1731_sculpt_brush_key(context, system):
             getattr(asset_reference, "asset_library_identifier", ""),
             getattr(asset_reference, "relative_asset_identifier", ""),
         )
-        return system.as_pointer(), brush_pointer, asset_key
+        return (
+            system.as_pointer(),
+            brush_pointer,
+            brush_name,
+            brush_type,
+            tool_id,
+            asset_key,
+        )
     except Exception:
         return None
 def _secret_paint_1731_apply_sculpt_ids_silently(context, system):
@@ -2336,19 +2559,43 @@ def _secret_paint_1731_apply_sculpt_ids_silently(context, system):
         object_name=getattr(system, "name", None),
         current_mode=getattr(system, "mode", None),
     )
+    view_layer = getattr(context, "view_layer", None)
+    active_before = (
+        getattr(getattr(view_layer, "objects", None), "active", None)
+        if view_layer is not None
+        else None
+    )
+    selected_before = tuple(getattr(context, "selected_objects", ()))
     try:
         _SECRET_PAINT_1731_SCULPT_BRUSH_APPLYING = True
-        handled = _secret_paint_apply_missing_ids(system)
-        if handled:
-            _secret_paint_1731_set_modifier_value(
-                _secret_paint_1731_paint_modifier(system),
+        paint_modifier = _secret_paint_1731_paint_modifier(system)
+        procedural_enabled = bool(
+            _secret_paint_1731_modifier_value(
+                paint_modifier,
                 "Input_69",
                 False,
             )
+        )
+        if procedural_enabled:
+            _secret_paint_q_apply_ids(
+                _SECRET_PAINT_1731_SILENT_REPORTER,
+                context,
+                system,
+            )
+            handled = True
+        else:
+            handled = _secret_paint_apply_missing_ids(system)
+            if handled:
+                _secret_paint_1731_set_modifier_value(
+                    paint_modifier,
+                    "Input_69",
+                    False,
+                )
         _secret_paint_trace_end(
             "Sculpt Curves brush change",
             brush_change_started,
             handled=handled,
+            procedural_conversion=procedural_enabled,
             mode_unchanged=getattr(system, "mode", None) == "SCULPT_CURVES",
         )
         return handled
@@ -2361,6 +2608,23 @@ def _secret_paint_1731_apply_sculpt_ids_silently(context, system):
         )
         return False
     finally:
+        if view_layer is not None:
+            try:
+                selected_before_set = set(selected_before)
+                for obj in tuple(getattr(context, "selected_objects", ())):
+                    if obj not in selected_before_set:
+                        obj.select_set(False)
+                view_objects = view_layer.objects
+                for obj in selected_before:
+                    if obj.name in view_objects:
+                        obj.select_set(True)
+                if (
+                    active_before is not None and
+                    active_before.name in view_objects
+                ):
+                    view_objects.active = active_before
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
         _SECRET_PAINT_1731_SCULPT_BRUSH_APPLYING = False
 def _secret_paint_1731_track_sculpt_brush(context, system=None, apply_on_change=True):
     global _SECRET_PAINT_1731_SCULPT_BRUSH_STATE
@@ -2378,14 +2642,25 @@ def _secret_paint_1731_track_sculpt_brush(context, system=None, apply_on_change=
     if globals().get("_secret_paint_q_selection_mode") in {"PLANT", "TERRAIN"}:
         _SECRET_PAINT_1731_SCULPT_BRUSH_STATE = key
         return "DEFERRED"
+    if _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE:
+        _SECRET_PAINT_1731_SCULPT_BRUSH_STATE = key
+        return "DEFERRED"
     same_system_brush_changed = (
         apply_on_change and
         previous_key is not None and
         previous_key[0] == key[0] and
         previous_key[1:] != key[1:]
     )
+    brush_identity_changed = (
+        previous_key is not None and
+        previous_key[1:4] != key[1:4]
+    )
+    applies_ids = (
+        brush_identity_changed and
+        key[3] in {"DENSITY", "DELETE"}
+    )
     _SECRET_PAINT_1731_SCULPT_BRUSH_STATE = key
-    if same_system_brush_changed:
+    if same_system_brush_changed and applies_ids:
         if _secret_paint_1731_apply_sculpt_ids_silently(context, system):
             return "APPLIED"
         _SECRET_PAINT_1731_SCULPT_BRUSH_STATE = previous_key
@@ -2596,6 +2871,8 @@ class brush_density_while_painting(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
         system = _secret_paint_1731_active_sculpt_paint_system(context)
+        self._accumulate_manual_paint = _secret_paint_accumulate_manual_paint(context)
+        self._system_name = getattr(system, "name", "")
         if system is not None:
             _secret_paint_1731_apply_sculpt_ids_silently(context, system)
             _secret_paint_1731_track_sculpt_brush(
@@ -2604,6 +2881,14 @@ class brush_density_while_painting(bpy.types.Operator):
                 apply_on_change=False,
             )
         context3sculptbrush(context)
+        if self._accumulate_manual_paint and system is not None:
+            try:
+                brush = context.tool_settings.curves_sculpt.brush
+                brush.curves_sculpt_settings.minimum_distance = (
+                    _secret_paint_1731_density_base_distance(system)
+                )
+            except (AttributeError, TypeError, ValueError):
+                pass
         bpy.ops.sculpt_curves.min_distance_edit('INVOKE_DEFAULT')
         context.window_manager.modal_handler_add(self)
         self._cancel = False
@@ -2613,15 +2898,195 @@ class brush_density_while_painting(bpy.types.Operator):
             pass
             return {'CANCELLED'}
         if event.type in {'LEFTMOUSE', 'RIGHTMOUSE',"ESC"}:
-            try:
-                _secret_paint_1731_set_modifier_value(
-                    _secret_paint_1731_paint_modifier(bpy.context.active_object),
-                    "Socket_11",
-                    context.tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance,
-                )
-            except: pass
+            if getattr(self, "_accumulate_manual_paint", False):
+                system = bpy.data.objects.get(getattr(self, "_system_name", ""))
+                modifier = _secret_paint_1731_paint_modifier(system)
+                try:
+                    brush = context.tool_settings.curves_sculpt.brush
+                    settings = brush.curves_sculpt_settings
+                    if event.type == 'LEFTMOUSE':
+                        base_distance = float(settings.minimum_distance)
+                        _secret_paint_1731_set_modifier_value(
+                            modifier,
+                            "Socket_11",
+                            base_distance,
+                        )
+                    else:
+                        base_distance = _secret_paint_1731_density_base_distance(
+                            system
+                        )
+                    settings.minimum_distance = (
+                        base_distance * _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+                    )
+                    if event.type == 'LEFTMOUSE':
+                        _secret_paint_1731_set_accumulate_density_attempts(
+                            context,
+                            event,
+                            system,
+                            brush=brush,
+                            base_distance=base_distance,
+                        )
+                except (AttributeError, TypeError, ValueError):
+                    pass
+            else:
+                try:
+                    _secret_paint_1731_set_modifier_value(
+                        _secret_paint_1731_paint_modifier(bpy.context.active_object),
+                        "Socket_11",
+                        context.tool_settings.curves_sculpt.brush.curves_sculpt_settings.minimum_distance,
+                    )
+                except: pass
             bpy.app.timers.register(lambda: setattr(self, '_cancel', True), first_interval=0.001)
         return {'PASS_THROUGH'}
+
+
+class accumulate_density_stroke_start(bpy.types.Operator):
+    """Calculate Count Max once before an accumulating Density stroke."""
+    bl_idname = "secret.accumulate_density_stroke_start"
+    bl_label = "Accumulate Density Stroke Start"
+    bl_options = {'INTERNAL'}
+
+    def invoke(self, context, event):
+        if not _secret_paint_accumulate_manual_paint(context):
+            return {'PASS_THROUGH'}
+        system = _secret_paint_1731_active_sculpt_paint_system(context)
+        _secret_paint_1731_set_accumulate_density_attempts(
+            context,
+            event,
+            system,
+        )
+        return {'PASS_THROUGH'}
+
+
+def _secret_paint_1731_curves_brush_type(brush):
+    if brush is None:
+        return ""
+    try:
+        if hasattr(brush, "curves_sculpt_brush_type"):
+            return brush.curves_sculpt_brush_type
+        return getattr(brush, "curves_sculpt_tool", "")
+    except Exception:
+        return ""
+
+
+class right_click_delete_while_painting(bpy.types.Operator):
+    """Right-drag with Density REMOVE, then restore the brush settings."""
+    bl_idname = "secret.right_click_delete_while_painting"
+    bl_label = "Right Click Delete While Painting"
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        active_system = _secret_paint_1731_active_sculpt_paint_system(context)
+        curves_sculpt = getattr(
+            getattr(context, "tool_settings", None),
+            "curves_sculpt",
+            None,
+        )
+        brush = getattr(curves_sculpt, "brush", None)
+        return (
+            getattr(context, "area", None) is not None and
+            context.area.type == 'VIEW_3D' and
+            active_system is not None and
+            _secret_paint_1731_curves_brush_type(brush) == "DENSITY"
+        )
+
+    def _restore_density_settings(self):
+        global _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE
+        if self._token != _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN:
+            return None
+        try:
+            settings = self._density_brush.curves_sculpt_settings
+            settings.density_mode = self._previous_density_mode
+            settings.minimum_distance = self._previous_minimum_distance
+        except Exception:
+            pass
+        finally:
+            if self._token == _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN:
+                _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = False
+        return None
+
+    def invoke(self, context, event):
+        global _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE
+        global _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN
+        if _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE:
+            return {'PASS_THROUGH'}
+
+        system = _secret_paint_1731_active_sculpt_paint_system(context)
+        if system is None:
+            return {'PASS_THROUGH'}
+        try:
+            ids_applied = _secret_paint_apply_missing_ids(system)
+        except Exception:
+            ids_applied = False
+        if ids_applied:
+            _secret_paint_1731_set_modifier_value(
+                _secret_paint_1731_paint_modifier(system),
+                "Input_69",
+                False,
+            )
+        _secret_paint_1731_track_sculpt_brush(
+            context,
+            system,
+            apply_on_change=False,
+        )
+
+        curves_sculpt = getattr(context.tool_settings, "curves_sculpt", None)
+        density_brush = getattr(curves_sculpt, "brush", None)
+        if _secret_paint_1731_curves_brush_type(density_brush) != "DENSITY":
+            return {'PASS_THROUGH'}
+
+        settings = getattr(density_brush, "curves_sculpt_settings", None)
+        if settings is None:
+            return {'PASS_THROUGH'}
+
+        self._density_brush = density_brush
+        self._previous_density_mode = settings.density_mode
+        self._previous_minimum_distance = settings.minimum_distance
+        _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN += 1
+        self._token = _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN
+        _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = True
+
+        try:
+            settings.density_mode = 'REMOVE'
+            settings.minimum_distance = 9000
+        except Exception:
+            self._restore_density_settings()
+            return {'CANCELLED'}
+
+        try:
+            stroke_poll = bpy.ops.sculpt_curves.brush_stroke.poll()
+            if stroke_poll:
+                stroke_result = bpy.ops.sculpt_curves.brush_stroke(
+                    'INVOKE_DEFAULT',
+                    mode='NORMAL',
+                    brush_toggle='None',
+                    pen_flip=False,
+                )
+            else:
+                stroke_result = {'CANCELLED'}
+        except Exception:
+            stroke_result = {'CANCELLED'}
+
+        if 'RUNNING_MODAL' not in stroke_result:
+            self._restore_density_settings()
+            return {'CANCELLED'}
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type == 'RIGHTMOUSE' and event.value == 'RELEASE':
+            self._restore_density_settings()
+            return {'FINISHED', 'PASS_THROUGH'}
+        if event.type in {'ESC', 'WINDOW_DEACTIVATE'}:
+            self._restore_density_settings()
+            return {'CANCELLED', 'PASS_THROUGH'}
+        return {'PASS_THROUGH'}
+
+    def cancel(self, _context):
+        self._restore_density_settings()
+
+
 def context3sculptbrush(context,**kwargs):
     if "activeobj" in kwargs:activeobj = kwargs.get("activeobj")
     else:activeobj = bpy.context.active_object
@@ -2749,13 +3214,16 @@ def context3sculptbrush(context,**kwargs):
         for bb in brush_density:
             paint_modifier = _secret_paint_1731_paint_modifier(activeobj)
             if paint_modifier:
-                bb.curves_sculpt_settings.minimum_distance = float(
+                minimum_distance = float(
                     _secret_paint_1731_modifier_value(
                         paint_modifier, "Socket_11", _SECRET_PAINT_DENSITY_FALLBACK
                     ) or _SECRET_PAINT_DENSITY_FALLBACK
                 )
             else:
-                bb.curves_sculpt_settings.minimum_distance = _SECRET_PAINT_DENSITY_FALLBACK
+                minimum_distance = _SECRET_PAINT_DENSITY_FALLBACK
+            if _secret_paint_accumulate_manual_paint(context):
+                minimum_distance *= _SECRET_PAINT_ACCUMULATE_DISTANCE_SCALE
+            bb.curves_sculpt_settings.minimum_distance = minimum_distance
             if bpy.app.version_string >= "4.2.0":
                 bb.curves_sculpt_settings.use_length_interpolate = False
                 bb.curves_sculpt_settings.use_shape_interpolate = False
@@ -9363,6 +9831,64 @@ class MyPropertiesClass(bpy.types.PropertyGroup):
     checkboxatoncenorm: bpy.props.BoolProperty(name="NRM", description="Bake normal", default=True)
     checkboxatonceemit: bpy.props.BoolProperty(name="EMI", description="Bake emission", default=False)
     checkboxatoncecombined: bpy.props.BoolProperty(name="COMB", description="Bake combined direct and indirect", default=False)
+_SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED = False
+
+
+def _secret_paint_object_mode_pie_builtin_mode_count(active_object):
+    object_type = getattr(active_object, "type", "")
+    if object_type in {"MESH", "GREASEPENCIL"}:
+        return 6
+    if object_type in {"CURVES", "ARMATURE"}:
+        return 3
+    if object_type in {"CURVE", "SURFACE", "META", "FONT", "LATTICE"}:
+        return 2
+    return 1
+
+
+def _secret_paint_object_mode_pie_draw(self, context):
+    active_object = context.active_object
+    if active_object is None:
+        return
+    pie = self.layout.menu_pie()
+    native_mode_count = _secret_paint_object_mode_pie_builtin_mode_count(
+        active_object
+    )
+    for _slot in range(native_mode_count, 6):
+        pie.separator()
+    pie.operator_context = 'INVOKE_DEFAULT'
+    pie.operator(
+        "secret.paint",
+        text="Secret Paint",
+        icon='BRUSH_DATA',
+    )
+
+
+def _secret_paint_register_object_mode_pie():
+    global _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED
+    if _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED:
+        return
+    menu = getattr(bpy.types, "VIEW3D_MT_object_mode_pie", None)
+    if menu is None:
+        return
+    try:
+        menu.remove(_secret_paint_object_mode_pie_draw)
+    except Exception:
+        pass
+    menu.append(_secret_paint_object_mode_pie_draw)
+    _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED = True
+
+
+def _secret_paint_unregister_object_mode_pie():
+    global _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED
+    menu = getattr(bpy.types, "VIEW3D_MT_object_mode_pie", None)
+    if menu is not None:
+        try:
+            menu.remove(_secret_paint_object_mode_pie_draw)
+        except Exception:
+            pass
+    _SECRET_PAINT_OBJECT_MODE_PIE_REGISTERED = False
+
+
 addon_keymaps = []
 _SECRET_PAINT_KEYMAP_DEFINITIONS = (
     ("Object Mode", "EMPTY", "secret.toggle_viewport_tab_bookmark", "W", {"shift": True}),
@@ -9380,6 +9906,8 @@ _SECRET_PAINT_KEYMAP_DEFINITIONS = (
     ("Object Mode", "EMPTY", "secret.paintbrushswitch", "Q", {"shift": True}),
     ("Sculpt Curves", "EMPTY", "secret.paintbrushswitch", "Q", {"shift": True}),
     ("Sculpt Curves", "EMPTY", "secret.brush_density_while_painting", "D", {}),
+    ("Sculpt Curves", "EMPTY", "secret.accumulate_density_stroke_start", "LEFTMOUSE", {"head": True}),
+    ("Sculpt Curves", "EMPTY", "secret.right_click_delete_while_painting", "RIGHTMOUSE", {"head": True}),
     ("Weight Paint", "EMPTY", "secret.paintbrushswitch", "Q", {"shift": True}),
     ("Curve", "EMPTY", "secret.paintbrushswitch", "Q", {"shift": True}),
     ("Object Mode", "EMPTY", "secret.assembly", "D", {"ctrl": True}),
@@ -9410,6 +9938,7 @@ class secret_menu(bpy.types.AddonPreferences):
     checkboxKeepManualWhenTransferBiome: bpy.props.BoolProperty(name="Keep Manual When Transferring Biomes", description="When transferring biomes from a terrain to another: keep the paint systems in manual mode instead of automatically switching everything to procedural", default=False)
     checkboxHideImported: bpy.props.BoolProperty(name="Hide Imported Paint Assets", description="When importing and painting objects from the asset browser (Q), hide them in a new collection called Hidden Assets (instead of having them visible next to the terrain)", default=False)
     checkboxShowPaintPrompt: bpy.props.BoolProperty(name="Show Paint Prompt", description="Show the prompt while choosing an object to paint with", default=True)
+    accumulate_manual_paint: bpy.props.BoolProperty(name="Accumulate Manual Paint", description="Build density over repeated manual Density strokes. Each stroke adds one quarter of the normal density target while allowing closer curve spacing", default=True, update=_secret_paint_update_accumulate_manual_paint)
     plant_selection_hold_ms: bpy.props.IntProperty(name="Plant Selection Hold (ms)", description="How long the paint shortcut must remain held after entering paint mode before opening plant selection. Set to 0 to open plant selection immediately", default=200, min=0, soft_max=1000, max=5000)
     automatic_density_multiplier: bpy.props.FloatProperty(name="Automatic Density", description="Scale for the density calculated from the brush size when creating a new paint system. 1.0 is the default density", default=1.0, min=0.1, soft_min=0.25, soft_max=4.0, max=10.0, step=10, precision=2)
     biomeAssetName: bpy.props.StringProperty(name="Asset Name", description="Leave empty to use the Active Object's name", default="Moss")
@@ -9429,6 +9958,7 @@ class secret_menu(bpy.types.AddonPreferences):
         layout.prop(self, "checkboxKeepManualWhenTransferBiome")
         layout.prop(self, "checkboxHideImported")
         layout.prop(self, "checkboxShowPaintPrompt")
+        layout.prop(self, "accumulate_manual_paint")
         layout.prop(self, "plant_selection_hold_ms", slider=True)
         layout.prop(self, "automatic_density_multiplier", slider=True)
         layout.prop(self, "checkboxOverrideBrushes")
@@ -10312,6 +10842,8 @@ classes = [
     biome_delete,
     assembly,
     brush_density_while_painting,
+    accumulate_density_stroke_start,
+    right_click_delete_while_painting,
     export_unreal,
     ]
 def register():
@@ -10330,6 +10862,7 @@ def register():
             _secret_paint_1731_sculpt_brush_load_post
         )
     _secret_paint_1731_start_sculpt_brush_monitor()
+    _secret_paint_register_object_mode_pie()
     wm = bpy.context.window_manager
     kc = wm.keyconfigs.addon
     if kc is not None:
@@ -10341,6 +10874,7 @@ def register():
             addon_keymaps.append((km, kmi))
 def unregister():
     if auto_updater_status: addon_updater_ops.unregister()
+    _secret_paint_unregister_object_mode_pie()
     _secret_paint_1731_stop_sculpt_brush_monitor()
     if _secret_paint_1731_sculpt_brush_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(
