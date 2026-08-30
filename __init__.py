@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 10),
+    "version": (2, 1, 11),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -3016,7 +3016,7 @@ def _secret_paint_1731_curves_brush_type(brush):
 
 
 class right_click_delete_while_painting(bpy.types.Operator):
-    """Right-drag with Density REMOVE, then restore the brush settings."""
+    """Temporarily use Density REMOVE while right-dragging from any brush."""
     bl_idname = "secret.right_click_delete_while_painting"
     bl_label = "Right Click Delete While Painting"
     bl_options = {'INTERNAL'}
@@ -3029,27 +3029,148 @@ class right_click_delete_while_painting(bpy.types.Operator):
             "curves_sculpt",
             None,
         )
-        brush = getattr(curves_sculpt, "brush", None)
         return (
             getattr(context, "area", None) is not None and
             context.area.type == 'VIEW_3D' and
             active_system is not None and
-            _secret_paint_1731_curves_brush_type(brush) == "DENSITY"
+            curves_sculpt is not None
         )
 
-    def _restore_density_settings(self):
+    @staticmethod
+    def _brush_asset_key(curves_sculpt):
+        asset_reference = getattr(
+            curves_sculpt,
+            "brush_asset_reference",
+            None,
+        )
+        return (
+            getattr(asset_reference, "asset_library_type", ""),
+            getattr(asset_reference, "asset_library_identifier", ""),
+            getattr(asset_reference, "relative_asset_identifier", ""),
+        )
+
+    @staticmethod
+    def _workspace_tool_id(context):
+        try:
+            workspace_tool = context.workspace.tools.from_space_view3d_mode(
+                "SCULPT_CURVES",
+                create=False,
+            )
+            return getattr(workspace_tool, "idname", "") or ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _activate_density_brush(context):
+        try:
+            bpy.ops.brush.asset_activate(
+                asset_library_type='ESSENTIALS',
+                asset_library_identifier="",
+                relative_asset_identifier=(
+                    "brushes/essentials_brushes-curve_sculpt.blend/"
+                    "Brush/Density"
+                ),
+                use_toggle=False,
+            )
+        except Exception:
+            pass
+        curves_sculpt = getattr(context.tool_settings, "curves_sculpt", None)
+        density_brush = getattr(curves_sculpt, "brush", None)
+        if _secret_paint_1731_curves_brush_type(density_brush) == "DENSITY":
+            return density_brush
+        try:
+            bpy.ops.wm.tool_set_by_brush_type(
+                brush_type="DENSITY",
+                space_type='VIEW_3D',
+            )
+        except Exception:
+            pass
+        density_brush = getattr(curves_sculpt, "brush", None)
+        if _secret_paint_1731_curves_brush_type(density_brush) == "DENSITY":
+            return density_brush
+        try:
+            bpy.ops.wm.tool_set_by_id(name="builtin_brush.density")
+        except Exception:
+            return None
+        density_brush = getattr(curves_sculpt, "brush", None)
+        if _secret_paint_1731_curves_brush_type(density_brush) == "DENSITY":
+            return density_brush
+        return None
+
+    def _restore_original_brush(self, context):
+        curves_sculpt = getattr(
+            getattr(context, "tool_settings", None),
+            "curves_sculpt",
+            None,
+        )
+        if curves_sculpt is None:
+            return None
+        current_brush = getattr(curves_sculpt, "brush", None)
+        original_brush = getattr(self, "_original_brush", None)
+        if current_brush == original_brush:
+            return original_brush
+        asset_key = getattr(self, "_original_asset_key", ("", "", ""))
+        if asset_key[2]:
+            try:
+                activation_result = bpy.ops.brush.asset_activate(
+                    asset_library_type=asset_key[0],
+                    asset_library_identifier=asset_key[1],
+                    relative_asset_identifier=asset_key[2],
+                    use_toggle=False,
+                )
+                if 'FINISHED' in activation_result:
+                    return getattr(curves_sculpt, "brush", None)
+            except Exception:
+                pass
+        current_brush = getattr(curves_sculpt, "brush", None)
+        if current_brush == original_brush:
+            return current_brush
+        original_tool_id = getattr(self, "_original_tool_id", "")
+        if original_tool_id:
+            try:
+                bpy.ops.wm.tool_set_by_id(name=original_tool_id)
+            except Exception:
+                pass
+        current_brush = getattr(curves_sculpt, "brush", None)
+        if current_brush == original_brush:
+            return current_brush
+        original_brush_type = getattr(self, "_original_brush_type", "")
+        if original_brush_type:
+            try:
+                bpy.ops.wm.tool_set_by_brush_type(
+                    brush_type=original_brush_type,
+                    space_type='VIEW_3D',
+                )
+            except Exception:
+                pass
+        return getattr(curves_sculpt, "brush", None)
+
+    def _restore_density_settings(self, context):
         global _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE
         if self._token != _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN:
             return None
         try:
-            settings = self._density_brush.curves_sculpt_settings
-            settings.density_mode = self._previous_density_mode
-            settings.minimum_distance = self._previous_minimum_distance
+            density_brush = getattr(self, "_density_brush", None)
+            if density_brush is not None:
+                settings = density_brush.curves_sculpt_settings
+                settings.density_mode = self._previous_density_mode
+                settings.minimum_distance = self._previous_minimum_distance
         except Exception:
             pass
         finally:
+            try:
+                self._restore_original_brush(context)
+            except Exception:
+                pass
             if self._token == _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN:
                 _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = False
+            system = bpy.data.objects.get(getattr(self, "_system_name", ""))
+            if system is not None:
+                _secret_paint_1731_track_sculpt_brush(
+                    context,
+                    system,
+                    apply_on_change=False,
+                )
         return None
 
     def invoke(self, context, event):
@@ -3061,16 +3182,7 @@ class right_click_delete_while_painting(bpy.types.Operator):
         system = _secret_paint_1731_active_sculpt_paint_system(context)
         if system is None:
             return {'PASS_THROUGH'}
-        try:
-            ids_applied = _secret_paint_apply_missing_ids(system)
-        except Exception:
-            ids_applied = False
-        if ids_applied:
-            _secret_paint_1731_set_modifier_value(
-                _secret_paint_1731_paint_modifier(system),
-                "Input_69",
-                False,
-            )
+        _secret_paint_1731_apply_sculpt_ids_silently(context, system)
         _secret_paint_1731_track_sculpt_brush(
             context,
             system,
@@ -3078,26 +3190,39 @@ class right_click_delete_while_painting(bpy.types.Operator):
         )
 
         curves_sculpt = getattr(context.tool_settings, "curves_sculpt", None)
-        density_brush = getattr(curves_sculpt, "brush", None)
-        if _secret_paint_1731_curves_brush_type(density_brush) != "DENSITY":
-            return {'PASS_THROUGH'}
+        original_brush = getattr(curves_sculpt, "brush", None)
+        self._system_name = system.name
+        self._original_brush = original_brush
+        self._original_brush_type = _secret_paint_1731_curves_brush_type(
+            original_brush
+        )
+        self._original_asset_key = self._brush_asset_key(curves_sculpt)
+        self._original_tool_id = self._workspace_tool_id(context)
+        self._density_brush = None
+
+        _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN += 1
+        self._token = _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN
+        _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = True
+
+        density_brush = self._activate_density_brush(context)
+        if density_brush is None:
+            self._restore_density_settings(context)
+            return {'CANCELLED'}
 
         settings = getattr(density_brush, "curves_sculpt_settings", None)
         if settings is None:
-            return {'PASS_THROUGH'}
+            self._restore_density_settings(context)
+            return {'CANCELLED'}
 
         self._density_brush = density_brush
         self._previous_density_mode = settings.density_mode
         self._previous_minimum_distance = settings.minimum_distance
-        _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN += 1
-        self._token = _SECRET_PAINT_1731_RIGHT_DELETE_TOKEN
-        _SECRET_PAINT_1731_RIGHT_DELETE_ACTIVE = True
 
         try:
             settings.density_mode = 'REMOVE'
             settings.minimum_distance = 9000
         except Exception:
-            self._restore_density_settings()
+            self._restore_density_settings(context)
             return {'CANCELLED'}
 
         try:
@@ -3115,22 +3240,22 @@ class right_click_delete_while_painting(bpy.types.Operator):
             stroke_result = {'CANCELLED'}
 
         if 'RUNNING_MODAL' not in stroke_result:
-            self._restore_density_settings()
+            self._restore_density_settings(context)
             return {'CANCELLED'}
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
         if event.type == 'RIGHTMOUSE' and event.value == 'RELEASE':
-            self._restore_density_settings()
+            self._restore_density_settings(context)
             return {'FINISHED', 'PASS_THROUGH'}
         if event.type in {'ESC', 'WINDOW_DEACTIVATE'}:
-            self._restore_density_settings()
+            self._restore_density_settings(context)
             return {'CANCELLED', 'PASS_THROUGH'}
         return {'PASS_THROUGH'}
 
-    def cancel(self, _context):
-        self._restore_density_settings()
+    def cancel(self, context):
+        self._restore_density_settings(context)
 
 
 def context3sculptbrush(context,**kwargs):
