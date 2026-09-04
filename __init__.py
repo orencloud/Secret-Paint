@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Secret Paint",
     "author": "orencloud",
-    "version": (2, 1, 11),
+    "version": (2, 1, 12),
     "blender": (4, 5, 0),
     "location": "Object + Target + Q",
     "description": "Paint the selected object on top of the active one",
@@ -2429,8 +2429,27 @@ def _secret_paint_1731_density_brush_radius(
     pressure = max(0.01, pressure) if getattr(brush, "use_pressure_size", False) else 1.0
 
     try:
-        if getattr(brush, "use_locked_size", "VIEW") == 'SCENE':
-            radius = float(brush.unprojected_size) * pressure * 0.5
+        unified = getattr(
+            context.tool_settings,
+            "unified_paint_settings",
+            None,
+        )
+        use_unified_size = bool(
+            unified is not None and
+            getattr(unified, "use_unified_size", False)
+        )
+        locked_size = (
+            getattr(unified, "use_locked_size", "VIEW")
+            if use_unified_size
+            else getattr(brush, "use_locked_size", "VIEW")
+        )
+        if locked_size == 'SCENE':
+            diameter = (
+                getattr(unified, "unprojected_size", brush.unprojected_size)
+                if use_unified_size
+                else brush.unprojected_size
+            )
+            radius = float(diameter) * pressure * 0.5
             return _secret_paint_1731_density_space_radius(system, radius)
     except (AttributeError, TypeError, ValueError):
         return None
@@ -2450,7 +2469,8 @@ def _secret_paint_1731_density_brush_radius(
         )
         if center is None:
             return None
-        pixel_radius = max(0.5, float(brush.size) * pressure * 0.5)
+        pixel_diameter = unified.size if use_unified_size else brush.size
+        pixel_radius = max(0.5, float(pixel_diameter) * pressure * 0.5)
         from bpy_extras import view3d_utils
         edge = view3d_utils.region_2d_to_location_3d(
             region,
@@ -4424,14 +4444,72 @@ def secretpaint_function(self,*args,**kwargs):
 _secret_paint_q_prompt = False
 _secret_paint_q_prompt_text = "Choose a plant to paint with"
 _secret_paint_q_selection_mode = None
+_secret_paint_q_cancel_selection_requested = False
 def _secret_paint_q_begin_selection_mode(mode, prompt):
     global _secret_paint_q_selection_mode, _secret_paint_q_prompt_text
+    global _secret_paint_q_cancel_selection_requested
     _secret_paint_q_selection_mode = mode
     _secret_paint_q_prompt_text = prompt
+    _secret_paint_q_cancel_selection_requested = False
 def _secret_paint_q_end_selection_mode():
     global _secret_paint_q_selection_mode, _secret_paint_q_prompt_text
+    global _secret_paint_q_cancel_selection_requested
     _secret_paint_q_selection_mode = None
     _secret_paint_q_prompt_text = "Choose a plant to paint with"
+    _secret_paint_q_cancel_selection_requested = False
+
+
+def _secret_paint_q_remember_picker_context(operator, context):
+    """Remember the window and 3D area in which a terrain picker started."""
+    operator._q_picker_window = getattr(context, "window", None)
+    operator._q_picker_area = getattr(context, "area", None)
+    operator._q_picker_region = next(
+        (
+            region for region in getattr(operator._q_picker_area, "regions", ())
+            if region.type == 'WINDOW'
+        ),
+        None,
+    )
+
+
+def _secret_paint_q_pointer_over_picker_region(operator, event):
+    """Return whether the pointer is over the initiating 3D window region."""
+    region = getattr(operator, "_q_picker_region", None)
+    if region is None or getattr(region, "type", None) != 'WINDOW':
+        return False
+    try:
+        mouse_x = int(event.mouse_x)
+        mouse_y = int(event.mouse_y)
+        return (
+            region.x <= mouse_x < region.x + region.width and
+            region.y <= mouse_y < region.y + region.height
+        )
+    except (AttributeError, ReferenceError, TypeError, ValueError):
+        return False
+
+
+def _secret_paint_q_pointer_left_picker(operator, context, event):
+    """Return whether a mouse event moved outside the initiating 3D area."""
+    if event.type != 'MOUSEMOVE':
+        return False
+    window = getattr(context, "window", None)
+    area = getattr(operator, "_q_picker_area", None)
+    if window != getattr(operator, "_q_picker_window", None):
+        return True
+    if area is None or getattr(area, "type", None) != 'VIEW_3D':
+        return True
+    context_area = getattr(context, "area", None)
+    if context_area is not None and context_area != area:
+        return True
+    try:
+        mouse_x = int(event.mouse_x)
+        mouse_y = int(event.mouse_y)
+        return not (
+            area.x <= mouse_x < area.x + area.width and
+            area.y <= mouse_y < area.y + area.height
+        )
+    except (AttributeError, ReferenceError, TypeError, ValueError):
+        return True
 def _secret_paint_q_enable_selection_overlays(context):
     """Enable overlays only in the 3D viewport that started the picker."""
     area = getattr(context, "area", None)
@@ -6761,6 +6839,41 @@ def _secret_paint_q_begin_plant_selection(
         self._q_hover_timer = None
     context.area.tag_redraw()
     return True
+
+
+def _secret_paint_q_cancel_object_terrain_picker(operator, context):
+    """Abort the Object Mode terrain picker and restore its source object."""
+    global _secret_paint_q_prompt
+    _secret_paint_q_prompt = False
+    _secret_paint_q_end_selection_mode()
+    _secret_paint_q_restore_selection_overlays(
+        getattr(operator, '_q_overlay_states', None)
+    )
+    if getattr(operator, '_q_draw_handler', None):
+        try:
+            bpy.types.SpaceView3D.draw_handler_remove(
+                operator._q_draw_handler,
+                'WINDOW',
+            )
+        except (ReferenceError, RuntimeError, ValueError):
+            pass
+        operator._q_draw_handler = None
+    _secret_paint_q_clear_selection(context)
+    brush = getattr(operator, "_q_object_brush", None)
+    try:
+        if brush is not None and brush.name in context.view_layer.objects:
+            brush.select_set(True)
+            context.view_layer.objects.active = brush
+    except (AttributeError, ReferenceError, RuntimeError):
+        pass
+    area = getattr(operator, "_q_picker_area", None)
+    try:
+        if area is not None:
+            area.tag_redraw()
+    except (ReferenceError, RuntimeError):
+        pass
+
+
 class orenscatter(bpy.types.Operator):
     """Select an object and a target, paint. Also works from the Asset Browser. Also Converts procedural generation into manual hair"""
     bl_idname = "secret.paint"
@@ -6785,6 +6898,8 @@ class orenscatter(bpy.types.Operator):
             self._q_navigation_button = None
             self._q_shortcut_type = event.type
             self._q_from_button = getattr(context.region, "type", "WINDOW") != "WINDOW"
+            self._q_expected_mode = context.mode
+            _secret_paint_q_remember_picker_context(self, context)
             self._q_draw_handler = _secret_paint_q_add_prompt_handler(context)
             _secret_paint_q_prompt = True
             _secret_paint_q_begin_selection_mode(
@@ -6880,6 +6995,30 @@ class orenscatter(bpy.types.Operator):
                 return {'RUNNING_MODAL'}
             return {'PASS_THROUGH'}
         if hasattr(self, "_q_object_brush"):
+            if (
+                    event.type == 'LEFTMOUSE' and event.value == 'PRESS' and
+                    not _secret_paint_q_pointer_over_picker_region(self, event)
+            ):
+                return {'PASS_THROUGH'}
+            cancel_for_tab = event.type == 'TAB' and event.value == 'PRESS'
+            cancel_requested = globals().get(
+                "_secret_paint_q_cancel_selection_requested",
+                False,
+            )
+            mode_changed = context.mode != getattr(
+                self,
+                "_q_expected_mode",
+                context.mode,
+            )
+            if (
+                    event.type in {'ESC', 'RIGHTMOUSE'} or
+                    cancel_for_tab or cancel_requested or mode_changed or
+                    _secret_paint_q_pointer_left_picker(self, context, event)
+            ):
+                _secret_paint_q_cancel_object_terrain_picker(self, context)
+                if cancel_for_tab:
+                    return {'CANCELLED', 'PASS_THROUGH'}
+                return {'CANCELLED'}
             modified_left = (
                 event.type == 'LEFTMOUSE' and
                 any((event.alt, event.ctrl, event.shift, event.oskey))
@@ -6961,18 +7100,6 @@ class orenscatter(bpy.types.Operator):
                 if stroke_ready:
                     return {'FINISHED', 'PASS_THROUGH'}
                 return {'FINISHED'}
-            if event.type == 'ESC':
-                _secret_paint_q_prompt = False
-                _secret_paint_q_end_selection_mode()
-                _secret_paint_q_restore_selection_overlays(
-                    getattr(self, '_q_overlay_states', None)
-                )
-                if getattr(self, '_q_draw_handler', None):
-                    bpy.types.SpaceView3D.draw_handler_remove(self._q_draw_handler, 'WINDOW')
-                    self._q_draw_handler = None
-                _secret_paint_q_clear_selection(context)
-                context.area.tag_redraw()
-                return {'CANCELLED'}
             if event.type == getattr(self, "_q_shortcut_type", None):
                 return {'RUNNING_MODAL'}
             return {'PASS_THROUGH'}
@@ -7141,6 +7268,8 @@ class orenscatter(bpy.types.Operator):
         _secret_paint_q_stop_hold_timer(self, context)
         _secret_paint_q_stop_hover_timer(self, context)
         _secret_paint_q_restore_preview_mask(self)
+        if hasattr(self, "_q_object_brush"):
+            _secret_paint_q_cancel_object_terrain_picker(self, context)
 def _secret_paint_q_pick_terrain(
         context,
         event,
@@ -7318,6 +7447,37 @@ def _secret_paint_q_transfer_to_terrain(self, context, source_system, target_ter
         return None
     _secret_paint_q_clear_selection(context)
     return transferred
+
+
+def _secret_paint_q_cancel_change_terrain(operator, context):
+    """Abort Change Terrain and restore the original paint system."""
+    global _secret_paint_q_prompt
+    _secret_paint_q_prompt = False
+    _secret_paint_q_end_selection_mode()
+    _secret_paint_q_restore_selection_overlays(
+        getattr(operator, '_terrain_overlay_states', None)
+    )
+    if getattr(operator, '_terrain_draw_handler', None):
+        try:
+            bpy.types.SpaceView3D.draw_handler_remove(
+                operator._terrain_draw_handler,
+                'WINDOW',
+            )
+        except (ReferenceError, RuntimeError, ValueError):
+            pass
+        operator._terrain_draw_handler = None
+    source_system = getattr(operator, "_terrain_source_system", None)
+    if source_system is not None:
+        _secret_paint_q_activate_system(context, source_system)
+    _secret_paint_q_clear_selection(context)
+    area = getattr(operator, "_q_picker_area", None)
+    try:
+        if area is not None:
+            area.tag_redraw()
+    except (ReferenceError, RuntimeError):
+        pass
+
+
 class paint_change_terrain(bpy.types.Operator):
     """Choose a new terrain while painting and transfer the active system."""
     bl_idname = "secret.paint_change_terrain"
@@ -7325,6 +7485,12 @@ class paint_change_terrain(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     def invoke(self, context, event):
         global _secret_paint_q_prompt, _secret_paint_q_prompt_text
+        global _secret_paint_q_cancel_selection_requested
+        if _secret_paint_q_selection_mode == "TERRAIN":
+            _secret_paint_q_cancel_selection_requested = True
+            if context.area:
+                context.area.tag_redraw()
+            return {'FINISHED'}
         source_system = context.active_object
         if not (source_system and source_system.type in {"CURVE", "CURVES"} and
                 source_system.parent and source_system.parent.type == "MESH" and
@@ -7337,6 +7503,8 @@ class paint_change_terrain(bpy.types.Operator):
         self._terrain_system_cache = {}
         self._terrain_shortcut_type = event.type
         self._terrain_from_button = getattr(context.region, "type", "WINDOW") != "WINDOW"
+        self._terrain_expected_mode = context.mode
+        _secret_paint_q_remember_picker_context(self, context)
         self._terrain_started_at = time.perf_counter()
         self._terrain_draw_handler = _secret_paint_q_add_prompt_handler(context)
         _secret_paint_q_prompt = True
@@ -7364,6 +7532,30 @@ class paint_change_terrain(bpy.types.Operator):
         return {'RUNNING_MODAL'}
     def modal(self, context, event):
         global _secret_paint_q_prompt, _secret_paint_q_prompt_text
+        if (
+                event.type == 'LEFTMOUSE' and event.value == 'PRESS' and
+                not _secret_paint_q_pointer_over_picker_region(self, event)
+        ):
+            return {'PASS_THROUGH'}
+        cancel_for_tab = event.type == 'TAB' and event.value == 'PRESS'
+        cancel_requested = globals().get(
+            "_secret_paint_q_cancel_selection_requested",
+            False,
+        )
+        mode_changed = context.mode != getattr(
+            self,
+            "_terrain_expected_mode",
+            context.mode,
+        )
+        if (
+                event.type in {'ESC', 'RIGHTMOUSE'} or
+                cancel_for_tab or cancel_requested or mode_changed or
+                _secret_paint_q_pointer_left_picker(self, context, event)
+        ):
+            _secret_paint_q_cancel_change_terrain(self, context)
+            if cancel_for_tab:
+                return {'CANCELLED', 'PASS_THROUGH'}
+            return {'CANCELLED'}
         button_confirm = (
             getattr(self, "_terrain_from_button", False) and
             event.type == 'LEFTMOUSE' and event.value == 'PRESS'
@@ -7434,24 +7626,11 @@ class paint_change_terrain(bpy.types.Operator):
             _secret_paint_q_clear_selection(context)
             context.area.tag_redraw()
             return {'FINISHED'}
-        if event.type in {'ESC', 'RIGHTMOUSE'}:
-            _secret_paint_q_prompt = False
-            _secret_paint_q_end_selection_mode()
-            _secret_paint_q_restore_selection_overlays(
-                getattr(self, '_terrain_overlay_states', None)
-            )
-            if getattr(self, '_terrain_draw_handler', None):
-                bpy.types.SpaceView3D.draw_handler_remove(self._terrain_draw_handler, 'WINDOW')
-                self._terrain_draw_handler = None
-            _secret_paint_q_activate_system(
-                context,
-                self._terrain_source_system,
-            )
-            _secret_paint_q_clear_selection(context)
-            return {'CANCELLED'}
         if event.type == getattr(self, "_terrain_shortcut_type", None):
             return {'RUNNING_MODAL'}
         return {'PASS_THROUGH'}
+    def cancel(self, context):
+        _secret_paint_q_cancel_change_terrain(self, context)
 class bezier_mode(bpy.types.Operator):
     """Enter the same Bezier drawing workflow as Q with one object selected."""
     bl_idname = "secret.bezier_mode"
@@ -9431,6 +9610,39 @@ def checkboxImportWithoutPainting_f(self, context):
     row.prop(bpy.context.preferences.addons[__package__].preferences, "checkboxHideImported", text="", icon='RESTRICT_RENDER_ON' if bpy.context.preferences.addons[__package__].preferences.checkboxHideImported else 'RESTRICT_RENDER_OFF')
 def shared_material_f(self,context):
     common_name = "Shared "+ str(context.scene.mypropertieslist.shared_material_index)
+    selected_materials = []
+    seen_materials = set()
+    for obj in context.selected_objects:
+        for mat_slot in obj.material_slots:
+            material = mat_slot.material
+            if material is None:
+                continue
+            material_key = material.as_pointer()
+            if material_key in seen_materials:
+                continue
+            seen_materials.add(material_key)
+            selected_materials.append(material)
+    if not selected_materials:
+        self.report({'ERROR'}, "Select an object with at least one Material")
+        return {'CANCELLED'}
+    editable_materials = []
+    skipped_materials = []
+    for material in selected_materials:
+        node_tree = getattr(material, "node_tree", None)
+        if (
+                not getattr(material, "is_editable", False) or
+                node_tree is None or
+                not getattr(node_tree, "is_editable", False)
+        ):
+            skipped_materials.append(material.name)
+            continue
+        editable_materials.append(material)
+    if not editable_materials:
+        self.report(
+            {'WARNING'},
+            "No selected materials are local, node-based, and editable",
+        )
+        return {'CANCELLED'}
     if common_name not in bpy.data.node_groups:
         all_nodes_before_import =[node_tree for node_tree in bpy.data.node_groups]
         activeobj = bpy.context.active_object
@@ -9447,17 +9659,26 @@ def shared_material_f(self,context):
         new_node[0].name = common_name
         bpy.context.view_layer.objects.active = activeobj
         for x in objselection: x.select_set(True)
-    Remove_Enabled = False
-    try: nodeys = bpy.context.active_object.active_material.node_tree.nodes
-    except:
-        self.report({'ERROR'}, "Select an object with at least one Material")
-        return {'FINISHED'}
-    for nod in nodeys:
-        if nod.type=="GROUP" and nod.node_tree and nod.node_tree == bpy.data.node_groups.get(common_name): Remove_Enabled = True
+    Remove_Enabled = any(
+        nod.type == "GROUP" and nod.node_tree == bpy.data.node_groups.get(common_name)
+        for material in editable_materials
+        for nod in material.node_tree.nodes
+    )
+    editable_material_keys = {
+        material.as_pointer() for material in editable_materials
+    }
+    processed_materials = set()
     for obj in bpy.context.selected_objects:
         for mat_slot in obj.material_slots:
             if mat_slot.material:
                 active_material=mat_slot.material
+                material_key = active_material.as_pointer()
+                if (
+                        material_key not in editable_material_keys or
+                        material_key in processed_materials
+                ):
+                    continue
+                processed_materials.add(material_key)
                 for node in active_material.node_tree.nodes:
                     if node.type == 'BSDF_PRINCIPLED':
                         if node.inputs["Base Color"].links and node.inputs["Base Color"].links[0].from_node.type == "GROUP" and node.inputs["Base Color"].links[0].from_node.node_tree.name.startswith("Shared"):
@@ -9563,6 +9784,12 @@ def shared_material_f(self,context):
                             active_material.node_tree.links.new(existing_node.outputs[existing_link.from_socket.name], common_material_group.inputs["Shader"])
                             for output in output_sockets:
                                 active_material.node_tree.links.new(common_material_group.outputs["Material Output"], output)
+    if skipped_materials:
+        names = ", ".join(sorted(set(skipped_materials)))
+        self.report(
+            {'WARNING'},
+            f"Skipped materials that could not be edited: {names}",
+        )
     return {'FINISHED'}
 class shared_material(bpy.types.Operator):
     """Add or remove a shared node group in front of every PrincipledBSDF in order to control the Color and Roughness of all the selected objects at the same time. Doesn't work on custom node groups (there is no procedural way to know which socket controls what)"""
@@ -10826,7 +11053,7 @@ def _secret_paint_1731_compact_panel_draw(self, context):
         paint_row.alert = True
         if _secret_paint_q_selection_mode == "TERRAIN":
             paint_row.operator(
-                "secret.paint",
+                "secret.paint_change_terrain",
                 icon='MESH_GRID',
                 text="Change Terrain",
             )
